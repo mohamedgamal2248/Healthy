@@ -40,6 +40,7 @@ const RULES = `قواعد صارمة:
 - أنت تقدّم إرشادات غذائية عامة فقط. ممنوع التشخيص أو العلاج أو ذكر أي دواء أو مكمل غذائي أو جرعة، وممنوع التوصية بالصيام. ممنوع ادعاء أن الأكل يعالج أو يشفي مرضًا.
 - إذا طلب المستخدم تشخيصًا أو علاجًا أو نظامًا غذائيًا لطفل، أرجع فقط: {"refusal": "${REFUSAL_AR}"}
 - السعرات والبروتين لحصة واحدة، أرقام واقعية.
+- لو الطلب عن طبق أو مكوّن غير مألوف ولا تعرف طريقة تحضيره المعتادة، استخدم أداة البحث على الويب للتأكد من الطريقة، ثم اكتب وصفتك الخاصة بصياغتك (لا تنسخ نصًا من أي موقع).
 - أرجع كائن JSON واحدًا فقط بدون أي نص قبله أو بعده.`;
 
 function profileLines(p: ProfileContext): string {
@@ -73,7 +74,7 @@ export async function generateRecipe(userText: string, profile: ProfileContext):
   let lastErr: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const text = await callModel({ system, messages });
+      const text = await callModel({ system, messages, webSearch: true, maxTokens: 2500 });
       return validate(extractJson(text));
     } catch (e) {
       if (e instanceof AiRefused || e instanceof AiNotConfigured) throw e;

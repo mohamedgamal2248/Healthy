@@ -23,7 +23,10 @@ export function MealCard({ meal, fav, onFav, label }: { meal: MealRow; fav?: boo
     <article className="card relative !p-0">
       <Link href={`/meals/${meal.id}`} className="block">
         <div className="space-y-2.5 p-4 pe-16">
-          {label && <span className="inline-block rounded-full bg-brand-100 px-3 py-1 text-xs font-extrabold text-brand-800">{label}</span>}
+          <div className="flex flex-wrap gap-1.5">
+            {label && <span className="inline-block rounded-full bg-brand-100 px-3 py-1 text-xs font-extrabold text-brand-800">{label}</span>}
+            {meal.cuisine === "international" && meal.origin_ar && <span className="inline-block rounded-full bg-sky-50 px-3 py-1 text-xs font-extrabold text-sky-600">{lang === "ar" ? meal.origin_ar : meal.origin_en}</span>}
+          </div>
           <h3 className="text-base font-extrabold leading-snug">{lang === "ar" ? meal.name_ar : meal.name_en}</h3>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-bold text-ink-soft">
             <span className="inline-flex items-center gap-1"><Icon name="clock" size={15} />{meal.time_min} {tr("د", "min")}</span>

@@ -1,7 +1,7 @@
 import { db, must } from "./supabase";
 import type { Auth } from "./auth";
 import { GROUP_DEFAULTS } from "@/data/challenges";
-import { addDays, dayNumber, weekStart } from "@/lib/dates";
+import { addDays, dayNumber, hash, weekStart } from "@/lib/dates";
 
 export type Group = { id: string; week_start: string; challenge_id: string | null; title_ar: string; title_en: string };
 
@@ -59,6 +59,33 @@ export async function topRecipes(a: Auth) {
     .map((r) => ({ id: r.id, title: r.title, author: r.username, calories: r.content?.recipe?.calories, protein: r.content?.recipe?.protein, likes: r.like_count, saves: r.save_count, score: score.get(r.id) ?? 0, liked: liked.has(r.id), saved: saved.has(r.id) }))
     .sort((x, y) => y.score - x.score)
     .slice(0, 10);
+}
+
+export const TEAMS = [
+  { key: "olive", ar: "فريق الزيتون", en: "Team Olive" },
+  { key: "gold", ar: "فريق الذهب", en: "Team Gold" },
+] as const;
+export const teamOf = (username: string) => TEAMS[hash(username) % 2].key;
+
+/** Two teams (assigned by a stable hash): weekly total of check-in days. Reputation only. */
+export async function teamBoard(groupId: string, me: string) {
+  const members = must(await db().from("hl_group_challenge_members").select("username,days_completed").eq("group_id", groupId).limit(2000)) as { username: string; days_completed: number }[];
+  const totals = { olive: { members: 0, days: 0 }, gold: { members: 0, days: 0 } };
+  for (const m of members) { const t = teamOf(m.username); totals[t].members++; totals[t].days += m.days_completed; }
+  return { teams: TEAMS.map((t) => ({ ...t, ...totals[t.key] })), myTeam: teamOf(me) };
+}
+
+/** Month ranking: check-in days in the current calendar month (verified + visible users only). */
+export async function monthlyBoard(today: string) {
+  const from = `${today.slice(0, 7)}-01`;
+  const checks = must(await db().from("hl_group_challenge_checks").select("username").gte("date", from).lte("date", today).limit(20000)) as { username: string }[];
+  const count = new Map<string, number>();
+  checks.forEach((c) => count.set(c.username, (count.get(c.username) ?? 0) + 1));
+  const names = [...count.keys()];
+  if (!names.length) return [];
+  const profs = must(await db().from("hl_profiles").select("username,kyc_verified,leaderboard_visible").in("username", names)) as { username: string; kyc_verified: boolean; leaderboard_visible: boolean }[];
+  const ok = new Set(profs.filter((p) => p.kyc_verified && p.leaderboard_visible).map((p) => p.username));
+  return names.filter((n) => ok.has(n)).sort((a, b) => (count.get(b) ?? 0) - (count.get(a) ?? 0)).slice(0, 50).map((n, i) => ({ rank: i + 1, username: n, verified: true, days: count.get(n) ?? 0, streak: 0 }));
 }
 
 /** Light counters for the engagement cards (no personal data). */

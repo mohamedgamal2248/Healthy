@@ -36,7 +36,7 @@ export function CreditBalance({ b, className = "" }: { b: Balances | null; class
       <dl className="mt-2 grid grid-cols-3 gap-2 text-center text-xs font-bold text-ink-soft">
         <div className="rounded-xl bg-white/70 p-2"><dt>{tr("من الخطة", "Plan")}</dt><dd className="text-base font-extrabold text-ink tabular-nums">{b.plan}</dd></div>
         <div className="rounded-xl bg-white/70 p-2"><dt>{tr("من الباقات", "Packs")}</dt><dd className="text-base font-extrabold text-ink tabular-nums">{b.pack}</dd></div>
-        <div className="rounded-xl bg-white/70 p-2"><dt>{tr("تجريبي", "Trial")}</dt><dd className="text-base font-extrabold text-ink tabular-nums">{b.trial}</dd></div>
+        <div className="rounded-xl bg-white/70 p-2"><dt>{tr("مكافأة", "Reward")}</dt><dd className="text-base font-extrabold text-ink tabular-nums">{b.trial}</dd></div>
       </dl>
       <p className="mt-2 text-xs font-semibold text-ink-soft">
         {b.planActive && date

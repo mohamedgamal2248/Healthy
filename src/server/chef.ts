@@ -4,7 +4,8 @@ import type { Auth } from "./auth";
 import { RECIPE_COST } from "@/config/pricing";
 import { spendCredit, refundCredit } from "./credits";
 import { aiConfigured, AiNotConfigured } from "./ai/provider";
-import { generateRecipe, AiRefused, type Recipe } from "./ai/recipe";
+import { generateRecipe, AiRefused, RecipeSchema, type Recipe } from "./ai/recipe";
+import { createHash } from "node:crypto";
 import { cautionsFor, hasMedicalFlag, isRefusalRequest, DOCTOR_NOTE_AR, DOCTOR_NOTE_EN, REFUSAL_AR, REFUSAL_EN } from "./ai/safety";
 
 export type RecipeContent = {
@@ -12,6 +13,22 @@ export type RecipeContent = {
   cautions: { ar: string; en: string }[];
   doctor_note: { ar: string; en: string } | null;
 };
+
+const CACHE_DAYS = 30;
+/** Same request text + same goal + same declared conditions => same cached recipe (saves provider cost). */
+export function recipeCacheKey(text: string, goal: string | null, conditions: string[]): string {
+  const norm = text.toLowerCase().replace(/[\p{P}\s]+/gu, " ").trim();
+  return createHash("sha256").update(`${norm}|${goal ?? ""}|${[...conditions].sort().join(",")}`).digest("hex");
+}
+
+async function cachedRecipe(key: string): Promise<Recipe | null> {
+  const row = must(await db().from("hl_ai_cache").select("recipe,hits,created_at").eq("key", key).maybeSingle()) as { recipe: unknown; hits: number; created_at: string } | null;
+  if (!row || Date.now() - new Date(row.created_at).getTime() > CACHE_DAYS * 86400000) return null;
+  const parsed = RecipeSchema.safeParse(row.recipe);
+  if (!parsed.success) return null;
+  await db().from("hl_ai_cache").update({ hits: row.hits + 1 }).eq("key", key);
+  return parsed.data;
+}
 
 export const refusal = () => new HttpError(422, "refused", REFUSAL_AR, REFUSAL_EN);
 
@@ -44,7 +61,12 @@ export async function chefGenerate(a: Auth, prompt: string) {
   }
 
   try {
-    const recipe = await generateRecipe(text, { goal: a.profile.goal, conditions: a.profile.conditions });
+    const key = recipeCacheKey(text, a.profile.goal, a.profile.conditions);
+    let recipe = await cachedRecipe(key);
+    if (!recipe) {
+      recipe = await generateRecipe(text, { goal: a.profile.goal, conditions: a.profile.conditions });
+      await db().from("hl_ai_cache").upsert({ key, recipe, hits: 0, created_at: new Date().toISOString() }, { onConflict: "key" });
+    }
     const content = wrapRecipe(recipe, a.profile.conditions);
     const saved = must(
       await db().from("hl_recipes").insert({ username: a.username, title: recipe.name, content, source_request_id: req.id }).select("id,title,content,shared,like_count,save_count,created_at,username").single(),

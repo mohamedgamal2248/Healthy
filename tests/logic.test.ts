@@ -111,3 +111,18 @@ test("session tokens are signed and tamper-evident", () => {
   assert.equal(verifySession(t.slice(0, -2) + "AA"), null);
   assert.equal(verifySession(null), null);
 });
+
+import { recipeCacheKey } from "../src/server/chef";
+import { callModel, MAX_INPUT_TOKENS_ESTIMATE } from "../src/server/ai/provider";
+
+test("AI cache key is stable across punctuation/spacing and differs by goal/conditions", () => {
+  const a = recipeCacheKey("عندي بيض  وجبنة قريش!", "lose", ["diabetes"]);
+  assert.equal(a, recipeCacheKey("عندي بيض وجبنة قريش", "lose", ["diabetes"]));
+  assert.notEqual(a, recipeCacheKey("عندي بيض وجبنة قريش", "gain", ["diabetes"]));
+  assert.notEqual(a, recipeCacheKey("عندي بيض وجبنة قريش", "lose", []));
+});
+
+test("oversized AI input is refused before any request is made", async () => {
+  process.env.AI_API_KEY = "k"; process.env.AI_PROVIDER = "meta";
+  await assert.rejects(callModel({ system: "x".repeat(MAX_INPUT_TOKENS_ESTIMATE * 2 + 10), messages: [{ role: "user", content: "hi" }] }), /input too large/);
+});

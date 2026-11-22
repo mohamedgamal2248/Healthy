@@ -7,15 +7,17 @@ import { Icon } from "@/components/Icon";
 
 type C = {
   group: { title_ar: string; title_en: string; week_start: string }; joined: boolean; myDays: number; checkedToday: boolean; hidden: boolean;
-  board: { rank: number; username: string; days: number; streak: number }[];
-  topRecipes: R[]; latestRecipes: R[]; stats: { members: number; checkedToday: number };
+  board: Row[];
+  topRecipes: R[]; latestRecipes: R[]; monthBoard: Row[]; teams: { key: string; ar: string; en: string; members: number; days: number }[]; myTeam: string; stats: { members: number; checkedToday: number };
 };
+type Row = { rank: number; username: string; days: number; streak: number };
 type R = { id: string; title: string; author: string; calories?: number; protein?: number; likes: number; saves: number; liked: boolean; saved: boolean };
 
 function Inner() {
   const { tr, lang, me, toast, errMsg } = useApp();
   const [d, setD] = useState<C | null>(null);
   const [busy, setBusy] = useState(false);
+  const [btab, setBtab] = useState<"week" | "month">("week");
   const [rtab, setRtab] = useState<"top" | "new">("top");
   const load = useCallback(() => api<C>("/community").then(setD).catch((e) => toast(errMsg(e), "err")), [toast, errMsg]);
   useEffect(() => { load(); }, [load]);
@@ -53,13 +55,29 @@ function Inner() {
       </section>
       {d.hidden && <Notice tone="info" icon="eyeOff">{tr("أنت مخفي من لوحة المتصدرين (من الملف الشخصي).", "You are hidden from the leaderboard (set in your profile).")}</Notice>}
 
+      <section className="card !p-3.5">
+        <p className="mb-2 text-sm font-extrabold text-ink-soft">{tr("الفريقان هذا الأسبوع", "Teams this week")}</p>
+        <div className="grid grid-cols-2 gap-3">
+          {d.teams.map((t) => (
+            <div key={t.key} className={`rounded-2xl p-3 text-center ${t.key === "olive" ? "bg-brand-50" : "bg-sun-50"} ${t.key === d.myTeam ? "ring-2 ring-ink/20" : ""}`}>
+              <p className="font-extrabold">{lang === "ar" ? t.ar : t.en}{t.key === d.myTeam && <span className="ms-1 text-xs text-ink-soft">({tr("فريقك", "yours")})</span>}</p>
+              <p className="text-2xl font-extrabold tabular-nums">{t.days}</p>
+              <p className="muted">{tr(`يوم · ${t.members} عضو`, `days · ${t.members} members`)}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section>
-        <h2 className="h2 mb-3">{tr("المتصدرون من البايونيرز الموثقين", "Leaderboard of verified Pioneers")}</h2>
-        {d.board.length === 0 ? <EmptyState icon="trophy" title={tr("كن أول المتصدرين", "Be the first on the board")} body={tr("انضم وسجّل يومك لتظهر هنا.", "Join and check in to appear here.")} /> : (
-          <ol className="space-y-2">{d.board.map((r) => (
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="h2">{tr("المتصدرون من البايونيرز الموثقين", "Verified Pioneers leaderboard")}</h2>
+          <div className="flex gap-1.5">{([["week", tr("الأسبوع", "Week")], ["month", tr("الشهر", "Month")]] as const).map(([k, l]) => (<button key={k} className="chip" aria-pressed={btab === k} onClick={() => setBtab(k)}>{l}</button>))}</div>
+        </div>
+        {(btab === "week" ? d.board : d.monthBoard).length === 0 ? <EmptyState icon="trophy" title={tr("كن أول المتصدرين", "Be the first on the board")} body={tr("انضم وسجّل يومك لتظهر هنا.", "Join and check in to appear here.")} /> : (
+          <ol className="space-y-2">{(btab === "week" ? d.board : d.monthBoard).map((r) => (
             <li key={r.username} className={`card flex items-center gap-3 !p-3 ${r.username === me?.profile.username ? "!border-brand-400 !bg-brand-50" : ""}`}>
               <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-extrabold tabular-nums ${medal[r.rank - 1] ?? "bg-canvas text-ink-soft"}`}>{r.rank}</span>
-              <div className="min-w-0 flex-1"><p className="truncate font-extrabold"><bdi dir="ltr">@{r.username}</bdi></p><div className="mt-0.5 flex items-center gap-2"><VerifiedBadge small /><span className="inline-flex items-center gap-1 text-xs font-bold text-ink-soft"><Icon name="flame" size={13} className="text-sun-500" />{r.streak}</span></div></div>
+              <div className="min-w-0 flex-1"><p className="truncate font-extrabold"><bdi dir="ltr">@{r.username}</bdi></p><div className="mt-0.5 flex items-center gap-2"><VerifiedBadge small />{btab === "week" && <span className="inline-flex items-center gap-1 text-xs font-bold text-ink-soft"><Icon name="flame" size={13} className="text-sun-500" />{r.streak}</span>}</div></div>
               <p className="text-end"><span className="block text-xl font-extrabold tabular-nums">{r.days}</span><span className="text-xs font-bold text-ink-soft">{tr("يوم", "days")}</span></p>
             </li>))}</ol>
         )}

@@ -22,6 +22,7 @@ export const PRICING: Record<ItemKey, PricedItem> = {
   pack_large: { key: "pack_large", kind: "pack", pricePi: num(process.env.PRICE_PACK_LARGE_PI, 2.5), credits: 30, days: 0 },
 };
 
+/** Credits earned once by finishing the 7-day starter challenge (no free credits at sign-up). */
 export const TRIAL_CREDITS = 3;
 export const RECIPE_COST = 1;
 export const PLAN_REGENERATE_COST = 1;

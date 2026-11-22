@@ -6,10 +6,11 @@ import { effectiveStreak } from "@/lib/streak";
 import { mealsOfTheDay } from "@/server/meals";
 import { getBalances } from "@/server/credits";
 import { groupSnapshot } from "@/server/community";
+import { TRIAL_CREDITS } from "@/config/pricing";
 
 export const GET = route(async (req) => {
   const a = await requireUser(req);
-  const [{ rows, swapUsed }, streak, meals, badges, favs, reminder, balances, community] = await Promise.all([
+  const [{ rows, swapUsed }, streak, meals, badges, favs, reminder, balances, community, rewarded] = await Promise.all([
     ensureToday(a),
     loadStreak(a.username),
     mealsOfTheDay(a.today),
@@ -18,6 +19,7 @@ export const GET = route(async (req) => {
     reminderState(a),
     a.profile.kyc_verified ? getBalances(a.username) : Promise.resolve(null),
     a.profile.kyc_verified ? groupSnapshot(a.username, a.today).catch(() => null) : Promise.resolve(null),
+    db().from("hl_credit_ledger").select("id", { count: "exact", head: true }).eq("username", a.username).eq("reason", "trial_grant"),
   ]);
   return ok({
     date: a.today,
@@ -31,6 +33,7 @@ export const GET = route(async (req) => {
     reminder,
     balances,
     community,
+    starter: { rewarded: (rewarded.count ?? 0) > 0, reward: TRIAL_CREDITS },
     profileReady: !!a.profile.disclaimer_accepted_at,
   });
 });

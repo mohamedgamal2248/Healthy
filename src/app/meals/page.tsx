@@ -12,6 +12,7 @@ function MealsInner() {
   const { tr, lang, toast, errMsg } = useApp();
   const [tags, setTags] = useState<string[]>([]);
   const [type, setType] = useState("");
+  const [cuisine, setCuisine] = useState("");
   const [q, setQ] = useState("");
   const [mode, setMode] = useState<"browse" | "have">("browse");
   const [have, setHave] = useState<string[]>([]);
@@ -21,11 +22,12 @@ function MealsInner() {
   const load = useCallback(async () => {
     const p = new URLSearchParams();
     if (type) p.set("type", type);
+    if (cuisine) p.set("cuisine", cuisine);
     if (tags.length) p.set("tags", tags.join(","));
     if (q.trim()) p.set("q", q.trim());
     if (mode === "have") p.set("have", have.length ? have.join(",") : "__none__");
     try { setMeals((await api<{ meals: MealRow[] }>(`/meals?${p}`)).meals); } catch (e) { toast(errMsg(e), "err"); }
-  }, [type, tags, q, mode, have, toast, errMsg]);
+  }, [type, cuisine, tags, q, mode, have, toast, errMsg]);
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
   useEffect(() => { api<{ meals: MealRow[] }>("/favourites").then((f) => setFavs(f.meals.map((m) => m.id))).catch(() => {}); }, []);
 
@@ -49,6 +51,7 @@ function MealsInner() {
       {mode === "browse" ? (
         <div className="mb-5 space-y-3">
           <div className="relative"><Icon name="search" size={18} className="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-ink-soft" /><input className="field !ps-11" placeholder={tr("ابحث باسم الوجبة…", "Search meals…")} value={q} onChange={(e) => setQ(e.target.value)} aria-label={tr("بحث", "Search")} /></div>
+          <div className="flex flex-wrap gap-2" role="group" aria-label={tr("المطبخ", "Cuisine")}>{[["", tr("كل المطابخ", "All cuisines")], ["egyptian", tr("مصري", "Egyptian")], ["international", tr("عالمي", "International")]].map(([k, l]) => (<button key={k} className="chip" aria-pressed={cuisine === k} onClick={() => setCuisine(k)}>{l}</button>))}</div>
           <div className="flex flex-wrap gap-2" role="group" aria-label={tr("نوع الوجبة", "Meal type")}>{types.map(([k, l]) => (<button key={k} className="chip" aria-pressed={type === k} onClick={() => setType(k)}>{l}</button>))}</div>
           <div className="flex flex-wrap gap-2" role="group" aria-label={tr("فلاتر", "Filters")}>{MEAL_TAGS.map((t) => (<button key={t.key} className="chip" aria-pressed={tags.includes(t.key)} onClick={() => toggle(tags, t.key, setTags)}>{tr(t.ar, t.en)}</button>))}</div>
         </div>
