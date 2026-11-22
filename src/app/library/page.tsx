@@ -34,9 +34,9 @@ function Inner() {
     <div className="py-5">
       <PageHeader title={tr("مكتبتي", "My library")} />
       <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl bg-brand-50 p-1.5">
-        {([["recipes", tr("طلباتي من AI", "My AI results")], ["fav", tr("المفضلة", "Favourites")]] as const).map(([k, l]) => (<button key={k} onClick={() => setTab(k)} aria-pressed={tab === k} className={`min-h-11 rounded-xl text-sm font-extrabold ${tab === k ? "bg-white text-brand-800 shadow-sm" : "text-ink-soft"}`}>{l}</button>))}
+        {([["recipes", tr("طلباتي من Healthy AI", "My Healthy AI results")], ["fav", tr("المفضلة", "Favourites")]] as const).map(([k, l]) => (<button key={k} onClick={() => setTab(k)} aria-pressed={tab === k} className={`min-h-11 rounded-xl text-sm font-extrabold ${tab === k ? "bg-white text-brand-800 shadow-sm" : "text-ink-soft"}`}>{l}</button>))}
       </div>
-      {tab === "recipes" ? (recipes.length ? <div className="space-y-2.5">{recipes.map((r) => <RecipeRow key={r.id} r={r} />)}</div> : <EmptyState icon="chef" title={tr("مفيش نتائج لسه", "Nothing yet")} body={tr("كل نتيجة تطلبها من AI تتحفظ هنا تلقائيًا.", "Every AI result is saved here automatically.")} action={<Link href="/chef" className="btn-primary">{tr("جرّب AI", "Try AI")}</Link>} />)
+      {tab === "recipes" ? (recipes.length ? <div className="space-y-2.5">{recipes.map((r) => <RecipeRow key={r.id} r={r} />)}</div> : <EmptyState icon="chef" title={tr("مفيش نتائج لسه", "Nothing yet")} body={tr("كل نتيجة تطلبها من Healthy AI تتحفظ هنا تلقائيًا.", "Every Healthy AI result is saved here automatically.")} action={<Link href="/chef" className="btn-primary">{tr("جرّب Healthy AI", "Try Healthy AI")}</Link>} />)
         : favs.meals.length + favs.recipes.length === 0 ? <EmptyState icon="heart" title={tr("مفيش مفضلات", "No favourites")} body={tr("اضغط على القلب في أي وجبة أو وصفة لحفظها.", "Tap the heart on any meal or recipe to save it.")} />
         : <div className="space-y-4">{favs.recipes.length > 0 && <div className="space-y-2.5">{favs.recipes.map((r) => <RecipeRow key={r.id} r={r} />)}</div>}<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{favs.meals.map((m) => <MealCard key={m.id} meal={m} fav onFav={unfav} />)}</div></div>}
     </div>
