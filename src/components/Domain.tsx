@@ -187,11 +187,10 @@ export function itemBenefits(i: PriceItem, tr: (a: string, e: string) => string)
 export function PaySheet({ item: itemIn, onClose, onPaid }: { item: PriceItem | null; onClose: () => void; onPaid: () => void }) {
   const { tr, me, toast } = useApp();
   const [fresh, setFresh] = useState<PriceItem | null>(null);
-  const [rate, setRate] = useState<number | null>(null);
   useEffect(() => {
     setFresh(null);
     if (!itemIn) return;
-    api<{ items: PriceItem[]; rate: { usdPerPi: number } }>("/pricing").then((r) => { setFresh(r.items.find((x) => x.key === itemIn.key) ?? null); setRate(r.rate.usdPerPi); }).catch(() => {});
+    api<{ items: PriceItem[] }>("/pricing").then((r) => setFresh(r.items.find((x) => x.key === itemIn.key) ?? null)).catch(() => {});
   }, [itemIn]);
   const item = fresh ?? itemIn;
   const [busy, setBusy] = useState(false);
@@ -212,7 +211,7 @@ export function PaySheet({ item: itemIn, onClose, onPaid }: { item: PriceItem | 
       else setMsg(tr(r.ar ?? "تعذّر إتمام الدفع. لم يتم منح أي شيء. حاول مرة أخرى.", r.en ?? "Payment could not be completed. Nothing was granted. Please try again."));
     } catch (e) {
       const x = e as { ar?: string; en?: string };
-      setMsg(tr(x.ar ?? "تعذّر بدء الدفع.", x.en ?? "Could not start the payment."));
+      setMsg(tr(x.ar ?? `تعذّر بدء الدفع${(e as Error)?.message ? ` (${(e as Error).message.slice(0, 80)})` : ""}.`, x.en ?? `Could not start the payment${(e as Error)?.message ? ` (${(e as Error).message.slice(0, 80)})` : ""}.`));
     } finally {
       setBusy(false);
     }
@@ -229,7 +228,6 @@ export function PaySheet({ item: itemIn, onClose, onPaid }: { item: PriceItem | 
         <ul className="space-y-1.5 text-sm font-semibold">
           {itemBenefits(item, tr).map((b) => (<li key={b} className="flex items-center gap-2"><Icon name="check" size={16} className="text-brand-600" />{b}</li>))}
         </ul>
-        <Notice tone="info">{tr("السعر محسوب لحظيًا بسعر Pi في OKX ومقرّب لأعلى لرقم صحيح، ويُثبَّت لمدة ٣٠ دقيقة بعد الضغط على ادفع. دفعة واحدة بلا تجديد تلقائي.", "The price follows the live Pi price on OKX, rounded up to a whole Pi, and is locked for 30 minutes once you tap pay. One payment, no auto-renewal.")}{item.usd !== undefined && rate ? <span className="mt-1 block text-xs">{tr(`≈ ${item.usd} دولار · 1 Pi ≈ ${rate.toFixed(4)} دولار`, `≈ $${item.usd} · 1 Pi ≈ $${rate.toFixed(4)}`)}</span> : null}</Notice>
         {msg && <Notice tone="bad">{msg}</Notice>}
         <button className="btn-primary w-full" onClick={pay} disabled={busy}>
           {busy ? <Spinner /> : <Icon name="pi" />} {busy ? tr("جاري الدفع…", "Processing…") : tr(`ادفع ${item.pricePi} Pi`, `Pay ${item.pricePi} Pi`)}
