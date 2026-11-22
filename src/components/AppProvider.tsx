@@ -48,7 +48,7 @@ const waitForPi = async (ms = 4000) => {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const [lang, setLangState] = useState<Lang>("ar");
+  const [lang, setLangState] = useState<Lang>("en"); // English is the primary language
   const [me, setMe] = useState<Me | null>(null);
   const [ready, setReady] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
@@ -81,7 +81,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4200);
   }, []);
 
-  const errMsg = useCallback((e: unknown) => (e instanceof ApiError ? (lang === "ar" ? e.ar : e.en) : lang === "ar" ? "حدث خطأ. حاول مرة أخرى." : "Something went wrong. Try again."), [lang]);
+  const errMsg = useCallback((e: unknown) => (e instanceof ApiError ? (lang === "ar" ? e.ar : e.en) : lang === "ar" ? "حدث خطأ. حاول مرة أخرى." : "Something went wrong. Please try again."), [lang]);
 
   const refresh = useCallback(async () => {
     if (!getToken()) {
@@ -92,6 +92,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const m = await api<Me>("/me");
       setMe(m);
+      try {
+        if (!localStorage.getItem("healthy.lang") && (m.profile.language === "ar" || m.profile.language === "en")) setLangState(m.profile.language);
+      } catch {}
       setReady(true);
       return m;
     } catch (e) {

@@ -159,7 +159,7 @@ export function RecipeView({ content, actions }: { content: RecipeContent; actio
       {r.substitutions.length > 0 && (
         <section>
           <h3 className="h2 mb-2">{tr("بدائل لو ناقصك حاجة", "Substitutions")}</h3>
-          <ul className="space-y-2">{r.substitutions.map((s, k) => (<li key={k} className="rounded-2xl bg-sun-50 p-3 text-sm"><b>{s.missing}؟</b> {s.use}</li>))}</ul>
+          <ul className="space-y-2">{r.substitutions.map((s, k) => (<li key={k} className="rounded-2xl bg-sun-50 p-3 text-sm"><b>{s.missing}{lang === "ar" ? "؟" : "?"}</b> {s.use}</li>))}</ul>
         </section>
       )}
       {content.cautions.map((c, k) => (<Notice key={k} tone="warn">{lang === "ar" ? c.ar : c.en}</Notice>))}

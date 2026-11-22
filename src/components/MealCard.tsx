@@ -33,7 +33,7 @@ export function MealCard({ meal, fav, onFav, label }: { meal: MealRow; fav?: boo
             <span className="inline-flex items-center gap-1"><Icon name="flame" size={15} className="text-sun-500" />{meal.calories} {tr("سعرة", "kcal")}</span>
             <span className="inline-flex items-center gap-1"><Icon name="bolt" size={15} className="text-brand-600" />{meal.protein_g} {tr("جم بروتين", "g protein")}</span>
           </div>
-          <p className="text-sm font-semibold text-ink"><span className="text-ink-soft">{tr("المكونات: ", "Ingredients: ")}</span>{meal.ingredients.map((i) => i.item).join(tr("، ", ", "))}</p>
+          <p className="text-sm font-semibold text-ink"><span className="text-ink-soft">{tr("المكونات: ", "Ingredients: ")}</span>{(lang === "en" && meal.ingredients_en ? meal.ingredients_en : meal.ingredients).map((i) => i.item).join(tr("، ", ", "))}</p>
           <p className="muted line-clamp-2">{lang === "ar" ? meal.why_ar : meal.why_en}</p>
           <TagChips tags={meal.tags} />
         </div>

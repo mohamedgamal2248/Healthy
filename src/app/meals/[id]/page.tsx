@@ -34,10 +34,10 @@ function Inner({ id }: { id: string }) {
         </div>
       </div>
       <section className="card"><h2 className="h2 mb-3">{tr("المكونات", "Ingredients")}</h2>
-        <ul className="divide-y divide-line">{meal.ingredients.map((i, k) => (<li key={k} className="flex justify-between gap-3 py-2.5"><span className="font-bold">{i.item}</span><span className="text-sm text-ink-soft">{i.qty}</span></li>))}</ul>
+        <ul className="divide-y divide-line">{(lang === "en" && meal.ingredients_en ? meal.ingredients_en : meal.ingredients).map((i, k) => (<li key={k} className="flex justify-between gap-3 py-2.5"><span className="font-bold">{i.item}</span><span className="text-sm text-ink-soft">{i.qty}</span></li>))}</ul>
       </section>
       <section className="card"><h2 className="h2 mb-3">{tr("طريقة التحضير", "Steps")}</h2>
-        <ol className="space-y-3">{meal.steps.map((s, k) => (<li key={k} className="flex gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-600 text-sm font-extrabold text-white">{k + 1}</span><span className="pt-0.5">{s}</span></li>))}</ol>
+        <ol className="space-y-3">{(lang === "en" && meal.steps_en ? meal.steps_en : meal.steps).map((s, k) => (<li key={k} className="flex gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-600 text-sm font-extrabold text-white">{k + 1}</span><span className="pt-0.5">{s}</span></li>))}</ol>
       </section>
       <p className="text-center text-xs font-semibold text-ink-soft">{tr("نصائح غذائية عامة، وليست تشخيصًا طبيًا أو بديلًا عن استشارة الطبيب", "General nutrition guidance, not a medical diagnosis or a substitute for consulting a doctor.")}</p>
     </div>

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Cairo", "Segoe UI", "Noto Sans Arabic", Tahoma, system-ui, sans-serif;
+  --font-sans: "Inter", "Cairo", "Segoe UI", "Noto Sans Arabic", Tahoma, system-ui, sans-serif;
 
   /* Brand: calm emerald */
   --color-brand-50: #ecfdf5;

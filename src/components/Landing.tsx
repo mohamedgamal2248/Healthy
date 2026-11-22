@@ -8,12 +8,12 @@ import { Spinner, DevLogin } from "./ui";
 import type { MealSeed } from "@/data/meals";
 import type { ChallengeSeed } from "@/data/challenges";
 
-export function Landing({ items, trial, meal, challenge }: { items: PriceItem[]; trial: number; meal: MealSeed; challenge: ChallengeSeed }) {
+export function Landing({ items, trial, meal, challenge, ingredientsEn }: { items: PriceItem[]; trial: number; meal: MealSeed; challenge: ChallengeSeed; ingredientsEn?: { item: string }[] }) {
   const { tr, lang, me, signIn, signingIn, devSignIn } = useApp();
   const steps = [
     { icon: "check", ar: "تحدي كل يوم", en: "A challenge every day", d_ar: "٣ تحديات صغيرة تبني عادة صحية وتحافظ على سلسلتك.", d_en: "Three small challenges that build habits and keep your streak alive." },
-    { icon: "utensils", ar: "وجبات مصرية رخيصة", en: "Cheap local meals", d_ar: "فطار وغدا وعشا من فول وعدس وبيض وقريش، بالسعرات والتكلفة.", d_en: "Breakfast, lunch and dinner from foul, lentils, eggs and cottage cheese, with calories and cost." },
-    { icon: "chef", ar: "شيف ذكاء اصطناعي", en: "AI Coach", d_ar: "اكتب اللي عندك في البيت واحصل على وصفة كاملة بكريدت واحد.", d_en: "Tell it what you have at home and get a full recipe for 1 credit." },
+    { icon: "utensils", ar: "وجبات مصرية رخيصة", en: "Affordable meals", d_ar: "فطار وغدا وعشا من فول وعدس وبيض وقريش، بالسعرات والتكلفة.", d_en: "Breakfast, lunch and dinner from foul, lentils, eggs and cottage cheese, with calories and cost." },
+    { icon: "chef", ar: "شيف ذكاء اصطناعي", en: "AI Coach", d_ar: "اكتب اللي عندك في البيت واحصل على وصفة كاملة بكريدت واحد.", d_en: "Ask for a meal, a workout or a 7-day challenge and get a complete, personal answer for 1 request." },
     { icon: "plan", ar: "نظام غذائي شخصي", en: "A personal diet plan", d_ar: "خطة أسبوعية من ملفك الصحي تتجدد مع وزنك.", d_en: "A weekly plan from your own profile that updates with your weight." },
   ];
   return (
@@ -23,7 +23,7 @@ export function Landing({ items, trial, meal, challenge }: { items: PriceItem[];
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-sm font-extrabold text-brand-700 shadow-sm"><Icon name="shieldCheck" size={16} />{tr("لبايونيرز Pi الموثّقين", "For verified Pi Pioneers")}</span>
             <h1 className="mt-4 text-4xl font-extrabold leading-[1.25] text-brand-900 sm:text-5xl">{tr("صحتك تبدأ بتحدي صغير كل يوم", "Your health starts with one small challenge a day")}</h1>
-            <p className="mt-4 max-w-xl text-lg font-semibold text-ink-soft">{tr("تحديات يومية، وجبات صحية من مكونات رخيصة، وشيف ذكاء اصطناعي ونظام غذائي شخصي. ادفع بـ Pi فقط لما تحتاج الخدمات المدفوعة.", "Daily challenges, healthy meals from cheap ingredients, an AI chef and a personal diet plan. Pay with Pi only when you want the paid services.")}</p>
+            <p className="mt-4 max-w-xl text-lg font-semibold text-ink-soft">{tr("تحديات يومية، وجبات صحية من مكونات رخيصة، وشيف ذكاء اصطناعي ونظام غذائي شخصي. ادفع بـ Pi فقط لما تحتاج الخدمات المدفوعة.", "Daily challenges, healthy meals from affordable ingredients, an AI coach for meals, workouts and challenges, and a personal diet plan. Pay with Pi only when you want the paid services.")}</p>
             <div className="mt-6 flex flex-wrap gap-3">
               {me ? (
                 <Link href="/today" className="btn-primary"><Icon name="home" />{tr("كمّل تحدي اليوم", "Continue today")}</Link>
@@ -50,7 +50,7 @@ export function Landing({ items, trial, meal, challenge }: { items: PriceItem[];
                   <span className="inline-flex items-center gap-1"><Icon name="flame" size={15} className="text-sun-500" />{meal.calories} {tr("سعرة", "kcal")}</span>
                   <span className="inline-flex items-center gap-1"><Icon name="bolt" size={15} className="text-brand-600" />{meal.protein_g} {tr("جم بروتين", "g protein")}</span>
                 </div>
-                <p className="text-sm font-semibold"><span className="text-ink-soft">{tr("المكونات: ", "Ingredients: ")}</span>{meal.ingredients.map((i) => i.item).join(tr("، ", ", "))}</p>
+                <p className="text-sm font-semibold"><span className="text-ink-soft">{tr("المكونات: ", "Ingredients: ")}</span>{(lang === "en" && ingredientsEn ? ingredientsEn : meal.ingredients).map((i) => i.item).join(tr("، ", ", "))}</p>
                 <TagChips tags={meal.tags} />
               </div>
             </div>

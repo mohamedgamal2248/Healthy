@@ -7,6 +7,7 @@ export type MealRow = {
   id: string; meal_type: "breakfast" | "lunch" | "dinner"; name_ar: string; name_en: string; photo_url: string | null;
   time_min: number; calories: number; protein_g: number; cost_egp: number; why_ar: string; why_en: string;
   cuisine: "egyptian" | "international"; origin_ar: string | null; origin_en: string | null;
+  ingredients_en: { item: string; qty: string }[] | null; steps_en: string[] | null;
   tags: string[]; ingredients: MealIngredient[]; ingredient_keys: string[]; steps: string[]; active: boolean;
 };
 

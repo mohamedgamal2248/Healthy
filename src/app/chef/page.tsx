@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { useApp, type Balances } from "@/components/AppProvider";
 import { Gate, Notice, PageHeader, PageSkeleton, Spinner } from "@/components/ui";
-import { CreditBalance, DisclaimerBanner, ContentView, type CoachContent } from "@/components/Domain";
+import { DisclaimerBanner, ContentView, type CoachContent } from "@/components/Domain";
 import { Icon } from "@/components/Icon";
 import { CoachThinking } from "@/components/CoachThinking";
 
@@ -120,7 +120,7 @@ function ChefInner() {
           {shareUrl && <div className="card flex items-center gap-2 !p-3"><Icon name="link" size={18} className="shrink-0 text-brand-600" /><input readOnly value={shareUrl} className="field !min-h-10 text-sm" dir="ltr" onFocus={(e) => e.currentTarget.select()} aria-label={tr("رابط المشاركة", "Share link")} /></div>}
           <section className="card space-y-3">
             <div className="flex items-center justify-between"><h2 className="h2">{tr("اسأل عن هذا المحتوى", "Ask about this")}</h2><span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-extrabold text-brand-800">{tr("مجاني، بدون كريدت", "Free, no credit")}</span></div>
-            <p className="muted">{tr("الوصفة الجديدة بكريدت واحد، لكن أي سؤال عن نفس الوصفة (تقليل الملح، بدائل، مناسبة للأطفال…) مجاني لأنه جزء من نفس الوصفة. بحد أقصى ٢٠ سؤالًا في اليوم.", "A new recipe costs 1 credit, but questions about the same recipe (less salt, substitutes, kids…) are free. Up to 20 questions per day.")}</p>
+            <p className="muted">{tr("الوصفة الجديدة بكريدت واحد، لكن أي سؤال عن نفس الوصفة (تقليل الملح، بدائل، مناسبة للأطفال…) مجاني لأنه جزء من نفس الوصفة. بحد أقصى ٢٠ سؤالًا في اليوم.", "A new request costs 1 credit, but follow-up questions about the same result (less salt, substitutes, kids…) are free, up to 20 per day.")}</p>
             {msgs.map((m, i) => (<div key={i} className={`max-w-[92%] rounded-2xl p-3 text-sm font-semibold leading-relaxed ${m.role === "user" ? "me-auto bg-brand-600 text-white" : "ms-auto bg-brand-50 text-ink"}`}>{m.content}</div>))}
             {asking && <div className="rounded-2xl bg-brand-50"><CoachThinking kind={kind} compact /></div>}
             <div className="flex flex-wrap gap-2">{[tr("أقلل الملح إزاي؟", "How do I cut the salt?"), tr("تنفع للأطفال؟", "Is it suitable for kids?")].map((s) => (<button key={s} className="chip" onClick={() => setQ(s)}>{s}</button>))}</div>
@@ -139,10 +139,9 @@ function ChefInner() {
             <label className="block"><span className="label">{tr("إيه اللي عندك أو عايز إيه؟", "What do you have, or what do you want?")}</span>
               <textarea className="field !min-h-32 resize-none py-3 leading-relaxed" value={prompt} onChange={(e) => setPrompt(e.target.value)} maxLength={400} placeholder={tr(kind === "recipe" ? "مثال: عندي بيض وجبنة قريش وطماطم" : kind === "workout" ? "مثال: تمرين منزلي ١٥ دقيقة للمبتدئين" : "مثال: تحدي ٧ أيام لشرب مياه أكتر", kind === "recipe" ? "e.g. I have eggs, cottage cheese and tomatoes" : kind === "workout" ? "e.g. a 15-minute beginner workout" : "e.g. a 7-day hydration challenge")} />
             </label>
-            <div className="flex flex-wrap gap-2">{EXAMPLES[kind].map((e) => (<button key={e.ar} className="chip" onClick={() => setPrompt(lang === "ar" ? e.ar : e.en)}>{lang === "ar" ? e.ar : e.en}</button>))}</div>
-            <CreditBalance b={balances} />
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">{EXAMPLES[kind].map((e) => (<button key={e.ar} className="chip shrink-0 whitespace-nowrap" onClick={() => setPrompt(lang === "ar" ? e.ar : e.en)}>{lang === "ar" ? e.ar : e.en}</button>))}</div>
             {refusal && <Notice tone="warn">{refusal}</Notice>}
-            {total === 0 && accepted && <Notice tone="warn" icon="bolt"><div className="flex flex-wrap items-center gap-3"><span>{tr("رصيدك من الكريدت خلص. اكسب ٣ كريدت بتحدي البداية (٧ أيام) أو اشترِ كريدت.", "You're out of credits. Earn 3 with the 7-day starter challenge, or buy credits.")}</span><Link href="/today" className="btn-soft btn-sm">{tr("تحدي البداية", "Starter challenge")}</Link><Link href="/pricing" className="btn-sun btn-sm">{tr("اشترِ كريدت", "Get credits")}</Link></div></Notice>}
+            {total === 0 && accepted && <Notice tone="warn" icon="bolt"><div className="flex flex-wrap items-center gap-3"><span>{tr("رصيدك من الكريدت خلص. اكسب ٣ كريدت بتحدي البداية (٧ أيام) أو اشترِ كريدت.", "You're out of AI requests. Earn 3 with the 7-day starter challenge, or get more.")}</span><Link href="/today" className="btn-soft btn-sm">{tr("تحدي البداية", "Starter challenge")}</Link><Link href="/pricing" className="btn-sun btn-sm">{tr("اشترِ كريدت", "Get requests")}</Link></div></Notice>}
             <button className="btn-primary w-full" onClick={generate} disabled={!canGenerate}>{busy ? <Spinner /> : <Icon name="sparkles" />}{busy ? tr("الكوتش بيجهّز طلبك…", "The coach is working on it…") : tr("اطلب من الكوتش — 1 كريدت", "Ask the coach — 1 credit")}</button>
             <p className="muted text-center">{tr("لو فشل التوليد يرجع الكريدت تلقائيًا. الأسئلة التالية على نفس الوصفة مجانية.", "If generation fails the credit is refunded automatically. Follow-up questions on the same recipe are free.")}</p>
           </section>

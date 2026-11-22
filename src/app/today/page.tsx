@@ -72,7 +72,7 @@ function TodayInner() {
     try {
       const r = await api<{ newBadges: string[]; starterReward?: boolean; referralReward?: boolean }>("/challenges/complete", { body: { id } });
       if (r.referralReward) toast(tr("مكافأة الدعوة: حصلت على طلب AI مجاني", "Invite reward: you earned a free AI request"), "ok");
-      if (r.starterReward) toast(tr(`مبروك! كسبت ${d.starter.reward} كريدت للشيف AI`, `Congrats! You earned ${d.starter.reward} AI Coach credits`), "ok");
+      if (r.starterReward) toast(tr(`مبروك! كسبت ${d.starter.reward} كريدت للشيف AI`, `Congrats! You earned ${d.starter.reward} AI requests`), "ok");
       r.newBadges.forEach((k) => { const b = BADGES.find((x) => x.key === k); if (b) toast(tr(`شارة جديدة: ${b.ar}`, `New badge: ${b.en}`), "ok"); });
       load();
     } catch (e) { toast(errMsg(e), "err"); load(); }
@@ -111,7 +111,7 @@ function TodayInner() {
           <div className="flex items-center gap-3">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sun-500 text-white"><Icon name="bolt" size={26} /></span>
             <div className="min-w-0 flex-1">
-              <p className="font-extrabold">{tr(`تحدي البداية: اكسب ${d.starter.reward} كريدت للشيف AI`, `Starter challenge: earn ${d.starter.reward} AI Coach credits`)}</p>
+              <p className="font-extrabold">{tr(`تحدي البداية: اكسب ${d.starter.reward} كريدت للشيف AI`, `Starter challenge: earn ${d.starter.reward} free AI requests`)}</p>
               <p className="muted">{tr("أنجز تحديًا واحدًا على الأقل كل يوم لمدة ٧ أيام متتالية.", "Complete at least one challenge every day for 7 days in a row.")}</p>
             </div>
           </div>
@@ -145,7 +145,7 @@ function TodayInner() {
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-600 text-white"><Icon name="chef" size={30} /></span>
           <div className="flex-1">
             <p className="h2">{tr("الكوتش", "AI Coach")}</p>
-            <p className="muted">{tr("قولّه عندك إيه واحصل على وصفة كاملة", "Tell it what you have and get a full recipe")}</p>
+            <p className="muted">{tr("وجبات وتمارين وتحديات على مقاسك", "Meals, workouts and challenges made for you")}</p>
           </div>
           <Icon name={lang === "ar" ? "chevronL" : "chevronR"} size={22} className="text-brand-600" />
         </Link>
