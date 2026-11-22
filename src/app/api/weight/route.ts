@@ -14,12 +14,12 @@ export const POST = route(async (req) => {
   const parsed = Body.safeParse(await readJson(req));
   if (!parsed.success) throw E.bad("اكتب وزنًا صحيحًا بالكيلوجرام.", "Enter a valid weight in kg.");
   const week = weekStart(a.today);
-  const official = must(await db().from("weight_logs").select("id").eq("username", a.username).eq("week_start", week).eq("is_official", true).maybeSingle());
+  const official = must(await db().from("hl_weight_logs").select("id").eq("username", a.username).eq("week_start", week).eq("is_official", true).maybeSingle());
   const isOfficial = !official;
-  must(await db().from("weight_logs").insert({ username: a.username, weight_kg: parsed.data.weight_kg, logged_date: a.today, is_official: isOfficial, week_start: week }));
+  must(await db().from("hl_weight_logs").insert({ username: a.username, weight_kg: parsed.data.weight_kg, logged_date: a.today, is_official: isOfficial, week_start: week }));
   let planRefreshed = false;
   if (isOfficial) {
-    must(await db().from("profiles").update({ weight_kg: parsed.data.weight_kg, updated_at: new Date().toISOString() }).eq("username", a.username));
+    must(await db().from("hl_profiles").update({ weight_kg: parsed.data.weight_kg, updated_at: new Date().toISOString() }).eq("username", a.username));
     // A new official weight refreshes the plan for the next week (subscribers; free).
     if (a.profile.kyc_verified && a.profile.disclaimer_accepted_at && (await hasActivePlan(a.username))) {
       try {

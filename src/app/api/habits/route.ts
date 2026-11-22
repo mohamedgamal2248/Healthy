@@ -14,6 +14,6 @@ export const POST = route(async (req) => {
   const a = await requireUser(req);
   const parsed = Body.safeParse(await readJson(req));
   if (!parsed.success) throw E.bad("قيمة غير صالحة.", "Invalid value.");
-  must(await db().from("habit_logs").upsert({ username: a.username, date: a.today, ...parsed.data }, { onConflict: "username,date" }));
+  must(await db().from("hl_habit_logs").upsert({ username: a.username, date: a.today, ...parsed.data }, { onConflict: "username,date" }));
   return ok({ ok: true });
 });

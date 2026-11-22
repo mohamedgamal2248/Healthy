@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { Icon } from "./Icon";
 import { useApp } from "./AppProvider";
-import { MealArt, TagChips } from "./MealCard";
+import { TagChips } from "./MealCard";
 import { PricingGrid, type PriceItem } from "./Pricing";
 import { Spinner, DevLogin } from "./ui";
 import type { MealSeed } from "@/data/meals";
@@ -42,8 +42,7 @@ export function Landing({ items, trial, meal, challenge }: { items: PriceItem[];
               <div className="flex-1"><p className="text-xs font-extrabold text-ink-soft">{tr("مثال: تحدي اليوم", "Sample: today's challenge")}</p><p className="font-extrabold">{lang === "ar" ? challenge.title_ar : challenge.title_en}</p></div>
               <span className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-brand-300 text-brand-600"><Icon name="check" size={24} /></span>
             </div>
-            <div className="card overflow-hidden !p-0">
-              <div className="aspect-[16/8] bg-brand-50"><MealArt meal={{ id: meal.id, meal_type: meal.meal_type, ingredient_keys: meal.ingredients.map((i) => i.key).filter(Boolean) as string[], photo_url: null, name_ar: meal.name_ar }} /></div>
+            <div className="card !p-0">
               <div className="space-y-2 p-4">
                 <p className="text-xs font-extrabold text-ink-soft">{tr("مثال: وجبة اليوم", "Sample: meal of the day")}</p>
                 <p className="font-extrabold">{lang === "ar" ? meal.name_ar : meal.name_en}</p>
@@ -52,6 +51,7 @@ export function Landing({ items, trial, meal, challenge }: { items: PriceItem[];
                   <span className="inline-flex items-center gap-1"><Icon name="bolt" size={15} className="text-brand-600" />{meal.protein_g} {tr("جم بروتين", "g protein")}</span>
                   <span className="inline-flex items-center gap-1"><Icon name="coin" size={15} />~{meal.cost_egp} {tr("جنيه", "EGP")}</span>
                 </div>
+                <p className="text-sm font-semibold"><span className="text-ink-soft">{tr("المكونات: ", "Ingredients: ")}</span>{meal.ingredients.map((i) => i.item).join(tr("، ", ", "))}</p>
                 <TagChips tags={meal.tags} />
               </div>
             </div>

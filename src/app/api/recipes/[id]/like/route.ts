@@ -5,12 +5,12 @@ import { requireVerified } from "@/server/auth";
 export const POST = route<{ id: string }>(async (req, { params }) => {
   const a = await requireVerified(req);
   const { id } = await params;
-  const r = must(await db().from("recipes").select("id,username,shared").eq("id", id).maybeSingle()) as { username: string; shared: boolean } | null;
+  const r = must(await db().from("hl_recipes").select("id,username,shared").eq("id", id).maybeSingle()) as { username: string; shared: boolean } | null;
   if (!r || (!r.shared && r.username !== a.username)) throw E.notFound();
-  const ex = must(await db().from("recipe_likes").select("recipe_id").eq("recipe_id", id).eq("username", a.username).maybeSingle());
-  if (ex) must(await db().from("recipe_likes").delete().eq("recipe_id", id).eq("username", a.username));
-  else must(await db().from("recipe_likes").insert({ recipe_id: id, username: a.username }));
-  const c = await db().from("recipe_likes").select("recipe_id", { count: "exact", head: true }).eq("recipe_id", id);
-  must(await db().from("recipes").update({ like_count: c.count ?? 0 }).eq("id", id));
+  const ex = must(await db().from("hl_recipe_likes").select("recipe_id").eq("recipe_id", id).eq("username", a.username).maybeSingle());
+  if (ex) must(await db().from("hl_recipe_likes").delete().eq("recipe_id", id).eq("username", a.username));
+  else must(await db().from("hl_recipe_likes").insert({ recipe_id: id, username: a.username }));
+  const c = await db().from("hl_recipe_likes").select("recipe_id", { count: "exact", head: true }).eq("recipe_id", id);
+  must(await db().from("hl_recipes").update({ like_count: c.count ?? 0 }).eq("id", id));
   return ok({ liked: !ex, likes: c.count ?? 0 });
 });

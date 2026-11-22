@@ -6,7 +6,7 @@ import { INGREDIENT_MAP, MEAL_TAGS } from "@/data/ingredients";
 
 export const GET = route(async (req) => {
   await requireAdmin(req);
-  return ok({ meals: must(await db().from("meals").select("*").order("meal_type").order("id")) });
+  return ok({ meals: must(await db().from("hl_meals").select("*").order("meal_type").order("id")) });
 });
 
 const Body = z.object({
@@ -33,6 +33,6 @@ export const POST = route(async (req) => {
   const p = Body.safeParse(await readJson(req));
   if (!p.success) throw E.bad("بيانات الوجبة غير صالحة: " + p.error.issues[0]?.path.join("."), "Invalid meal data: " + p.error.issues[0]?.path.join("."));
   const ingredient_keys = Array.from(new Set(p.data.ingredients.map((i) => i.key).filter(Boolean)));
-  must(await db().from("meals").upsert({ ...p.data, ingredient_keys }, { onConflict: "id" }));
+  must(await db().from("hl_meals").upsert({ ...p.data, ingredient_keys }, { onConflict: "id" }));
   return ok({ ok: true });
 });

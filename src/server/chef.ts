@@ -34,12 +34,12 @@ export async function chefGenerate(a: Auth, prompt: string) {
   if (!aiConfigured()) throw E.notConfigured("الشيف AI");
 
   const req = must(
-    await db().from("ai_requests").insert({ username: a.username, type: "recipe", input_summary: text.slice(0, 200), credit_cost: RECIPE_COST, status: "pending" }).select("id").single(),
+    await db().from("hl_ai_requests").insert({ username: a.username, type: "recipe", input_summary: text.slice(0, 200), credit_cost: RECIPE_COST, status: "pending" }).select("id").single(),
   ) as { id: string };
 
   const kind = await spendCredit(a.username, req.id);
   if (!kind) {
-    must(await db().from("ai_requests").update({ status: "failed", credit_cost: 0, error: "no_credits" }).eq("id", req.id));
+    must(await db().from("hl_ai_requests").update({ status: "failed", credit_cost: 0, error: "no_credits" }).eq("id", req.id));
     throw E.noCredits();
   }
 
@@ -47,14 +47,14 @@ export async function chefGenerate(a: Auth, prompt: string) {
     const recipe = await generateRecipe(text, { goal: a.profile.goal, conditions: a.profile.conditions });
     const content = wrapRecipe(recipe, a.profile.conditions);
     const saved = must(
-      await db().from("recipes").insert({ username: a.username, title: recipe.name, content, source_request_id: req.id }).select("id,title,content,shared,like_count,save_count,created_at,username").single(),
+      await db().from("hl_recipes").insert({ username: a.username, title: recipe.name, content, source_request_id: req.id }).select("id,title,content,shared,like_count,save_count,created_at,username").single(),
     );
-    must(await db().from("ai_requests").update({ status: "completed", output: recipe }).eq("id", req.id));
+    must(await db().from("hl_ai_requests").update({ status: "completed", output: recipe }).eq("id", req.id));
     return saved;
   } catch (e) {
     await refundCredit(req.id);
     const reason = e instanceof AiRefused ? "refused" : e instanceof AiNotConfigured ? "not_configured" : e instanceof Error ? e.message.slice(0, 120) : "failed";
-    must(await db().from("ai_requests").update({ status: "refunded", error: reason }).eq("id", req.id));
+    must(await db().from("hl_ai_requests").update({ status: "refunded", error: reason }).eq("id", req.id));
     if (e instanceof AiRefused) throw refusal();
     if (e instanceof AiNotConfigured) throw E.notConfigured("الشيف AI");
     throw new HttpError(502, "ai_failed", "تعذّر توليد وصفة صالحة هذه المرة. أعدنا لك الكريدت تلقائيًا، حاول مرة أخرى.", "We couldn't produce a valid recipe this time. Your credit was refunded automatically; please try again.");

@@ -9,7 +9,7 @@ export type MealRow = {
 };
 
 export async function listMeals(f: { type?: string; tags?: string[]; have?: string[]; q?: string }): Promise<MealRow[]> {
-  let q = db().from("meals").select("*").eq("active", true).order("meal_type").order("id");
+  let q = db().from("hl_meals").select("*").eq("active", true).order("meal_type").order("id");
   if (f.type && ["breakfast", "lunch", "dinner"].includes(f.type)) q = q.eq("meal_type", f.type);
   if (f.tags?.length) q = q.contains("tags", f.tags);
   // "I have these ingredients": every non-staple ingredient of the meal must be among the ticked ones.
@@ -19,14 +19,14 @@ export async function listMeals(f: { type?: string; tags?: string[]; have?: stri
 }
 
 export async function getMeal(id: string): Promise<MealRow | null> {
-  return must(await db().from("meals").select("*").eq("id", id).maybeSingle()) as MealRow | null;
+  return must(await db().from("hl_meals").select("*").eq("id", id).maybeSingle()) as MealRow | null;
 }
 
 /** Breakfast / lunch / dinner of the day: admin override first, otherwise a daily rotation. */
 export async function mealsOfTheDay(date: string): Promise<Record<"breakfast" | "lunch" | "dinner", MealRow | null>> {
   const [all, overrides] = await Promise.all([
-    db().from("meals").select("*").eq("active", true).order("id"),
-    db().from("meal_overrides").select("meal_type, meal_id").eq("date", date),
+    db().from("hl_meals").select("*").eq("active", true).order("id"),
+    db().from("hl_meal_overrides").select("meal_type, meal_id").eq("date", date),
   ]);
   const meals = must(all) as MealRow[];
   const ov = new Map((must(overrides) as { meal_type: string; meal_id: string }[]).map((o) => [o.meal_type, o.meal_id]));

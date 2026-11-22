@@ -9,7 +9,7 @@ export const POST = route(async (req) => {
   const { username, kyc } = await readJson<{ username?: string; kyc?: boolean }>(req);
   if (!username || !/^[A-Za-z0-9_.-]{3,32}$/.test(username)) throw E.bad();
   const verified = kyc !== false;
-  must(await db().from("profiles").upsert({ username, pi_uid: `dev-${username}`, kyc_verified: verified }, { onConflict: "username" }));
+  must(await db().from("hl_profiles").upsert({ username, pi_uid: `dev-${username}`, kyc_verified: verified }, { onConflict: "username" }));
   if (verified) await grantTrial(username);
   return ok({ token: signSession(username, `dev-${username}`), username, kycVerified: verified });
 });

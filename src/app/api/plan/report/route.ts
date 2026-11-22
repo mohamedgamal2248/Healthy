@@ -8,7 +8,7 @@ import { weekStart } from "@/lib/dates";
 export const GET = route(async (req) => {
   const a = await requireVerified(req);
   if (!(await hasActivePlan(a.username))) return ok({ subscribed: false, reports: [] });
-  const reports = must(await db().from("weekly_reports").select("week_start,summary,tip,created_at").eq("username", a.username).order("week_start", { ascending: false }).limit(8));
+  const reports = must(await db().from("hl_weekly_reports").select("week_start,summary,tip,created_at").eq("username", a.username).order("week_start", { ascending: false }).limit(8));
   return ok({ subscribed: true, reports });
 });
 

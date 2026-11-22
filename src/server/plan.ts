@@ -20,11 +20,11 @@ export type StoredPlan = {
 type Weight = { weight_kg: number; logged_date: string; is_official: boolean; created_at: string };
 
 async function officialWeights(username: string, limit = 3): Promise<Weight[]> {
-  return must(await db().from("weight_logs").select("weight_kg,logged_date,is_official,created_at").eq("username", username).eq("is_official", true).order("logged_date", { ascending: false }).limit(limit)) as Weight[];
+  return must(await db().from("hl_weight_logs").select("weight_kg,logged_date,is_official,created_at").eq("username", username).eq("is_official", true).order("logged_date", { ascending: false }).limit(limit)) as Weight[];
 }
 
 export async function planForWeek(username: string, week: string): Promise<StoredPlan | null> {
-  return must(await db().from("diet_plans").select("*").eq("username", username).eq("week_start", week).maybeSingle()) as StoredPlan | null;
+  return must(await db().from("hl_diet_plans").select("*").eq("username", username).eq("week_start", week).maybeSingle()) as StoredPlan | null;
 }
 
 /** The current plan plus safety text for the user's declared conditions. */
@@ -50,7 +50,7 @@ async function generate(a: Auth, week: string, kind: "first" | "refresh" | "rege
   const calorieTarget = dailyCalories(input); // never below 1,200 kcal
   const water = dailyWaterCups(input.weightKg);
 
-  const meals = must(await db().from("meals").select("id,meal_type,name_ar,name_en,calories,protein_g,tags").eq("active", true)) as PlanMealRef[];
+  const meals = must(await db().from("hl_meals").select("id,meal_type,name_ar,name_en,calories,protein_g,tags").eq("active", true)) as PlanMealRef[];
   const built = buildWeekPlan({ meals, calorieTarget, conditions: p.conditions, goal: p.goal, weekStart: week, seed: `${a.username}:${week}` });
 
   // Complete slots the catalogue cannot fill (e.g. no meal carries the required condition tags) with AI.
@@ -79,13 +79,13 @@ async function generate(a: Auth, week: string, kind: "first" | "refresh" | "rege
   const planJson = { days: built.days, notes: { gaps_unfilled: unfilled, ai_filled: aiFilled } };
 
   const row = must(
-    await db().from("diet_plans").upsert({ username: a.username, week_start: week, daily_calorie_target: calorieTarget, daily_water_target: water, adjustment_kcal: adjustment, plan: planJson, status: "active", created_at: new Date().toISOString() }, { onConflict: "username,week_start" }).select("*").single(),
+    await db().from("hl_diet_plans").upsert({ username: a.username, week_start: week, daily_calorie_target: calorieTarget, daily_water_target: water, adjustment_kcal: adjustment, plan: planJson, status: "active", created_at: new Date().toISOString() }, { onConflict: "username,week_start" }).select("*").single(),
   ) as StoredPlan;
 
   if (aiFilled > 0 || requestId) {
     // Audit trail for AI usage inside plan generation (credit cost is recorded on the request itself).
-    if (requestId) must(await db().from("ai_requests").update({ status: "completed", output: { week, calorieTarget, aiFilled } }).eq("id", requestId));
-    else must(await db().from("ai_requests").insert({ username: a.username, type: "plan", input_summary: `plan ${week} (ai gap fill x${aiFilled})`, credit_cost: 0, status: "completed" }));
+    if (requestId) must(await db().from("hl_ai_requests").update({ status: "completed", output: { week, calorieTarget, aiFilled } }).eq("id", requestId));
+    else must(await db().from("hl_ai_requests").insert({ username: a.username, type: "plan", input_summary: `plan ${week} (ai gap fill x${aiFilled})`, credit_cost: 0, status: "completed" }));
   }
   return row;
 }
@@ -100,17 +100,17 @@ export async function createPlan(a: Auth, mode: "auto" | "regenerate"): Promise<
   const existing = await planForWeek(a.username, week);
 
   if (mode === "regenerate" && existing) {
-    const req = must(await db().from("ai_requests").insert({ username: a.username, type: "plan", input_summary: `regenerate ${week}`, credit_cost: PLAN_REGENERATE_COST, status: "pending" }).select("id").single()) as { id: string };
+    const req = must(await db().from("hl_ai_requests").insert({ username: a.username, type: "plan", input_summary: `regenerate ${week}`, credit_cost: PLAN_REGENERATE_COST, status: "pending" }).select("id").single()) as { id: string };
     const kind = await spendCredit(a.username, req.id);
     if (!kind) {
-      must(await db().from("ai_requests").update({ status: "failed", credit_cost: 0, error: "no_credits" }).eq("id", req.id));
+      must(await db().from("hl_ai_requests").update({ status: "failed", credit_cost: 0, error: "no_credits" }).eq("id", req.id));
       throw E.noCredits();
     }
     try {
       return await generate(a, week, "regenerate", req.id);
     } catch (e) {
       await refundCredit(req.id);
-      await db().from("ai_requests").update({ status: "refunded", error: e instanceof Error ? e.message.slice(0, 120) : "failed" }).eq("id", req.id);
+      await db().from("hl_ai_requests").update({ status: "refunded", error: e instanceof Error ? e.message.slice(0, 120) : "failed" }).eq("id", req.id);
       throw e;
     }
   }
@@ -129,16 +129,16 @@ export async function createPlan(a: Auth, mode: "auto" | "regenerate"): Promise<
 // ------------------------------------------------------------------ weekly report
 export async function buildReport(a: Auth, week: string) {
   const end = addDays(week, 6);
-  const weights = must(await db().from("weight_logs").select("weight_kg,logged_date,is_official").eq("username", a.username).lte("logged_date", end).order("logged_date", { ascending: false }).limit(40)) as { weight_kg: number; logged_date: string; is_official: boolean }[];
+  const weights = must(await db().from("hl_weight_logs").select("weight_kg,logged_date,is_official").eq("username", a.username).lte("logged_date", end).order("logged_date", { ascending: false }).limit(40)) as { weight_kg: number; logged_date: string; is_official: boolean }[];
   const inWeek = weights.filter((w) => w.logged_date >= week);
   const before = weights.find((w) => w.logged_date < week && w.is_official) ?? weights.find((w) => w.logged_date < week);
   const cur = inWeek.find((w) => w.is_official) ?? inWeek[0];
   const change = cur && before ? Math.round((Number(cur.weight_kg) - Number(before.weight_kg)) * 10) / 10 : null;
   const streak = await loadStreak(a.username);
   const completed = await recentCompletedCount(a.username, week, end);
-  const favs = must(await db().from("favourites").select("source_id,created_at").eq("username", a.username).eq("source_type", "meal").gte("created_at", `${week}T00:00:00Z`).order("created_at", { ascending: false }).limit(1)) as { source_id: string }[];
-  const fav = favs[0] ? (must(await db().from("meals").select("id,name_ar,name_en").eq("id", favs[0].source_id).maybeSingle()) as { id: string; name_ar: string; name_en: string } | null) : null;
-  const habits = must(await db().from("habit_logs").select("water_cups").eq("username", a.username).gte("date", week).lte("date", end)) as { water_cups: number | null }[];
+  const favs = must(await db().from("hl_favourites").select("source_id,created_at").eq("username", a.username).eq("source_type", "meal").gte("created_at", `${week}T00:00:00Z`).order("created_at", { ascending: false }).limit(1)) as { source_id: string }[];
+  const fav = favs[0] ? (must(await db().from("hl_meals").select("id,name_ar,name_en").eq("id", favs[0].source_id).maybeSingle()) as { id: string; name_ar: string; name_en: string } | null) : null;
+  const habits = must(await db().from("hl_habit_logs").select("water_cups").eq("username", a.username).gte("date", week).lte("date", end)) as { water_cups: number | null }[];
   const waters = habits.map((h) => h.water_cups).filter((n): n is number => n !== null);
   const avgWater = waters.length ? Math.round((waters.reduce((s, n) => s + n, 0) / waters.length) * 10) / 10 : null;
 
@@ -156,7 +156,7 @@ export async function saveReport(a: Auth, week: string) {
   const r = await buildReport(a, week);
   const { tip_ar, tip_en, ...summary } = r;
   void tip_en;
-  must(await db().from("weekly_reports").upsert({ username: a.username, week_start: week, summary: { ...summary, tip_en }, tip: tip_ar }, { onConflict: "username,week_start" }));
+  must(await db().from("hl_weekly_reports").upsert({ username: a.username, week_start: week, summary: { ...summary, tip_en }, tip: tip_ar }, { onConflict: "username,week_start" }));
   return r;
 }
 

@@ -36,7 +36,7 @@ function clientTz(req: Request, profileTz?: string): string {
 export async function requireUser(req: Request): Promise<Auth> {
   const claims = verifySession(bearer(req));
   if (!claims) throw E.unauth();
-  const profile = must(await db().from("profiles").select("*").eq("username", claims.u).maybeSingle()) as Profile | null;
+  const profile = must(await db().from("hl_profiles").select("*").eq("username", claims.u).maybeSingle()) as Profile | null;
   if (!profile) throw E.unauth();
   const tz = clientTz(req, profile.timezone);
   return { username: profile.username, uid: claims.uid, profile, tz, today: localDate(tz) };

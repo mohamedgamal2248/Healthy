@@ -37,6 +37,6 @@ export const PATCH = route(async (req) => {
     if (!merged.age || !merged.goal) throw E.bad("العمر والهدف مطلوبان قبل الموافقة.", "Age and goal are required before accepting.");
     update.disclaimer_accepted_at = a.profile.disclaimer_accepted_at ?? new Date().toISOString();
   }
-  must(await db().from("profiles").update(update).eq("username", a.username));
+  must(await db().from("hl_profiles").update(update).eq("username", a.username));
   return ok({ ok: true });
 });

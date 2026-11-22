@@ -8,8 +8,8 @@ export const GET = route(async (req) => {
   const a = await requireVerified(req);
   const group = await currentGroup(a.today);
   const [me, checked, board, top] = await Promise.all([
-    db().from("group_challenge_members").select("days_completed").eq("group_id", group.id).eq("username", a.username).maybeSingle(),
-    db().from("group_challenge_checks").select("date").eq("group_id", group.id).eq("username", a.username).eq("date", a.today).maybeSingle(),
+    db().from("hl_group_challenge_members").select("days_completed").eq("group_id", group.id).eq("username", a.username).maybeSingle(),
+    db().from("hl_group_challenge_checks").select("date").eq("group_id", group.id).eq("username", a.username).eq("date", a.today).maybeSingle(),
     leaderboard(group.id),
     topRecipes(a),
   ]);

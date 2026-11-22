@@ -5,7 +5,7 @@ import { requireAdmin } from "@/server/auth";
 
 export const GET = route(async (req) => {
   await requireAdmin(req);
-  return ok({ challenges: must(await db().from("challenges").select("*").order("type").order("id")) });
+  return ok({ challenges: must(await db().from("hl_challenges").select("*").order("type").order("id")) });
 });
 
 const Body = z.object({
@@ -23,6 +23,6 @@ export const POST = route(async (req) => {
   await requireAdmin(req);
   const p = Body.safeParse(await readJson(req));
   if (!p.success) throw E.bad("بيانات التحدي غير صالحة (المعرّف: حروف إنجليزية صغيرة وأرقام وشرطات).", "Invalid challenge data.");
-  must(await db().from("challenges").upsert(p.data, { onConflict: "id" }));
+  must(await db().from("hl_challenges").upsert(p.data, { onConflict: "id" }));
   return ok({ ok: true });
 });

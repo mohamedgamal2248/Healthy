@@ -12,8 +12,8 @@ export const GET = route(async (req) => {
     ensureToday(a),
     loadStreak(a.username),
     mealsOfTheDay(a.today),
-    db().from("badges").select("badge_key, earned_at").eq("username", a.username),
-    db().from("favourites").select("source_id").eq("username", a.username).eq("source_type", "meal"),
+    db().from("hl_badges").select("badge_key, earned_at").eq("username", a.username),
+    db().from("hl_favourites").select("source_id").eq("username", a.username).eq("source_type", "meal"),
     reminderState(a),
     a.profile.kyc_verified ? getBalances(a.username) : Promise.resolve(null),
   ]);

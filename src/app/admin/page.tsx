@@ -99,7 +99,6 @@ function MealAdmin({ items, onSave, busy }: { items: Meal[]; onSave: (m: Meal) =
           <Field label={tr("النوع", "Type")}><select className="field" value={f.meal_type} onChange={(e) => setF({ ...f, meal_type: e.target.value as Meal["meal_type"] })}><option value="breakfast">breakfast</option><option value="lunch">lunch</option><option value="dinner">dinner</option></select></Field>
           <Field label="الاسم بالعربية"><input className="field" value={f.name_ar} onChange={(e) => setF({ ...f, name_ar: e.target.value })} /></Field>
           <Field label="English name"><input className="field" value={f.name_en} onChange={(e) => setF({ ...f, name_en: e.target.value })} /></Field>
-          <Field label={tr("رابط الصورة (اختياري)", "Photo URL (optional)")}><input className="field" dir="ltr" value={f.photo_url ?? ""} onChange={(e) => setF({ ...f, photo_url: e.target.value || null })} /></Field>
           <Field label={tr("دقائق التحضير", "Prep minutes")}><input className="field" type="number" value={f.time_min} onChange={n("time_min")} /></Field>
           <Field label={tr("السعرات", "Calories")}><input className="field" type="number" value={f.calories} onChange={n("calories")} /></Field>
           <Field label={tr("بروتين (جم)", "Protein (g)")}><input className="field" type="number" value={f.protein_g} onChange={n("protein_g")} /></Field>

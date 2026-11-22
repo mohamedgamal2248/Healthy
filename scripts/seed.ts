@@ -9,7 +9,7 @@ async function main() {
   if (!url || !key) throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required");
   const sb = createClient(url, key, { auth: { persistSession: false } });
 
-  const ch = await sb.from("challenges").upsert(CHALLENGE_SEEDS.map((c) => ({ ...c, active: true })), { onConflict: "id", ignoreDuplicates: true });
+  const ch = await sb.from("hl_challenges").upsert(CHALLENGE_SEEDS.map((c) => ({ ...c, active: true })), { onConflict: "id", ignoreDuplicates: true });
   if (ch.error) throw ch.error;
 
   const rows = MEAL_SEEDS.map((m) => ({
@@ -20,7 +20,7 @@ async function main() {
     active: true,
   }));
   // ignoreDuplicates keeps admin edits to already-seeded meals intact.
-  const ml = await sb.from("meals").upsert(rows, { onConflict: "id", ignoreDuplicates: true });
+  const ml = await sb.from("hl_meals").upsert(rows, { onConflict: "id", ignoreDuplicates: true });
   if (ml.error) throw ml.error;
   console.log(`Seeded ${CHALLENGE_SEEDS.length} challenges and ${MEAL_SEEDS.length} meals.`);
 }
