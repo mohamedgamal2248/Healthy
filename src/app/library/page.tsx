@@ -24,8 +24,8 @@ function Inner() {
   if (!recipes || !favs) return <PageSkeleton />;
   const RecipeRow = ({ r }: { r: R }) => (
     <Link href={`/chef?recipe=${r.id}`} className="card flex items-center gap-3 !p-3.5 transition hover:shadow-md">
-      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-600"><Icon name={r.content.kind === "workout" ? "bolt" : r.content.kind === "challenge" ? "flame" : "utensils"} size={24} /></span>
-      <div className="min-w-0 flex-1"><p className="truncate font-extrabold">{r.title}</p><p className="muted">{r.content.recipe ? `${Math.round(r.content.recipe.calories)} ${tr("سعرة", "kcal")} · ${Math.round(r.content.recipe.protein)} ${tr("جم بروتين", "g protein")}` : r.content.kind === "workout" ? tr("برنامج تمرين", "Workout") : tr("تحدٍّ مخصص", "Custom challenge")}</p></div>
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-600"><Icon name={r.content.kind === "workout" ? "bolt" : r.content.kind === "challenge" ? "flame" : r.content.kind === "scan" ? "camera" : "utensils"} size={24} /></span>
+      <div className="min-w-0 flex-1"><p className="truncate font-extrabold">{r.title}</p><p className="muted">{r.content.scan ? `~${Math.round(r.content.scan.totals.calories.mid)} ${tr("سعرة", "kcal")} (${tr("تقدير", "est.")}) · ${Math.round(r.content.scan.totals.protein_g.mid)} ${tr("جم بروتين", "g protein")}` : r.content.recipe ? `${Math.round(r.content.recipe.calories)} ${tr("سعرة", "kcal")} · ${Math.round(r.content.recipe.protein)} ${tr("جم بروتين", "g protein")}` : r.content.kind === "workout" ? tr("برنامج تمرين", "Workout") : tr("تحدٍّ مخصص", "Custom challenge")}</p></div>
       {r.shared && <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-600">{tr("مشارَكة", "Shared")}</span>}
       <Icon name="chevronL" size={20} className="text-ink-soft rtl:block ltr:hidden" /><Icon name="chevronR" size={20} className="text-ink-soft ltr:block rtl:hidden" />
     </Link>

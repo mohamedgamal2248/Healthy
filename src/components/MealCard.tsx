@@ -17,7 +17,7 @@ export function TagChips({ tags, max = 3 }: { tags: string[]; max?: number }) {
   );
 }
 
-export function MealCard({ meal, fav, onFav, label }: { meal: MealRow; fav?: boolean; onFav?: (id: string) => void; label?: string }) {
+export function MealCard({ meal, fav, onFav, label, missing }: { meal: MealRow; fav?: boolean; onFav?: (id: string) => void; label?: string; missing?: string }) {
   const { tr, lang } = useApp();
   return (
     <article className="card relative !p-0">
@@ -34,6 +34,7 @@ export function MealCard({ meal, fav, onFav, label }: { meal: MealRow; fav?: boo
             <span className="inline-flex items-center gap-1"><Icon name="bolt" size={15} className="text-brand-600" />{meal.protein_g} {tr("جم بروتين", "g protein")}</span>
           </div>
           <p className="text-sm font-semibold text-ink"><span className="text-ink-soft">{tr("المكونات: ", "Ingredients: ")}</span>{(lang === "en" && meal.ingredients_en ? meal.ingredients_en : meal.ingredients).map((i) => i.item).join(tr("، ", ", "))}</p>
+          {missing && <p className="rounded-xl bg-sun-50 px-3 py-2 text-sm font-bold text-sun-600">{tr("ينقصك: ", "You need: ")}{missing}</p>}
           <p className="muted line-clamp-2">{lang === "ar" ? meal.why_ar : meal.why_en}</p>
           <TagChips tags={meal.tags} />
         </div>
