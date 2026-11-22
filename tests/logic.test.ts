@@ -44,15 +44,20 @@ test("calories never go below 1,200 even for aggressive inputs", () => {
   assert.ok(weeklyAdjustment("lose", 80, 80, -300) >= -300);
 });
 
-test("catalogue: 30 meals, 10 per type, Arabic, no emoji, ingredient keys valid", () => {
-  assert.equal(MEAL_SEEDS.length, 30);
-  for (const t of ["breakfast", "lunch", "dinner"]) assert.equal(MEAL_SEEDS.filter((m) => m.meal_type === t).length, 10);
+test("catalogue: 110 meals (30+40 Egyptian, 40 international), no emoji, no forbidden words, keys valid", async () => {
+  assert.equal(MEAL_SEEDS.length, 110);
+  assert.equal(MEAL_SEEDS.filter((m) => m.cuisine === "egyptian").length, 70);
+  assert.equal(MEAL_SEEDS.filter((m) => m.cuisine === "international").length, 40);
+  const forbidden = ["خنزير", "نبيذ", "كحول", "حلال", "حرام", "halal", "haram", "pork", "bacon", "wine", "beer", "mirin", "sake", "gelatin"];
+  for (const m of MEAL_SEEDS) { const words = JSON.stringify(m).toLowerCase().split(/[^\p{L}]+/u); for (const f of forbidden) assert.ok(!words.includes(f), `${m.id}: ${f}`); }
+  const { INGREDIENT_MAP } = await import("../src/data/ingredients");
+  for (const m of MEAL_SEEDS) for (const i of m.ingredients) if (i.key) assert.ok(INGREDIENT_MAP[i.key], `${m.id}: ${i.key}`);
   const emoji = /\p{Extended_Pictographic}/u;
   for (const m of MEAL_SEEDS) {
     assert.ok(m.steps.length >= 3 && m.ingredients.length >= 3 && m.calories > 0 && m.protein_g > 0, m.id);
     assert.ok(!emoji.test(JSON.stringify(m)), m.id);
   }
-  assert.equal(new Set(MEAL_SEEDS.map((m) => m.id)).size, 30);
+  assert.equal(new Set(MEAL_SEEDS.map((m) => m.id)).size, 110);
   assert.ok(CHALLENGE_SEEDS.length >= 14);
 });
 
