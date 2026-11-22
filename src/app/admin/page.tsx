@@ -8,7 +8,8 @@ import { INGREDIENTS, MEAL_TAGS } from "@/data/ingredients";
 
 type Ch = { id: string; type: string; title_ar: string; title_en: string; target_value: number | null; unit: string | null; active: boolean };
 type Meal = { id: string; meal_type: "breakfast" | "lunch" | "dinner"; name_ar: string; name_en: string; photo_url: string | null; time_min: number; calories: number; protein_g: number; cost_egp: number; why_ar: string; why_en: string; tags: string[]; ingredients: { item: string; qty: string; key?: string }[]; steps: string[]; active: boolean };
-type Stats = { users: number; challengesCompleted: number; recipesGenerated: number; plansActive: number; piReceived: number };
+type KindCost = { kind: string; n: number; refunded: number; avgCost: number; totalCost: number; avgIn: number; avgOut: number; avgSearches: number };
+type Stats = { aiByKind: KindCost[]; aiCostUsd: number; avgCostUsd: number; aiCalls: number; aiRefunded: number; audit: { admin: string; action: string; target: string | null; created_at: string }[]; users: number; challengesCompleted: number; recipesGenerated: number; plansActive: number; piReceived: number };
 
 function Inner() {
   const { me, tr, toast, errMsg } = useApp();
@@ -35,11 +36,46 @@ function Inner() {
       <div className="flex flex-wrap gap-2">{([["stats", tr("الإجماليات", "Totals")], ["challenges", tr("التحديات", "Challenges")], ["meals", tr("الوجبات", "Meals")], ["rotation", tr("وجبات اليوم", "Daily rotation")], ["group", tr("تحدي الأسبوع", "Weekly challenge")]] as const).map(([k, l]) => (<button key={k} className="chip" aria-pressed={tab === k} onClick={() => setTab(k)}>{l}</button>))}</div>
 
       {tab === "stats" && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-          {[["users", tr("المستخدمون", "Users"), stats.users], ["check", tr("تحديات منجزة", "Challenges completed"), stats.challengesCompleted], ["chef", tr("وصفات AI", "Recipes generated"), stats.recipesGenerated], ["sparkles", tr("خطط فعّالة", "Plans active"), stats.plansActive], ["pi", tr("Pi المستلمة", "Pi received"), stats.piReceived]].map(([ic, l, v]) => (
-            <div key={l as string} className="card"><Icon name={ic as string} size={22} className="text-brand-600" /><p className="mt-2 text-3xl font-extrabold tabular-nums">{v as number}</p><p className="muted">{l as string}</p></div>
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            {[["users", tr("المستخدمون", "Users"), stats.users], ["check", tr("تحديات منجزة", "Challenges completed"), stats.challengesCompleted], ["chef", tr("وصفات AI", "Recipes generated"), stats.recipesGenerated], ["sparkles", tr("خطط فعّالة", "Plans active"), stats.plansActive], ["pi", tr("Pi المستلمة", "Pi received"), stats.piReceived]].map(([ic, l, v]) => (
+              <div key={l as string} className="card"><Icon name={ic as string} size={22} className="text-brand-600" /><p className="mt-2 text-3xl font-extrabold tabular-nums">{v as number}</p><p className="muted">{l as string}</p></div>
+            ))}
+          </div>
+          <section className="card space-y-3">
+            <div className="flex items-center justify-between gap-3"><h2 className="h2">{tr("تكلفة الذكاء الاصطناعي لكل نوع", "AI cost by request type")}</h2><span className="muted tabular-nums">{tr("الإجمالي", "Total")}: ${stats.aiCostUsd} · {stats.aiCalls} {tr("طلب", "calls")} · {stats.aiRefunded} {tr("مُسترد", "refunded")}</span></div>
+            <p className="muted">{tr("تقدير من التوكنات الفعلية حسب أسعار Meta (إدخال 0.10 / إخراج 0.50 دولار لكل مليون، وبحث 0.0025). سعر الكريدت للمستخدم نحو 0.05 دولار.", "Estimated from real token usage at Meta's rates ($0.10 in / $0.50 out per 1M, $0.0025 per search). A credit sells for about $0.05.")}</p>
+            {stats.aiByKind.length === 0 ? <p className="muted">{tr("لا توجد بيانات بعد.", "No data yet.")}</p> : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[460px] text-sm">
+                  <thead><tr className="text-start text-xs font-extrabold text-ink-soft"><th className="py-2 text-start">{tr("النوع", "Type")}</th><th>{tr("العدد", "Calls")}</th><th>{tr("متوسط التكلفة", "Avg cost")}</th><th>{tr("إدخال/إخراج", "Tokens in/out")}</th><th>{tr("نسبة من السعر", "% of price")}</th></tr></thead>
+                  <tbody>
+                    {stats.aiByKind.map((k) => {
+                      const pct = (k.avgCost / 0.05) * 100;
+                      const high = k.avgCost > 0.01;
+                      return (
+                        <tr key={k.kind} className="border-t border-line text-center">
+                          <td className="py-2.5 text-start font-extrabold">{({ recipe: tr("وجبة", "Meal"), workout: tr("تمرين", "Workout"), challenge: tr("تحدٍّ", "Challenge"), scan: tr("تحليل صورة", "Photo scan"), plan: tr("خطة", "Plan") } as Record<string, string>)[k.kind] ?? k.kind}</td>
+                          <td className="tabular-nums">{k.n}{k.refunded ? <span className="text-xs text-ink-soft"> ({k.refunded} ↩)</span> : null}</td>
+                          <td className={`font-extrabold tabular-nums ${high ? "text-rose-600" : ""}`}>${k.avgCost.toFixed(5)}</td>
+                          <td className="tabular-nums text-ink-soft">{k.avgIn} / {k.avgOut}</td>
+                          <td className={`tabular-nums ${high ? "font-extrabold text-rose-600" : ""}`}>{pct.toFixed(1)}%</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {stats.aiByKind.some((k) => k.avgCost > 0.01) && <Notice tone="warn">{tr("متوسط تكلفة أحد الأنواع تجاوز 0.01 دولار: فكّر في رفع كريدته إلى 2.", "One type averages above $0.01 per call: consider charging 2 credits for it.")}</Notice>}
+          </section>
+          <section className="card space-y-2">
+            <h2 className="h2">{tr("سجل أفعال الإدارة", "Admin audit log")}</h2>
+            {stats.audit.length === 0 ? <p className="muted">{tr("لا توجد أفعال بعد.", "Nothing yet.")}</p> : (
+              <ul className="divide-y divide-line text-sm">{stats.audit.map((a, i) => (<li key={i} className="flex flex-wrap items-center gap-x-3 py-2"><span className="font-extrabold">{a.action}</span><span className="text-ink-soft" dir="ltr">{a.target}</span><span className="ms-auto text-xs text-ink-soft" dir="ltr">{a.admin} · {new Date(a.created_at).toLocaleString()}</span></li>))}</ul>
+            )}
+          </section>
+        </>
       )}
       {tab === "challenges" && <ChallengeAdmin items={chs} onSave={(c) => post("/admin/challenges", c)} busy={busy} />}
       {tab === "meals" && <MealAdmin items={meals} onSave={(m) => post("/admin/meals", m)} busy={busy} />}
