@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, rememberToken, getToken } from "@/lib/api";
+import { clearGetCache } from "@/lib/useGet";
 import { piSignIn } from "@/lib/pi-client";
 
 export type Lang = "ar" | "en";
@@ -100,6 +101,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         rememberToken(null);
+        clearGetCache();
         setMe(null);
       }
       setReady(true);
@@ -113,6 +115,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const afterLogin = useCallback(
     async (token: string) => {
+      clearGetCache();
       rememberToken(token);
       const m = await refresh();
       try {
@@ -157,6 +160,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(() => {
+    if (getToken()) api("/auth/logout", { method: "POST", body: {} }).catch(() => {});
+    clearGetCache();
     rememberToken(null);
     setMe(null);
     router.push("/");

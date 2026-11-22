@@ -13,7 +13,7 @@ export async function enforceGenerationLimits(username: string): Promise<void> {
   const hourAgo = new Date(now - 3600_000).toISOString();
   const dayAgo = new Date(now - 86400_000).toISOString();
   const startOfUtcDay = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00Z").toISOString();
-  const base = () => db().from("hl_ai_requests").select("id", { count: "exact", head: true }).eq("type", "recipe").neq("error", "no_credits");
+  const base = () => db().from("hl_ai_requests").select("id", { count: "exact", head: true }).eq("type", "recipe").or("error.is.null,error.neq.no_credits");
 
   const [inflight, hour, day, global] = await Promise.all([
     db().from("hl_ai_requests").select("id", { count: "exact", head: true }).eq("username", username).eq("status", "pending").gte("created_at", new Date(now - AI_LIMITS.inFlightWindowMs).toISOString()),

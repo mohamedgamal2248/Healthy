@@ -21,6 +21,7 @@ export type Profile = {
   token_version: number;
   deleted_at: string | null;
   created_at: string;
+  timezone_changed_at: string | null;
 };
 
 export type Auth = { username: string; uid: string; profile: Profile; tz: string; today: string };
@@ -30,19 +31,15 @@ function bearer(req: Request): string | null {
   return h?.toLowerCase().startsWith("bearer ") ? h.slice(7).trim() : null;
 }
 
-/** Local timezone: client sends x-tz (device timezone); falls back to the profile, then Africa/Cairo. */
-function clientTz(req: Request, profileTz?: string): string {
-  const h = req.headers.get("x-tz");
-  return validTz(h || profileTz || DEFAULT_TZ);
-}
-
 export async function requireUser(req: Request): Promise<Auth> {
   const claims = verifySession(bearer(req));
   if (!claims) throw E.unauth();
   const profile = must(await db().from("hl_profiles").select("*").eq("username", claims.u).maybeSingle()) as Profile | null;
   // Revocable sessions: bumping token_version (or deleting the account) invalidates every issued token.
   if (!profile || profile.deleted_at || (claims.v ?? 0) !== (profile.token_version ?? 0)) throw E.unauth();
-  const tz = clientTz(req, profile.timezone);
+  // Day boundaries (streaks, daily challenges, check-ins) use the timezone stored on the profile, never a per-request header.
+  if (claims.uid !== profile.pi_uid && profile.pi_uid) throw E.unauth(); // token must belong to this Pi identity
+  const tz = validTz(profile.timezone || DEFAULT_TZ);
   return { username: profile.username, uid: claims.uid, profile, tz, today: localDate(tz) };
 }
 

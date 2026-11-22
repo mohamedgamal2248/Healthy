@@ -1,6 +1,7 @@
 import { db, must } from "@/server/supabase";
 import { ok, readJson, route, E } from "@/server/http";
 import { requireUser } from "@/server/auth";
+import { publicContent } from "@/server/public-content";
 import { rateLimit } from "@/server/ratelimit";
 
 export const GET = route(async (req) => {
@@ -12,7 +13,8 @@ export const GET = route(async (req) => {
     mealIds.length ? db().from("hl_meals").select("*").in("id", mealIds) : Promise.resolve({ data: [], error: null }),
     recipeIds.length ? db().from("hl_recipes").select("id,title,content,username,created_at,shared").in("id", recipeIds) : Promise.resolve({ data: [], error: null }),
   ]);
-  return ok({ meals: must(meals as never), recipes: must(recipes as never) });
+  const rec = (must(recipes as never) as { username: string; content: { cautions?: unknown; doctor_note?: unknown } }[]).map((r) => (r.username === a.username ? r : { ...r, content: publicContent(r.content) }));
+  return ok({ meals: must(meals as never), recipes: rec });
 });
 
 /** Toggle a favourite. Saving a shared recipe also bumps its public save count. */

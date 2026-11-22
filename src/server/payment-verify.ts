@@ -18,7 +18,7 @@ export const memoFor = (itemKey: string): string => {
  *  - payer is the same Pi user who created the purchase
  *  - direction is user_to_app and the payment was not cancelled
  */
-export function paymentMismatch(payment: PiPayment, purchase: PurchaseRef, payerUid: string): string | null {
+export function paymentMismatch(payment: PiPayment, purchase: PurchaseRef, payerUid: string, opts: { enforceTtl?: boolean } = {}): string | null {
   const item = PRICING[purchase.item_key as ItemKey];
   if (!item || item.kind !== purchase.kind) return "unknown_item";
   // The price was quoted by OUR server when the purchase was created (live OKX rate, rounded up to whole Pi).
@@ -26,7 +26,8 @@ export function paymentMismatch(payment: PiPayment, purchase: PurchaseRef, payer
   const quoted = Number(purchase.amount_pi);
   if (!(quoted >= 1) || !Number.isInteger(quoted)) return "bad_quote";
   if (Math.abs(Number(payment.amount) - quoted) > 1e-7) return "wrong_amount";
-  if (purchase.created_at && Date.now() - new Date(purchase.created_at).getTime() > QUOTE_TTL_MIN * 60_000) return "quote_expired";
+  // The quote age matters only when the payment is being opened. Once the user has actually paid, we must still grant.
+  if (opts.enforceTtl && purchase.created_at && Date.now() - new Date(purchase.created_at).getTime() > QUOTE_TTL_MIN * 60_000) return "quote_expired";
   if (payment.memo !== memoFor(purchase.item_key)) return "wrong_memo";
   if (payment.user_uid !== payerUid) return "wrong_payer";
   if (payment.direction !== "user_to_app") return "wrong_direction";

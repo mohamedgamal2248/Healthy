@@ -35,7 +35,7 @@ export function usdToPi(usd: number, usdPerPi: number): number {
 export async function quote(key: ItemKey): Promise<Quote> {
   const item = PRICING[key];
   if ((process.env.PRICING_MODE ?? "live") === "fixed") {
-    return { key, usd: item.usd, pricePi: item.fixedPi, rate: { usdPerPi: item.usd / item.fixedPi, source: "fallback", asOf: Date.now() }, mode: "fixed" };
+    return { key, usd: item.usd, pricePi: Math.max(1, Math.ceil(item.fixedPi)), rate: { usdPerPi: item.usd / item.fixedPi, source: "fallback", asOf: Date.now() }, mode: "fixed" };
   }
   const rate = await getPiRate();
   return { key, usd: item.usd, pricePi: usdToPi(item.usd, rate.usdPerPi), rate, mode: "live" };

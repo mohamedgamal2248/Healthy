@@ -30,6 +30,14 @@ export async function leaderboard(groupId: string) {
   return members.filter((m) => visible.has(m.username)).slice(0, 50).map((m, i) => ({ rank: i + 1, username: m.username, verified: true, days: m.days_completed, streak: st.get(m.username) ?? 0 }));
 }
 
+/** Authors who are KYC-verified, not deleted and did not hide themselves from community surfaces. */
+async function visibleAuthors(names: string[]): Promise<Set<string>> {
+  const uniq = [...new Set(names)];
+  if (!uniq.length) return new Set();
+  const rows = must(await db().from("hl_profiles").select("username,kyc_verified,leaderboard_visible,deleted_at").in("username", uniq)) as { username: string; kyc_verified: boolean; leaderboard_visible: boolean; deleted_at: string | null }[];
+  return new Set(rows.filter((p) => p.kyc_verified && p.leaderboard_visible && !p.deleted_at).map((p) => p.username));
+}
+
 /** Top shared recipes of the last 7 days by likes + saves from verified users. */
 export async function topRecipes(a: Auth) {
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
@@ -55,7 +63,9 @@ export async function topRecipes(a: Auth) {
   ]);
   const liked = new Set((must(myLikes) as { recipe_id: string }[]).map((r) => r.recipe_id));
   const saved = new Set((must(myFavs) as { source_id: string }[]).map((r) => r.source_id));
+  const okAuthors = await visibleAuthors(recipes.map((r) => r.username));
   return recipes
+    .filter((r) => okAuthors.has(r.username))
     .map((r) => ({ id: r.id, title: r.title, author: r.username, calories: r.content?.recipe?.calories, protein: r.content?.recipe?.protein, likes: r.like_count, saves: r.save_count, score: score.get(r.id) ?? 0, liked: liked.has(r.id), saved: saved.has(r.id) }))
     .sort((x, y) => y.score - x.score)
     .slice(0, 10);
@@ -110,7 +120,8 @@ export async function latestRecipes(a: Auth) {
   ]);
   const liked = new Set((must(myLikes) as { recipe_id: string }[]).map((r) => r.recipe_id));
   const saved = new Set((must(myFavs) as { source_id: string }[]).map((r) => r.source_id));
-  return rows.map((r) => ({ id: r.id, title: r.title, author: r.username, calories: r.content?.recipe?.calories, protein: r.content?.recipe?.protein, likes: r.like_count, saves: r.save_count, score: 0, liked: liked.has(r.id), saved: saved.has(r.id) }));
+  const okAuthors = await visibleAuthors(rows.map((r) => r.username));
+  return rows.filter((r) => okAuthors.has(r.username)).map((r) => ({ id: r.id, title: r.title, author: r.username, calories: r.content?.recipe?.calories, protein: r.content?.recipe?.protein, likes: r.like_count, saves: r.save_count, score: 0, liked: liked.has(r.id), saved: saved.has(r.id) }));
 }
 
 export { addDays };

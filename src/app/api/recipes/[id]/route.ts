@@ -1,6 +1,7 @@
 import { db, must } from "@/server/supabase";
 import { ok, route, E } from "@/server/http";
 import { requireUser } from "@/server/auth";
+import { publicContent } from "@/server/public-content";
 
 export const GET = route<{ id: string }>(async (req, { params }) => {
   const a = await requireUser(req);
@@ -13,5 +14,6 @@ export const GET = route<{ id: string }>(async (req, { params }) => {
     db().from("hl_favourites").select("source_id").eq("username", a.username).eq("source_type", "recipe").eq("source_id", id).maybeSingle(),
     db().from("hl_recipe_likes").select("recipe_id").eq("recipe_id", id).eq("username", a.username).maybeSingle(),
   ]);
-  return ok({ recipe: r, own, messages, favourite: !!fav.data, liked: !!like.data });
+  const out = own ? r : { ...r, content: publicContent((r as unknown as { content: { cautions?: unknown; doctor_note?: unknown } }).content) };
+  return ok({ recipe: out, own, messages, favourite: !!fav.data, liked: !!like.data });
 });

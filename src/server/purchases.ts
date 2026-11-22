@@ -50,7 +50,7 @@ export async function approve(a: Auth, paymentId: string) {
   const payment = await getPayment(paymentId);
   const purchase = await purchaseForPayment(a, payment);
   if (purchase.status !== "pending" && purchase.status !== "approved") throw payErr("purchase_not_open");
-  const bad = paymentMismatch(payment, purchase, a.uid);
+  const bad = paymentMismatch(payment, purchase, a.uid, { enforceTtl: true });
   if (bad) {
     await failPurchase(purchase.id, bad);
     throw payErr(bad);
