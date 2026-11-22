@@ -1,0 +1,18 @@
+import { db, must } from "@/server/supabase";
+import { ok, route, E } from "@/server/http";
+import { requireVerified } from "@/server/auth";
+import { currentGroup } from "@/server/community";
+
+export const POST = route(async (req) => {
+  const a = await requireVerified(req);
+  const g = await currentGroup(a.today);
+  const mem = must(await db().from("group_challenge_members").select("username").eq("group_id", g.id).eq("username", a.username).maybeSingle());
+  if (!mem) throw E.bad("انضم للتحدي أولًا.", "Join the challenge first.");
+  // Primary key (group, user, date) makes the daily check-in idempotent.
+  await db().from("group_challenge_checks").upsert({ group_id: g.id, username: a.username, date: a.today }, { onConflict: "group_id,username,date", ignoreDuplicates: true });
+  const c = await db().from("group_challenge_checks").select("date", { count: "exact", head: true }).eq("group_id", g.id).eq("username", a.username);
+  const days = c.count ?? 0;
+  must(await db().from("group_challenge_members").update({ days_completed: days }).eq("group_id", g.id).eq("username", a.username));
+  if (days >= 7) await db().from("badges").upsert({ username: a.username, badge_key: "group_finisher" }, { onConflict: "username,badge_key", ignoreDuplicates: true });
+  return ok({ days });
+});
