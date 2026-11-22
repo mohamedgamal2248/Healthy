@@ -15,7 +15,7 @@ type Report = { week_start: string; weight_change: number | null; current_weight
 type PlanResp = { subscribed: boolean; week?: string; current?: StoredPlan | null; next?: StoredPlan | null; balances?: Balances; regenerateCost?: number; safety?: { cautions: { ar: string; en: string }[]; doctor_note: { ar: string; en: string } | null } };
 const TYPE = { breakfast: ["فطار", "Breakfast", "sun"], lunch: ["غدا", "Lunch", "utensils"], dinner: ["عشا", "Dinner", "moon"] } as const;
 
-type ShopItem = { key: string | null; item: string; group: string; uses: number; sample: string[] };
+type ShopItem = { key: string | null; item: string; item_en: string; group: string; uses: number; sample: string[] };
 function Shopping({ week, which }: { week: string; which: "current" | "next" }) {
   const { tr, lang } = useApp();
   const { data } = useGet<{ items: ShopItem[] }>(`/plan/shopping?week=${which}`);
@@ -39,8 +39,8 @@ function Shopping({ week, which }: { week: string; which: "current" | "next" }) 
               {list.map((i) => { const id = i.key ?? i.item; const on = done.includes(id); return (
                 <li key={id}><button onClick={() => toggle(id)} className="flex min-h-12 w-full items-center gap-3 px-3 text-start" aria-pressed={on}>
                   <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 ${on ? "border-brand-600 bg-brand-600 text-white" : "border-brand-300"}`}>{on && <Icon name="check" size={14} />}</span>
-                  <span className={`flex-1 font-bold ${on ? "text-ink-soft line-through" : ""}`}>{i.item}</span>
-                  <span className="text-xs font-bold text-ink-soft">{tr(`${i.uses} وجبات`, `${i.uses} meals`)}</span>
+                  <span className={`flex-1 font-bold ${on ? "text-ink-soft line-through" : ""}`}>{lang === "en" ? i.item_en : i.item}</span>
+                  <span className="text-xs font-bold text-ink-soft">{tr(`${i.uses} وجبات`, `${i.uses} ${i.uses === 1 ? "meal" : "meals"}`)}</span>
                 </button></li>); })}
             </ul>
           </div>
@@ -96,7 +96,7 @@ function Inner() {
 
   const plan = which === "next" ? d.next : d.current;
   const generate = async (mode: "auto" | "regenerate") => {
-    if (mode === "regenerate" && !confirm(tr(`إعادة توليد الخطة تخصم ${d.regenerateCost} كريدت. متابعة؟`, `Regenerating costs ${d.regenerateCost} credit. Continue?`))) return;
+    if (mode === "regenerate" && !confirm(tr(`إعادة توليد الخطة تخصم ${d.regenerateCost} كريدت. متابعة؟`, `Regenerating costs ${d.regenerateCost} AI request. Continue?`))) return;
     setBusy(true);
     try { await api("/plan", { body: { mode } }); await load(); await refresh(); toast(tr("تم تحديث خطتك", "Your plan is ready"), "ok"); }
     catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
@@ -140,7 +140,7 @@ function Inner() {
           </div>
           <div className="card flex flex-wrap items-center gap-3">
             <p className="muted flex-1">{tr("تتجدد خطتك تلقائيًا كل أسبوع عند تسجيل وزن جديد (مجانًا). غيّرت هدفك في منتصف الأسبوع؟", "Your plan refreshes weekly when you log a new weight (free). Changed your goal mid-week?")}</p>
-            <button className="btn-soft btn-sm" onClick={() => generate("regenerate")} disabled={busy || (d.balances?.total ?? 0) < 1}><Icon name="refresh" size={18} />{tr(`إعادة التوليد — ${d.regenerateCost} كريدت`, `Regenerate — ${d.regenerateCost} credit`)}</button>
+            <button className="btn-soft btn-sm" onClick={() => generate("regenerate")} disabled={busy || (d.balances?.total ?? 0) < 1}><Icon name="refresh" size={18} />{tr(`إعادة التوليد — ${d.regenerateCost} كريدت`, `Regenerate — ${d.regenerateCost} request`)}</button>
           </div>
         </>
       )}

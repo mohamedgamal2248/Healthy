@@ -151,3 +151,16 @@ test("AI answers in the language the user wrote in", () => {
   assert.match(langInstruction("en"), /ENGLISH/);
   assert.notEqual(recipeCacheKey("eggs", null, [], "recipe", "en"), recipeCacheKey("eggs", null, [], "recipe", "ar"));
 });
+
+import { MEALS_EN } from "../src/data/meals-en";
+test("every catalogue meal has English ingredients and steps matching the Arabic structure", () => {
+  const bad = /pork|bacon|wine|beer|mirin|sake|gelatin|halal|haram/i;
+  for (const m of MEAL_SEEDS) {
+    const en = MEALS_EN[m.id];
+    assert.ok(en, `missing EN for ${m.id}`);
+    assert.equal(en.ingredients.length, m.ingredients.length, m.id);
+    assert.equal(en.steps.length, m.steps.length, m.id);
+    assert.ok(!/[\u0600-\u06FF]/.test(JSON.stringify(en)), `Arabic left in EN for ${m.id}`);
+    assert.ok(!bad.test(JSON.stringify(en)), m.id);
+  }
+});

@@ -46,7 +46,7 @@ function MealsInner() {
   return (
     <div className="py-5">
       <EatTabs />
-      <PageHeader title={tr("كتالوج الوجبات", "Meal catalogue")} sub={tr("وجبات مصرية صحية من مكونات رخيصة ومتوفرة", "Healthy Egyptian meals from cheap, easy-to-find ingredients")} />
+      <PageHeader title={tr("كتالوج الوجبات", "Meal catalogue")} sub={tr("وجبات مصرية صحية من مكونات رخيصة ومتوفرة", "Healthy Egyptian and international meals from affordable, easy-to-find ingredients")} />
       <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl bg-brand-50 p-1.5">
         {([["browse", tr("تصفح الوجبات", "Browse")], ["have", tr("عندي المكونات دي", "I have these ingredients")]] as const).map(([k, l]) => (
           <button key={k} onClick={() => setMode(k)} aria-pressed={mode === k} className={`min-h-11 rounded-xl px-3 text-sm font-extrabold transition ${mode === k ? "bg-white text-brand-800 shadow-sm" : "text-ink-soft"}`}>{l}</button>

@@ -21,10 +21,10 @@ export const GET = route(async (req) => {
   const ids = [...new Set(slots.map((s) => s.meal_id).filter(Boolean) as string[])];
   const meals = ids.length ? (must(await db().from("hl_meals").select("id,ingredients").in("id", ids)) as { id: string; ingredients: { item: string; qty: string; key?: string }[] }[]) : [];
   const byId = new Map(meals.map((m) => [m.id, m]));
-  const agg = new Map<string, { key: string | null; item: string; group: string; uses: number; sample: string[] }>();
+  const agg = new Map<string, { key: string | null; item: string; item_en: string; group: string; uses: number; sample: string[] }>();
   const add = (k: string | null, item: string, qty?: string) => {
     const id = k ?? `x:${item}`;
-    const cur = agg.get(id) ?? { key: k, item: k ? INGREDIENT_MAP[k]?.ar ?? item : item, group: k ? INGREDIENT_MAP[k]?.group ?? "other" : "other", uses: 0, sample: [] };
+    const cur = agg.get(id) ?? { key: k, item: k ? INGREDIENT_MAP[k]?.ar ?? item : item, item_en: k ? INGREDIENT_MAP[k]?.en ?? item : item, group: k ? INGREDIENT_MAP[k]?.group ?? "other" : "other", uses: 0, sample: [] };
     cur.uses++;
     if (qty && cur.sample.length < 3 && !cur.sample.includes(qty)) cur.sample.push(qty);
     agg.set(id, cur);

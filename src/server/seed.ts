@@ -1,6 +1,7 @@
 import { db, must } from "./supabase";
 import { CHALLENGE_SEEDS } from "@/data/challenges";
 import { MEAL_SEEDS } from "@/data/meals";
+import { MEALS_EN } from "@/data/meals-en";
 
 let done = false;
 
@@ -18,12 +19,18 @@ export async function ensureSeeded(): Promise<void> {
       await db().from("hl_meals").upsert(
         MEAL_SEEDS.map((x) => ({
           id: x.id, cuisine: x.cuisine, origin_ar: x.origin_ar ?? null, origin_en: x.origin_en ?? null, meal_type: x.meal_type, name_ar: x.name_ar, name_en: x.name_en, time_min: x.time_min, calories: x.calories,
-          protein_g: x.protein_g, cost_egp: x.cost_egp, why_ar: x.why_ar, why_en: x.why_en, tags: x.tags, ingredients: x.ingredients, steps: x.steps,
+          protein_g: x.protein_g, cost_egp: x.cost_egp, why_ar: x.why_ar, why_en: x.why_en, tags: x.tags, ingredients: x.ingredients, steps: x.steps, ingredients_en: MEALS_EN[x.id]?.ingredients ?? null, steps_en: MEALS_EN[x.id]?.steps ?? null,
           ingredient_keys: Array.from(new Set(x.ingredients.map((i) => i.key).filter(Boolean))), active: true,
         })),
         { onConflict: "id", ignoreDuplicates: true },
       ),
     );
+  }
+  // English-first: backfill English ingredients/steps on rows seeded before they existed (one-time).
+  const missing = must(await db().from("hl_meals").select("id").is("steps_en", null)) as { id: string }[];
+  const todo = missing.filter((r) => MEALS_EN[r.id]);
+  if (todo.length) {
+    await Promise.all(todo.map((r) => db().from("hl_meals").update({ ingredients_en: MEALS_EN[r.id].ingredients, steps_en: MEALS_EN[r.id].steps }).eq("id", r.id)));
   }
   done = true;
 }
