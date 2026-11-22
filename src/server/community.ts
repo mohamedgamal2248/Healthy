@@ -61,4 +61,29 @@ export async function topRecipes(a: Auth) {
     .slice(0, 10);
 }
 
+/** Light counters for the engagement cards (no personal data). */
+export async function groupSnapshot(username: string, today: string) {
+  const g = await currentGroup(today);
+  const [members, checks, me] = await Promise.all([
+    db().from("hl_group_challenge_members").select("username", { count: "exact", head: true }).eq("group_id", g.id),
+    db().from("hl_group_challenge_checks").select("username", { count: "exact", head: true }).eq("group_id", g.id).eq("date", today),
+    db().from("hl_group_challenge_members").select("days_completed").eq("group_id", g.id).eq("username", username).maybeSingle(),
+  ]);
+  return { title_ar: g.title_ar, title_en: g.title_en, members: members.count ?? 0, checkedToday: checks.count ?? 0, joined: !!me.data, myDays: (me.data as { days_completed: number } | null)?.days_completed ?? 0 };
+}
+
+/** Newest shared recipes (so fresh content shows up even before it collects likes). */
+export async function latestRecipes(a: Auth) {
+  const rows = must(await db().from("hl_recipes").select("id,username,title,content,like_count,save_count,shared_at").eq("shared", true).order("shared_at", { ascending: false }).limit(10)) as { id: string; username: string; title: string; content: { recipe: { calories: number; protein: number } }; like_count: number; save_count: number }[];
+  if (!rows.length) return [];
+  const ids = rows.map((r) => r.id);
+  const [myLikes, myFavs] = await Promise.all([
+    db().from("hl_recipe_likes").select("recipe_id").eq("username", a.username).in("recipe_id", ids),
+    db().from("hl_favourites").select("source_id").eq("username", a.username).eq("source_type", "recipe").in("source_id", ids),
+  ]);
+  const liked = new Set((must(myLikes) as { recipe_id: string }[]).map((r) => r.recipe_id));
+  const saved = new Set((must(myFavs) as { source_id: string }[]).map((r) => r.source_id));
+  return rows.map((r) => ({ id: r.id, title: r.title, author: r.username, calories: r.content?.recipe?.calories, protein: r.content?.recipe?.protein, likes: r.like_count, saves: r.save_count, score: 0, liked: liked.has(r.id), saved: saved.has(r.id) }));
+}
+
 export { addDays };

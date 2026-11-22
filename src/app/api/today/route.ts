@@ -5,10 +5,11 @@ import { ensureToday, loadStreak, reminderState } from "@/server/challenges";
 import { effectiveStreak } from "@/lib/streak";
 import { mealsOfTheDay } from "@/server/meals";
 import { getBalances } from "@/server/credits";
+import { groupSnapshot } from "@/server/community";
 
 export const GET = route(async (req) => {
   const a = await requireUser(req);
-  const [{ rows, swapUsed }, streak, meals, badges, favs, reminder, balances] = await Promise.all([
+  const [{ rows, swapUsed }, streak, meals, badges, favs, reminder, balances, community] = await Promise.all([
     ensureToday(a),
     loadStreak(a.username),
     mealsOfTheDay(a.today),
@@ -16,6 +17,7 @@ export const GET = route(async (req) => {
     db().from("hl_favourites").select("source_id").eq("username", a.username).eq("source_type", "meal"),
     reminderState(a),
     a.profile.kyc_verified ? getBalances(a.username) : Promise.resolve(null),
+    a.profile.kyc_verified ? groupSnapshot(a.username, a.today).catch(() => null) : Promise.resolve(null),
   ]);
   return ok({
     date: a.today,
@@ -28,6 +30,7 @@ export const GET = route(async (req) => {
     favourites: (must(favs) as { source_id: string }[]).map((f) => f.source_id),
     reminder,
     balances,
+    community,
     profileReady: !!a.profile.disclaimer_accepted_at,
   });
 });

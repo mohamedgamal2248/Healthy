@@ -7,6 +7,7 @@ import { useApp, type Balances } from "@/components/AppProvider";
 import { Gate, Notice, PageHeader, PageSkeleton, Spinner } from "@/components/ui";
 import { CreditBalance, DisclaimerBanner, RecipeView, type RecipeContent } from "@/components/Domain";
 import { Icon } from "@/components/Icon";
+import { CookingAnimation } from "@/components/Cooking";
 
 type Recipe = { id: string; title: string; content: RecipeContent; shared: boolean };
 type Msg = { id?: string; role: "user" | "assistant"; content: string };
@@ -77,7 +78,7 @@ function ChefInner() {
     try {
       const r = await api<{ url: string }>(`/recipes/${recipe.id}/share`, { body: { shared: true } });
       setShareUrl(r.url);
-      try { await navigator.clipboard.writeText(r.url); toast(tr("تم نسخ رابط المشاركة", "Share link copied"), "ok"); } catch { /* shown below */ }
+      try { await navigator.clipboard.writeText(r.url); toast(tr("تم النشر في المجتمع ونسخ الرابط", "Published to the community; link copied"), "ok"); } catch { /* shown below */ }
     } catch (e) { toast(errMsg(e), "err"); }
   };
 
@@ -96,18 +97,23 @@ function ChefInner() {
             content={recipe.content}
             actions={<>
               <button className="btn-soft btn-sm" onClick={toggleFav} aria-pressed={fav}><Icon name="heart" size={18} filled={fav} className={fav ? "text-rose-600" : ""} />{fav ? tr("في المفضلة", "Saved") : tr("أضف للمفضلة", "Favourite")}</button>
-              <button className="btn-soft btn-sm" onClick={share}><Icon name="share" size={18} />{tr("مشاركة برابط PiNet", "Share via PiNet link")}</button>
+              <button className="btn-soft btn-sm" onClick={share}><Icon name="share" size={18} />{tr("انشر في المجتمع + رابط", "Publish to community + link")}</button>
             </>}
           />
           {shareUrl && <div className="card flex items-center gap-2 !p-3"><Icon name="link" size={18} className="shrink-0 text-brand-600" /><input readOnly value={shareUrl} className="field !min-h-10 text-sm" dir="ltr" onFocus={(e) => e.currentTarget.select()} aria-label={tr("رابط المشاركة", "Share link")} /></div>}
           <section className="card space-y-3">
             <div className="flex items-center justify-between"><h2 className="h2">{tr("اسأل عن هذه الوصفة", "Ask about this recipe")}</h2><span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-extrabold text-brand-800">{tr("مجاني، بدون كريدت", "Free, no credit")}</span></div>
+            <p className="muted">{tr("الوصفة الجديدة بكريدت واحد، لكن أي سؤال عن نفس الوصفة (تقليل الملح، بدائل، مناسبة للأطفال…) مجاني لأنه جزء من نفس الوصفة. بحد أقصى ٢٠ سؤالًا في اليوم.", "A new recipe costs 1 credit, but questions about the same recipe (less salt, substitutes, kids…) are free. Up to 20 questions per day.")}</p>
             {msgs.map((m, i) => (<div key={i} className={`max-w-[92%] rounded-2xl p-3 text-sm font-semibold leading-relaxed ${m.role === "user" ? "me-auto bg-brand-600 text-white" : "ms-auto bg-brand-50 text-ink"}`}>{m.content}</div>))}
+            {asking && <div className="rounded-2xl bg-brand-50"><CookingAnimation compact /></div>}
             <div className="flex flex-wrap gap-2">{[tr("أقلل الملح إزاي؟", "How do I cut the salt?"), tr("تنفع للأطفال؟", "Is it suitable for kids?")].map((s) => (<button key={s} className="chip" onClick={() => setQ(s)}>{s}</button>))}</div>
             <div className="flex gap-2"><input className="field" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask()} placeholder={tr("اكتب سؤالك…", "Your question…")} maxLength={400} aria-label={tr("سؤال", "Question")} /><button className="btn-primary !px-4" onClick={ask} disabled={asking || !q.trim()} aria-label={tr("إرسال", "Send")}>{asking ? <Spinner size={20} /> : <Icon name="send" size={20} className="rtl:-scale-x-100" />}</button></div>
           </section>
         </>
       ) : (
+        busy ? (
+          <section className="card"><CookingAnimation /></section>
+        ) : (
         <>
           <section className="card space-y-4">
             <label className="block"><span className="label">{tr("إيه اللي عندك أو عايز إيه؟", "What do you have, or what do you want?")}</span>
@@ -122,6 +128,7 @@ function ChefInner() {
           </section>
           <DisclaimerBanner conditions={me?.profile.conditions} compact />
         </>
+        )
       )}
     </div>
   );

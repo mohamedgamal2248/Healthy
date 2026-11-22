@@ -5,6 +5,8 @@ import { PRICING, isItemKey } from "@/config/pricing";
 import { approvePayment, completePayment, getPayment, type PiPayment } from "./pi-backend";
 import { completedProperly, memoFor, paymentMismatch, type PurchaseRef } from "./payment-verify";
 
+const UUID_RE = /^[0-9a-f-]{36}$/;
+
 type PurchaseRow = PurchaseRef & { status: string };
 
 export async function createPurchase(a: Auth, itemKey: unknown) {
@@ -14,15 +16,13 @@ export async function createPurchase(a: Auth, itemKey: unknown) {
     await db().from("hl_purchases").insert({ username: a.username, kind: item.kind, item_key: item.key, amount_pi: item.pricePi, status: "pending" }).select("id").single(),
   ) as { id: string };
   // Amount and memo are decided on the server; the client only passes them to the Pi SDK.
-  return { purchaseId: row.id, amount: item.pricePi, memo: memoFor(item.kind, row.id), metadata: { purchaseId: row.id, item: item.key } };
+  return { purchaseId: row.id, amount: item.pricePi, memo: memoFor(item.key), metadata: { purchaseId: row.id, item: item.key } };
 }
 
-const MEMO_RE = /^healthy_(plan|pack):([0-9a-f-]{36})$/;
-
 async function purchaseForPayment(a: Auth, payment: PiPayment): Promise<PurchaseRow> {
-  const m = MEMO_RE.exec(payment.memo ?? "");
-  if (!m) throw payErr("wrong_memo");
-  const p = must(await db().from("hl_purchases").select("id,username,kind,item_key,amount_pi,pi_payment_id,status").eq("id", m[2]).maybeSingle()) as PurchaseRow | null;
+  const pid = String((payment.metadata as { purchaseId?: unknown } | undefined)?.purchaseId ?? "");
+  if (!UUID_RE.test(pid)) throw payErr("wrong_memo");
+  const p = must(await db().from("hl_purchases").select("id,username,kind,item_key,amount_pi,pi_payment_id,status").eq("id", pid).maybeSingle()) as PurchaseRow | null;
   if (!p || p.username !== a.username) throw payErr("wrong_payer");
   return p;
 }

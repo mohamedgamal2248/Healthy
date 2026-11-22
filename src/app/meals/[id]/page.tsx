@@ -24,8 +24,8 @@ function Inner({ id }: { id: string }) {
             <h1 className="h1">{lang === "ar" ? meal.name_ar : meal.name_en}</h1>
             <button onClick={toggle} aria-pressed={m.favourite} aria-label={tr("حفظ في المفضلة", "Save to favourites")} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-line"><Icon name="heart" size={24} filled={m.favourite} className={m.favourite ? "text-rose-600" : "text-ink-soft"} /></button>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {[["clock", `${meal.time_min} ${tr("دقيقة", "min")}`, tr("التحضير", "Prep")], ["flame", `${meal.calories}`, tr("سعرة", "kcal")], ["bolt", `${meal.protein_g} ${tr("جم", "g")}`, tr("بروتين", "Protein")], ["coin", `~${meal.cost_egp}`, tr("جنيه تقريبًا", "EGP approx.")]].map(([ic, v, l]) => (
+          <div className="grid grid-cols-3 gap-2">
+            {[["clock", `${meal.time_min} ${tr("دقيقة", "min")}`, tr("التحضير", "Prep")], ["flame", `${meal.calories}`, tr("سعرة", "kcal")], ["bolt", `${meal.protein_g} ${tr("جم", "g")}`, tr("بروتين", "Protein")]].map(([ic, v, l]) => (
               <div key={l} className="rounded-2xl bg-brand-50 p-3 text-center"><Icon name={ic} size={20} className="mx-auto text-brand-600" /><p className="font-extrabold tabular-nums">{v}</p><p className="text-xs font-bold text-ink-soft">{l}</p></div>
             ))}
           </div>

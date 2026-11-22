@@ -37,10 +37,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
           <Link href={signedIn ? "/today" : "/"} className="flex items-center gap-2.5">
             <Logo />
-            <span className="leading-tight">
-              <span className="block text-lg font-extrabold text-brand-800">{tr("صحتي", "Healthy")}</span>
-              <span className="block text-[11px] font-semibold text-ink-soft">Pi Healthy</span>
-            </span>
+            <span className="text-xl font-extrabold tracking-tight text-brand-800" dir="ltr">Healthy</span>
           </Link>
           <div className="flex items-center gap-2">
             {me?.balances && (
@@ -50,9 +47,8 @@ export function Shell({ children }: { children: ReactNode }) {
                 <span className="hidden sm:inline">{tr("كريدت", "credits")}</span>
               </Link>
             )}
-            <button className="chip" onClick={() => setLang(lang === "ar" ? "en" : "ar")} aria-label={tr("تغيير اللغة", "Switch language")}>
-              <Icon name="globe" size={16} />
-              {lang === "ar" ? "EN" : "عربي"}
+            <button className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-white text-xs font-extrabold text-ink-soft transition active:scale-90" onClick={() => setLang(lang === "ar" ? "en" : "ar")} aria-label={tr("تغيير اللغة", "Switch language")} dir="ltr">
+              {lang === "ar" ? "EN" : "AR"}
             </button>
             {!signedIn && ready && (
               <>

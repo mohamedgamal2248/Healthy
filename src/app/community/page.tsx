@@ -8,19 +8,30 @@ import { Icon } from "@/components/Icon";
 type C = {
   group: { title_ar: string; title_en: string; week_start: string }; joined: boolean; myDays: number; checkedToday: boolean; hidden: boolean;
   board: { rank: number; username: string; days: number; streak: number }[];
-  topRecipes: { id: string; title: string; author: string; calories?: number; protein?: number; likes: number; saves: number; liked: boolean; saved: boolean }[];
+  topRecipes: R[]; latestRecipes: R[]; stats: { members: number; checkedToday: number };
 };
+type R = { id: string; title: string; author: string; calories?: number; protein?: number; likes: number; saves: number; liked: boolean; saved: boolean };
 
 function Inner() {
   const { tr, lang, me, toast, errMsg } = useApp();
   const [d, setD] = useState<C | null>(null);
   const [busy, setBusy] = useState(false);
+  const [rtab, setRtab] = useState<"top" | "new">("top");
   const load = useCallback(() => api<C>("/community").then(setD).catch((e) => toast(errMsg(e), "err")), [toast, errMsg]);
   useEffect(() => { load(); }, [load]);
   if (!d) return <PageSkeleton />;
   const act = async (path: string) => { setBusy(true); try { await api(path, { body: {} }); await load(); } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); } };
   const like = async (id: string) => { try { await api(`/recipes/${id}/like`, { body: {} }); load(); } catch (e) { toast(errMsg(e), "err"); } };
   const save = async (id: string) => { try { await api("/favourites", { body: { type: "recipe", id } }); load(); } catch (e) { toast(errMsg(e), "err"); } };
+  const invite = async () => {
+    const url = (process.env.NEXT_PUBLIC_PINET_URL || window.location.origin).replace(/\/$/, "");
+    const text = tr(`انضم لتحدي الأسبوع معايا على Healthy: ${lang === "ar" ? d.group.title_ar : d.group.title_en}`, `Join this week's challenge with me on Healthy: ${d.group.title_en}`);
+    try {
+      if (navigator.share) await navigator.share({ title: "Healthy", text, url });
+      else { await navigator.clipboard.writeText(`${text} ${url}`); toast(tr("تم نسخ رابط الدعوة", "Invite link copied"), "ok"); }
+    } catch { /* cancelled */ }
+  };
+  const myRank = d.board.find((r) => r.username === me?.profile.username)?.rank;
   const medal = ["bg-sun-400 text-white", "bg-slate-300 text-ink", "bg-amber-700/80 text-white"];
 
   return (
@@ -29,6 +40,7 @@ function Inner() {
       <section className="overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-sun-500 to-sun-600 p-5 text-white shadow-(--shadow-card)">
         <p className="flex items-center gap-2 text-sm font-extrabold text-sun-100"><Icon name="users" size={18} />{tr("تحدي الأسبوع الجماعي", "This week's group challenge")}</p>
         <h2 className="mt-1 text-2xl font-extrabold leading-snug">{lang === "ar" ? d.group.title_ar : d.group.title_en}</h2>
+        <p className="mt-1 text-sm font-bold text-sun-100">{tr(`${d.stats.members} بايونير انضموا · ${d.stats.checkedToday} سجّلوا اليوم`, `${d.stats.members} pioneers joined · ${d.stats.checkedToday} checked in today`)}{myRank ? tr(` · ترتيبك ${myRank}`, ` · your rank ${myRank}`) : ""}</p>
         {d.joined ? (
           <div className="mt-4 flex items-center gap-3">
             <div className="flex-1"><div className="h-3 overflow-hidden rounded-full bg-white/30"><div className="h-full rounded-full bg-white" style={{ width: `${Math.min(100, (d.myDays / 7) * 100)}%` }} /></div><p className="mt-1 text-sm font-bold">{d.myDays}/7 {tr("أيام", "days")}</p></div>
@@ -37,6 +49,7 @@ function Inner() {
         ) : (
           <button className="btn mt-4 !bg-white !text-sun-600" disabled={busy} onClick={() => act("/community/join")}>{busy ? <Spinner size={18} /> : <Icon name="plus" />}{tr("انضم بضغطة واحدة", "Join with one tap")}</button>
         )}
+        <button className="btn mt-3 w-full !bg-white/20 !text-white" onClick={invite}><Icon name="share" size={18} />{tr("ادعُ أصحابك للتحدي", "Invite friends to the challenge")}</button>
       </section>
       {d.hidden && <Notice tone="info" icon="eyeOff">{tr("أنت مخفي من لوحة المتصدرين (من الملف الشخصي).", "You are hidden from the leaderboard (set in your profile).")}</Notice>}
 
@@ -46,18 +59,21 @@ function Inner() {
           <ol className="space-y-2">{d.board.map((r) => (
             <li key={r.username} className={`card flex items-center gap-3 !p-3 ${r.username === me?.profile.username ? "!border-brand-400 !bg-brand-50" : ""}`}>
               <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-extrabold tabular-nums ${medal[r.rank - 1] ?? "bg-canvas text-ink-soft"}`}>{r.rank}</span>
-              <div className="min-w-0 flex-1"><p className="truncate font-extrabold">@{r.username}</p><div className="mt-0.5 flex items-center gap-2"><VerifiedBadge small /><span className="inline-flex items-center gap-1 text-xs font-bold text-ink-soft"><Icon name="flame" size={13} className="text-sun-500" />{r.streak}</span></div></div>
+              <div className="min-w-0 flex-1"><p className="truncate font-extrabold"><bdi dir="ltr">@{r.username}</bdi></p><div className="mt-0.5 flex items-center gap-2"><VerifiedBadge small /><span className="inline-flex items-center gap-1 text-xs font-bold text-ink-soft"><Icon name="flame" size={13} className="text-sun-500" />{r.streak}</span></div></div>
               <p className="text-end"><span className="block text-xl font-extrabold tabular-nums">{r.days}</span><span className="text-xs font-bold text-ink-soft">{tr("يوم", "days")}</span></p>
             </li>))}</ol>
         )}
       </section>
 
       <section>
-        <h2 className="h2 mb-3">{tr("أفضل الوصفات هذا الأسبوع", "Top recipes this week")}</h2>
-        {d.topRecipes.length === 0 ? <EmptyState icon="chef" title={tr("لا وصفات بعد", "No recipes yet")} body={tr("شارك وصفة من الشيف AI وسيظهر الإعجاب والحفظ هنا.", "Share an AI Chef recipe and its likes and saves will show up here.")} /> : (
-          <ul className="space-y-2.5">{d.topRecipes.map((r) => (
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="h2">{tr("وصفات المجتمع", "Community recipes")}</h2>
+          <div className="flex gap-1.5">{([["top", tr("الأفضل", "Top")], ["new", tr("الأحدث", "Newest")]] as const).map(([k, l]) => (<button key={k} className="chip" aria-pressed={rtab === k} onClick={() => setRtab(k)}>{l}</button>))}</div>
+        </div>
+        {(rtab === "top" ? d.topRecipes : d.latestRecipes).length === 0 ? <EmptyState icon="chef" title={tr("لا وصفات بعد", "No recipes yet")} body={tr("ولّد وصفة من الشيف AI ثم اضغط «انشر في المجتمع» لتظهر هنا ويحفظها الآخرون.", "Generate a recipe with the AI Chef, then press Publish to community so others can like and save it.")} /> : (
+          <ul className="space-y-2.5">{(rtab === "top" ? d.topRecipes : d.latestRecipes).map((r) => (
             <li key={r.id} className="card flex items-center gap-3 !p-3.5">
-              <a href={`/r/${r.id}`} className="min-w-0 flex-1"><p className="truncate font-extrabold">{r.title}</p><p className="muted flex items-center gap-2">@{r.author}<VerifiedBadge small /></p></a>
+              <a href={`/r/${r.id}`} className="min-w-0 flex-1"><p className="truncate font-extrabold">{r.title}</p><p className="muted flex items-center gap-2"><bdi dir="ltr">@{r.author}</bdi><VerifiedBadge small /></p></a>
               <button className="btn-ghost btn-sm !px-2.5" onClick={() => like(r.id)} aria-pressed={r.liked} aria-label={tr("إعجاب", "Like")}><Icon name="heart" size={20} filled={r.liked} className={r.liked ? "text-rose-600" : ""} /><span className="tabular-nums">{r.likes}</span></button>
               <button className="btn-ghost btn-sm !px-2.5" onClick={() => save(r.id)} aria-pressed={r.saved} aria-label={tr("حفظ", "Save")}><Icon name="book" size={20} filled={r.saved} className={r.saved ? "text-brand-600" : ""} /><span className="tabular-nums">{r.saves}</span></button>
             </li>))}</ul>
