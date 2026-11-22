@@ -1,5 +1,6 @@
 import { db, must } from "./supabase";
 import { ensureSeeded } from "./seed";
+import { grantTrial } from "./credits";
 import { E } from "./http";
 import type { Auth } from "./auth";
 import { applyCompletion, effectiveStreak, streakBadges, type StreakState } from "@/lib/streak";
@@ -110,21 +111,24 @@ export async function completeChallenge(a: Auth, userChallengeId: string) {
   const row = must(await db().from("hl_user_challenges").select("id,status,date").eq("id", userChallengeId).eq("username", a.username).maybeSingle()) as { id: string; status: string; date: string } | null;
   if (!row) throw E.notFound();
   if (row.date !== a.today) throw E.bad("يمكنك إنجاز تحديات اليوم فقط.", "You can only complete today's challenges.");
-  if (row.status === "completed") return { newBadges: [] as string[] };
+  if (row.status === "completed") return { newBadges: [] as string[], starterReward: false };
   if (row.status !== "assigned") throw E.bad();
 
   // Conditional update guards against double taps / concurrent requests counting twice.
   const upd = must(
     await db().from("hl_user_challenges").update({ status: "completed", completed_at: new Date().toISOString() }).eq("id", row.id).eq("status", "assigned").select("id"),
   ) as { id: string }[];
-  if (!upd.length) return { newBadges: [] as string[] };
+  if (!upd.length) return { newBadges: [] as string[], starterReward: false };
 
   const next = applyCompletion(await loadStreak(a.username), a.today);
   must(
     await db().from("hl_streaks").upsert({ username: a.username, current_streak: next.current, longest_streak: next.longest, last_completed_date: next.last, total_completed: next.total }, { onConflict: "username" }),
   );
   const newBadges = await awardBadges(a.username, next.current);
-  return { newBadges };
+  // Starter challenge: 7 days in a row earns the AI credits, once (unique ledger index guarantees it).
+  let starterReward = false;
+  if (next.current >= 7 && a.profile.kyc_verified) starterReward = await grantTrial(a.username);
+  return { newBadges, starterReward };
 }
 
 export async function lastActivityDate(username: string): Promise<string | null> {

@@ -1,50 +1,12 @@
-// Seed catalogue: original nutrition content written for Pi Healthy (30 meals, 10 per type).
-// Calories / protein are per one serving and approximate. Costs are rough EGP per serving.
-// Ingredient tuple: [Arabic item, quantity, ingredient key]. No key = pantry staple (salt, oil, spices...).
-import type { MealTag } from "./ingredients";
+// Seed catalogue: original nutrition content written for Pi Healthy.
+// Calories / protein are per one serving and approximate. Ingredient tuple: [Arabic item, quantity, ingredient key].
+import { meal, type MealSeed } from "./meal-types";
+import { EGYPTIAN_MORE } from "./meals-egyptian-more";
+import { INTERNATIONAL } from "./meals-international";
 
-export type MealType = "breakfast" | "lunch" | "dinner";
-export type MealIngredient = { item: string; qty: string; key?: string };
-export type MealSeed = {
-  id: string;
-  meal_type: MealType;
-  name_ar: string;
-  name_en: string;
-  time_min: number;
-  calories: number;
-  protein_g: number;
-  cost_egp: number;
-  why_ar: string;
-  why_en: string;
-  tags: MealTag[];
-  ingredients: MealIngredient[];
-  steps: string[];
-};
+export type { MealSeed, MealType, MealIngredient } from "./meal-types";
 
-type I = [string, string, string?];
-function meal(
-  id: string,
-  meal_type: MealType,
-  name_ar: string,
-  name_en: string,
-  time_min: number,
-  calories: number,
-  protein_g: number,
-  cost_egp: number,
-  tags: MealTag[],
-  why_ar: string,
-  why_en: string,
-  ings: I[],
-  steps: string[],
-): MealSeed {
-  return {
-    id, meal_type, name_ar, name_en, time_min, calories, protein_g, cost_egp, why_ar, why_en, tags,
-    ingredients: ings.map(([item, qty, key]) => ({ item, qty, ...(key ? { key } : {}) })),
-    steps,
-  };
-}
-
-export const MEAL_SEEDS: MealSeed[] = [
+const BASE_MEALS: MealSeed[] = [
   // ------------------------------------------------------------------ breakfast (10)
   meal("foul-balady", "breakfast", "فول مدمس بالليمون وزيت الزيتون مع عيش بلدي", "Foul medames with lemon and baladi bread", 10, 330, 17, 15,
     ["vegetarian", "budget", "diabetes_friendly"],
@@ -201,3 +163,5 @@ export const MEAL_SEEDS: MealSeed[] = [
     [["صدر فراخ مقطع مكعبات", "١٥٠ جم", "chicken"], ["كوسة", "حبة", "zucchini"], ["جزر", "نصف حبة", "carrot"], ["فلفل رومي", "نصف حبة", "pepper"], ["ثوم", "فص", "garlic"], ["زيت", "ملعقة صغيرة"]],
     ["حمّر الفراخ في الزيت ٥ دقائق حتى يتغير لونها.", "أضف الثوم والجزر وقلّب ٣ دقائق.", "أضف الكوسة والفلفل واتركها ٥ دقائق مع التقليب.", "تبّل بالفلفل الأسود والكمون وقدّمها ساخنة."]),
 ];
+
+export const MEAL_SEEDS: MealSeed[] = [...BASE_MEALS, ...EGYPTIAN_MORE, ...INTERNATIONAL];

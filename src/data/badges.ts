@@ -8,5 +8,6 @@ export const BADGES: BadgeDef[] = [
   { key: "sugar_hero", ar: "بطل السكر", en: "Sugar hero", desc_ar: "٧ أيام بدون سكر مضاف", desc_en: "7 sugar-free days", icon: "shield" },
   { key: "water_champ", ar: "بطل المياه", en: "Water champ", desc_ar: "١٠ أيام من تحديات المياه", desc_en: "10 water challenges done", icon: "drop" },
   { key: "walker", ar: "ماشي نشيط", en: "Active walker", desc_ar: "١٠ أيام من تحديات المشي", desc_en: "10 walking challenges done", icon: "steps" },
+  { key: "regular_4w", ar: "مشارك منتظم", en: "Regular", desc_ar: "شاركت في ٤ تحديات أسبوعية", desc_en: "Joined 4 weekly challenges", icon: "medal" },
   { key: "group_finisher", ar: "أكمل التحدي الجماعي", en: "Group finisher", desc_ar: "٧ أيام في تحدي الأسبوع", desc_en: "7 days in a weekly group challenge", icon: "users" },
 ];

@@ -44,15 +44,20 @@ test("calories never go below 1,200 even for aggressive inputs", () => {
   assert.ok(weeklyAdjustment("lose", 80, 80, -300) >= -300);
 });
 
-test("catalogue: 30 meals, 10 per type, Arabic, no emoji, ingredient keys valid", () => {
-  assert.equal(MEAL_SEEDS.length, 30);
-  for (const t of ["breakfast", "lunch", "dinner"]) assert.equal(MEAL_SEEDS.filter((m) => m.meal_type === t).length, 10);
+test("catalogue: 110 meals (30+40 Egyptian, 40 international), no emoji, no forbidden words, keys valid", async () => {
+  assert.equal(MEAL_SEEDS.length, 110);
+  assert.equal(MEAL_SEEDS.filter((m) => m.cuisine === "egyptian").length, 70);
+  assert.equal(MEAL_SEEDS.filter((m) => m.cuisine === "international").length, 40);
+  const forbidden = ["خنزير", "نبيذ", "كحول", "حلال", "حرام", "halal", "haram", "pork", "bacon", "wine", "beer", "mirin", "sake", "gelatin"];
+  for (const m of MEAL_SEEDS) { const words = JSON.stringify(m).toLowerCase().split(/[^\p{L}]+/u); for (const f of forbidden) assert.ok(!words.includes(f), `${m.id}: ${f}`); }
+  const { INGREDIENT_MAP } = await import("../src/data/ingredients");
+  for (const m of MEAL_SEEDS) for (const i of m.ingredients) if (i.key) assert.ok(INGREDIENT_MAP[i.key], `${m.id}: ${i.key}`);
   const emoji = /\p{Extended_Pictographic}/u;
   for (const m of MEAL_SEEDS) {
     assert.ok(m.steps.length >= 3 && m.ingredients.length >= 3 && m.calories > 0 && m.protein_g > 0, m.id);
     assert.ok(!emoji.test(JSON.stringify(m)), m.id);
   }
-  assert.equal(new Set(MEAL_SEEDS.map((m) => m.id)).size, 30);
+  assert.equal(new Set(MEAL_SEEDS.map((m) => m.id)).size, 110);
   assert.ok(CHALLENGE_SEEDS.length >= 14);
 });
 
@@ -110,4 +115,19 @@ test("session tokens are signed and tamper-evident", () => {
   assert.equal(verifySession(forged), null);
   assert.equal(verifySession(t.slice(0, -2) + "AA"), null);
   assert.equal(verifySession(null), null);
+});
+
+import { recipeCacheKey } from "../src/server/chef";
+import { callModel, MAX_INPUT_TOKENS_ESTIMATE } from "../src/server/ai/provider";
+
+test("AI cache key is stable across punctuation/spacing and differs by goal/conditions", () => {
+  const a = recipeCacheKey("عندي بيض  وجبنة قريش!", "lose", ["diabetes"]);
+  assert.equal(a, recipeCacheKey("عندي بيض وجبنة قريش", "lose", ["diabetes"]));
+  assert.notEqual(a, recipeCacheKey("عندي بيض وجبنة قريش", "gain", ["diabetes"]));
+  assert.notEqual(a, recipeCacheKey("عندي بيض وجبنة قريش", "lose", []));
+});
+
+test("oversized AI input is refused before any request is made", async () => {
+  process.env.AI_API_KEY = "k"; process.env.AI_PROVIDER = "meta";
+  await assert.rejects(callModel({ system: "x".repeat(MAX_INPUT_TOKENS_ESTIMATE * 2 + 10), messages: [{ role: "user", content: "hi" }] }), /input too large/);
 });

@@ -122,7 +122,7 @@ function ChefInner() {
             <div className="flex flex-wrap gap-2">{EXAMPLES.map((e) => (<button key={e.ar} className="chip" onClick={() => setPrompt(lang === "ar" ? e.ar : e.en)}>{lang === "ar" ? e.ar : e.en}</button>))}</div>
             <CreditBalance b={balances} />
             {refusal && <Notice tone="warn">{refusal}</Notice>}
-            {total === 0 && accepted && <Notice tone="warn" icon="bolt"><div className="flex flex-wrap items-center gap-3"><span>{tr("رصيدك من الكريدت خلص.", "You're out of credits.")}</span><Link href="/pricing" className="btn-sun btn-sm">{tr("اشترِ كريدت", "Get credits")}</Link></div></Notice>}
+            {total === 0 && accepted && <Notice tone="warn" icon="bolt"><div className="flex flex-wrap items-center gap-3"><span>{tr("رصيدك من الكريدت خلص. اكسب ٣ كريدت بتحدي البداية (٧ أيام) أو اشترِ كريدت.", "You're out of credits. Earn 3 with the 7-day starter challenge, or buy credits.")}</span><Link href="/today" className="btn-soft btn-sm">{tr("تحدي البداية", "Starter challenge")}</Link><Link href="/pricing" className="btn-sun btn-sm">{tr("اشترِ كريدت", "Get credits")}</Link></div></Notice>}
             <button className="btn-primary w-full" onClick={generate} disabled={!canGenerate}>{busy ? <Spinner /> : <Icon name="sparkles" />}{busy ? tr("الشيف بيحضّر وصفتك…", "The chef is cooking your recipe…") : tr("توليد وصفة جديدة — 1 كريدت", "Generate new recipe — 1 credit")}</button>
             <p className="muted text-center">{tr("لو فشل التوليد يرجع الكريدت تلقائيًا. الأسئلة التالية على نفس الوصفة مجانية.", "If generation fails the credit is refunded automatically. Follow-up questions on the same recipe are free.")}</p>
           </section>

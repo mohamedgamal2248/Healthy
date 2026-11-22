@@ -6,13 +6,15 @@ import type { MealIngredient } from "@/data/meals";
 export type MealRow = {
   id: string; meal_type: "breakfast" | "lunch" | "dinner"; name_ar: string; name_en: string; photo_url: string | null;
   time_min: number; calories: number; protein_g: number; cost_egp: number; why_ar: string; why_en: string;
+  cuisine: "egyptian" | "international"; origin_ar: string | null; origin_en: string | null;
   tags: string[]; ingredients: MealIngredient[]; ingredient_keys: string[]; steps: string[]; active: boolean;
 };
 
-export async function listMeals(f: { type?: string; tags?: string[]; have?: string[]; q?: string }): Promise<MealRow[]> {
+export async function listMeals(f: { cuisine?: string; type?: string; tags?: string[]; have?: string[]; q?: string }): Promise<MealRow[]> {
   await ensureSeeded();
   let q = db().from("hl_meals").select("*").eq("active", true).order("meal_type").order("id");
   if (f.type && ["breakfast", "lunch", "dinner"].includes(f.type)) q = q.eq("meal_type", f.type);
+  if (f.cuisine === "egyptian" || f.cuisine === "international") q = q.eq("cuisine", f.cuisine);
   if (f.tags?.length) q = q.contains("tags", f.tags);
   // "I have these ingredients": every non-staple ingredient of the meal must be among the ticked ones.
   if (f.have?.length) q = q.containedBy("ingredient_keys", f.have);

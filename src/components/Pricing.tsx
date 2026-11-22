@@ -11,7 +11,7 @@ export function FreeTierCard({ trial }: { trial: number }) {
     tr("تحدي اليوم وسلسلة الأيام والشارات", "Daily challenges, streaks and badges"),
     tr("وجبات اليوم وكتالوج الوجبات بالبحث", "Meals of the day and catalogue search"),
     tr("تتبّع التقدم (الوزن والمياه والنوم والخطوات)", "Progress tracking (weight, water, sleep, steps)"),
-    tr(`${trial} توليدات تجريبية للشيف AI (مرة واحدة)`, `${trial} trial AI Chef generations (once)`),
+    tr(`${trial} كريدت AI مكافأة لإنهاء تحدي البداية (٧ أيام متتالية)`, `${trial} AI credits for finishing the 7-day starter challenge`),
   ];
   return (
     <div className="card flex flex-col">
