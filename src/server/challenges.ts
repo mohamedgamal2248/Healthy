@@ -1,4 +1,5 @@
 import { db, must } from "./supabase";
+import { ensureSeeded } from "./seed";
 import { E } from "./http";
 import type { Auth } from "./auth";
 import { applyCompletion, effectiveStreak, streakBadges, type StreakState } from "@/lib/streak";
@@ -10,6 +11,7 @@ export type TodayChallenge = { id: string; challenge_id: string; status: "assign
 const DAILY_COUNT = 3;
 
 async function activePool(): Promise<ChallengeRow[]> {
+  await ensureSeeded();
   return must(await db().from("hl_challenges").select("*").eq("active", true).order("id")) as ChallengeRow[];
 }
 
