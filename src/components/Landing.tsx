@@ -59,7 +59,7 @@ export function Landing({ items, trial, meal, challenge }: { items: PriceItem[];
       </section>
 
       <section className="mx-auto max-w-6xl py-10">
-        <h2 className="h1 mb-6 text-center">{tr("كيف يعمل صحتي؟", "How Pi Healthy works")}</h2>
+        <h2 className="h1 mb-6 text-center">{tr("كيف يعمل صحتي؟", "How Healthy works")}</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {steps.map((s, i) => (
             <div key={s.icon} className="card">

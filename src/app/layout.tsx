@@ -5,7 +5,7 @@ import { AppProvider } from "@/components/AppProvider";
 import { Shell } from "@/components/Shell";
 
 export const metadata: Metadata = {
-  title: "صحتي | Pi Healthy",
+  title: "Healthy",
   description: "تحدي صحي كل يوم، وجبات مصرية رخيصة وصحية، وشيف ذكاء اصطناعي ونظام غذائي شخصي لمستخدمي Pi.",
   icons: { icon: "/icon.svg" },
 };
