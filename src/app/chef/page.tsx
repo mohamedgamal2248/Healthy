@@ -7,7 +7,7 @@ import { useApp, type Balances } from "@/components/AppProvider";
 import { Gate, Notice, PageHeader, PageSkeleton, Spinner } from "@/components/ui";
 import { CreditBalance, DisclaimerBanner, ContentView, type CoachContent } from "@/components/Domain";
 import { Icon } from "@/components/Icon";
-import { CookingAnimation } from "@/components/Cooking";
+import { CoachThinking } from "@/components/CoachThinking";
 
 type Recipe = { id: string; title: string; content: CoachContent; shared: boolean };
 type Kind = "recipe" | "workout" | "challenge";
@@ -122,14 +122,14 @@ function ChefInner() {
             <div className="flex items-center justify-between"><h2 className="h2">{tr("اسأل عن هذا المحتوى", "Ask about this")}</h2><span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-extrabold text-brand-800">{tr("مجاني، بدون كريدت", "Free, no credit")}</span></div>
             <p className="muted">{tr("الوصفة الجديدة بكريدت واحد، لكن أي سؤال عن نفس الوصفة (تقليل الملح، بدائل، مناسبة للأطفال…) مجاني لأنه جزء من نفس الوصفة. بحد أقصى ٢٠ سؤالًا في اليوم.", "A new recipe costs 1 credit, but questions about the same recipe (less salt, substitutes, kids…) are free. Up to 20 questions per day.")}</p>
             {msgs.map((m, i) => (<div key={i} className={`max-w-[92%] rounded-2xl p-3 text-sm font-semibold leading-relaxed ${m.role === "user" ? "me-auto bg-brand-600 text-white" : "ms-auto bg-brand-50 text-ink"}`}>{m.content}</div>))}
-            {asking && <div className="rounded-2xl bg-brand-50"><CookingAnimation compact /></div>}
+            {asking && <div className="rounded-2xl bg-brand-50"><CoachThinking kind={kind} compact /></div>}
             <div className="flex flex-wrap gap-2">{[tr("أقلل الملح إزاي؟", "How do I cut the salt?"), tr("تنفع للأطفال؟", "Is it suitable for kids?")].map((s) => (<button key={s} className="chip" onClick={() => setQ(s)}>{s}</button>))}</div>
             <div className="flex gap-2"><input className="field" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask()} placeholder={tr("اكتب سؤالك…", "Your question…")} maxLength={400} aria-label={tr("سؤال", "Question")} /><button className="btn-primary !px-4" onClick={ask} disabled={asking || !q.trim()} aria-label={tr("إرسال", "Send")}>{asking ? <Spinner size={20} /> : <Icon name="send" size={20} className="rtl:-scale-x-100" />}</button></div>
           </section>
         </>
       ) : (
         busy ? (
-          <section className="card"><CookingAnimation /></section>
+          <section className="card"><CoachThinking kind={kind} /></section>
         ) : (
         <>
           <section className="card space-y-4">
