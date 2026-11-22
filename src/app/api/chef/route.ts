@@ -8,8 +8,8 @@ export const maxDuration = 90;
 export const POST = route(async (req) => {
   const a = await requireVerified(req);
   requireDisclaimer(a);
-  const { prompt, kind } = await readJson<{ prompt?: string; kind?: string }>(req);
+  const { prompt, kind, lang } = await readJson<{ prompt?: string; kind?: string; lang?: string }>(req);
   if (typeof prompt !== "string") throw E.bad();
-  const recipe = await coachGenerate(a, prompt, kind);
+  const recipe = await coachGenerate(a, prompt, kind, lang);
   return ok({ recipe, balances: await getBalances(a.username) });
 });

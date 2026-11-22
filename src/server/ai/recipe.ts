@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AiNotConfigured, callModel, extractJson, type AiMessage } from "./provider";
 import { outputIsSafe, REFUSAL_AR } from "./safety";
 import { MIN_DAILY_KCAL } from "@/config/pricing";
+import { langInstruction, type Lang } from "./lang";
 
 export const RecipeSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -22,7 +23,7 @@ export class AiRefused extends Error {
   }
 }
 
-export type ProfileContext = { goal: string | null; conditions: string[] };
+export type ProfileContext = { goal: string | null; conditions: string[]; lang?: Lang };
 
 const SHAPE = `{
   "name": "اسم الوصفة",
@@ -55,7 +56,7 @@ function profileLines(p: ProfileContext): string {
 }
 
 export function recipeSystemPrompt(p: ProfileContext): string {
-  return `أنت "الكوتش" في تطبيق صحتي لمستخدمي Pi في مصر. تكتب وصفة واحدة كاملة بصيغة JSON بالشكل التالي بالضبط:\n${SHAPE}\n\n${RULES}\n${profileLines(p)}`;
+  return `أنت "الكوتش" في تطبيق صحتي لمستخدمي Pi في مصر. تكتب وصفة واحدة كاملة بصيغة JSON بالشكل التالي بالضبط:\n${SHAPE}\n\n${RULES}\n${profileLines(p)}${langInstruction(p.lang ?? "ar")}`;
 }
 
 function validate(raw: unknown): Recipe {
@@ -89,7 +90,7 @@ export async function generateRecipe(userText: string, profile: ProfileContext):
 }
 
 export async function answerFollowUp(recipe: unknown, history: AiMessage[], question: string, profile: ProfileContext): Promise<string> {
-  const system = `أنت "الكوتش" في تطبيق صحتي. المستخدم يسأل عن هذا المحتوى تحديدًا (وصفة أو تمرين أو تحدٍّ):\n${JSON.stringify(recipe)}\n\nأجب بالعربية في فقرة قصيرة وعملية (٣ إلى ٥ جمل). إرشادات غذائية عامة فقط: ممنوع التشخيص أو العلاج أو ذكر دواء أو مكمل أو جرعة أو الصيام. إذا سُئلت عن الأطفال فاذكر معلومة عامة وانصح بسؤال طبيب الأطفال ولا تضع نظامًا لطفل. إذا طُلب منك تشخيص أو علاج اعتذر بلطف.\n${profileLines(profile)}`;
+  const system = `أنت "الكوتش" في تطبيق صحتي. المستخدم يسأل عن هذا المحتوى تحديدًا (وصفة أو تمرين أو تحدٍّ):\n${JSON.stringify(recipe)}\n\nأجب بالعربية في فقرة قصيرة وعملية (٣ إلى ٥ جمل). إرشادات غذائية عامة فقط: ممنوع التشخيص أو العلاج أو ذكر دواء أو مكمل أو جرعة أو الصيام. إذا سُئلت عن الأطفال فاذكر معلومة عامة وانصح بسؤال طبيب الأطفال ولا تضع نظامًا لطفل. إذا طُلب منك تشخيص أو علاج اعتذر بلطف.\n${profileLines(profile)}${langInstruction(profile.lang ?? "ar")}`;
   const text = (await callModel({ system, messages: [...history, { role: "user", content: question }], maxTokens: 600 })).trim();
   if (!text || !outputIsSafe(text)) throw new AiUnusable("followup");
   return text;

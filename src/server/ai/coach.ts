@@ -2,6 +2,7 @@ import { z } from "zod";
 import { callModel, extractJson, AiNotConfigured } from "./provider";
 import { outputIsSafe, REFUSAL_AR } from "./safety";
 import { AiRefused, AiUnusable, type ProfileContext } from "./recipe";
+import { langInstruction } from "./lang";
 
 export type CoachKind = "recipe" | "workout" | "challenge";
 export const COACH_KINDS: CoachKind[] = ["recipe", "workout", "challenge"];
@@ -49,7 +50,7 @@ export function cardSystemPrompt(kind: Exclude<CoachKind, "recipe">, p: ProfileC
     kind === "workout"
       ? "اكتب برنامج تمرين منزلي عام واحد للمبتدئين: أقسام (إحماء، تمارين رئيسية بعدد التكرارات أو الزمن وفترات الراحة، تهدئة). بدون أجهزة، وآمن، وانصح بالتوقف عند الألم أو الدوخة."
       : "اكتب تحدّي صحيًا مخصصًا لمدة ٧ أيام: قسم لكل مرحلة أو أيام، وبنود صغيرة قابلة للتنفيذ يوميًا (مياه، حركة، نوم، أكل)، وكيف يتابع المستخدم تقدمه.";
-  return `أنت "الكوتش" في تطبيق Healthy. ${task}\nأرجع JSON بالشكل التالي بالضبط:\n${SHAPE}\n\n${COMMON}\n${profileNotes(p)}`;
+  return `أنت "الكوتش" في تطبيق Healthy. ${task}\nأرجع JSON بالشكل التالي بالضبط:\n${SHAPE}\n\n${COMMON}\n${profileNotes(p)}${langInstruction(p.lang ?? "ar")}`;
 }
 
 export async function generateCard(kind: Exclude<CoachKind, "recipe">, userText: string, profile: ProfileContext): Promise<Card> {

@@ -60,7 +60,7 @@ async function generate(a: Auth, week: string, kind: "first" | "refresh" | "rege
     const typeAr = { breakfast: "فطار", lunch: "غدا", dinner: "عشا" } as const;
     const results = await Promise.allSettled(
       built.gaps.slice(0, 6).map((g) =>
-        generateRecipe(`وصفة ${typeAr[g.type]} بحوالي ${g.kcal} سعرة حرارية${need.includes("low_salt") ? "، قليلة الملح" : ""}${need.includes("diabetes_friendly") ? "، مناسبة لمريض السكر" : ""}`, { goal: p.goal, conditions: p.conditions }),
+        generateRecipe(`وصفة ${typeAr[g.type]} بحوالي ${g.kcal} سعرة حرارية${need.includes("low_salt") ? "، قليلة الملح" : ""}${need.includes("diabetes_friendly") ? "، مناسبة لمريض السكر" : ""}`, { goal: p.goal, conditions: p.conditions, lang: p.language === "en" ? "en" : "ar" }),
       ),
     );
     results.forEach((r, i) => {
