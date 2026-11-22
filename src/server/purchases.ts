@@ -31,6 +31,7 @@ async function purchaseForPayment(a: Payer, payment: PiPayment): Promise<Purchas
 }
 
 function payErr(reason: string) {
+  console.error("[payment] rejected:", reason);
   return new HttpError(400, "payment_rejected", "تعذّر التحقق من الدفعة، لم يتم منح أي شيء.", "The payment could not be verified. Nothing was granted.", { reason });
 }
 
@@ -40,6 +41,7 @@ async function failPurchase(id: string, reason: string) {
 
 /** Server approval: verify the payment against our purchase row first, then approve it with Pi. */
 export async function approve(a: Auth, paymentId: string) {
+  console.log("[payment] approve start", paymentId.slice(0, 8), a.username);
   const payment = await getPayment(paymentId);
   const purchase = await purchaseForPayment(a, payment);
   if (purchase.status !== "pending" && purchase.status !== "approved") throw payErr("purchase_not_open");
@@ -60,6 +62,7 @@ export async function approve(a: Auth, paymentId: string) {
 
 /** Server completion: re-verify with the Pi API, complete, confirm, then grant atomically. */
 export async function complete(a: Payer, paymentId: string, txid: string) {
+  console.log("[payment] complete start", paymentId.slice(0, 8), a.username);
   if (!txid) throw E.bad();
   const payment = await getPayment(paymentId);
   const purchase = await purchaseForPayment(a, payment);
