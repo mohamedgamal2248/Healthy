@@ -71,7 +71,7 @@ export async function coachGenerate(a: Auth, prompt: string, kindIn: unknown = "
   const lang = detectLang(text, asLang(uiLang, a.profile.language === "en" ? "en" : "ar"));
   if (text.length < 3 || text.length > AI_LIMITS.maxPromptChars) throw E.bad(`اكتب طلبًا قصيرًا (٣ إلى ${AI_LIMITS.maxPromptChars} حرفًا).`, `Keep your request short (3 to ${AI_LIMITS.maxPromptChars} characters).`);
   if (isRefusalRequest(text)) throw refusal();
-  if (!aiConfigured()) throw E.notConfigured("AI");
+  if (!aiConfigured()) throw E.notConfigured("Healthy AI");
   await enforceGenerationLimits(a.username);
 
   const req = must(
@@ -114,7 +114,7 @@ export async function coachGenerate(a: Auth, prompt: string, kindIn: unknown = "
     const reason = e instanceof AiRefused ? "refused" : e instanceof AiNotConfigured ? "not_configured" : e instanceof Error ? e.message.slice(0, 120) : "failed";
     must(await db().from("hl_ai_requests").update({ status: "refunded", error: reason, tokens_in: failUsage.tokensIn, tokens_out: failUsage.tokensOut, searches: failUsage.searches, est_cost_usd: estimateCostUsd(failUsage) }).eq("id", req.id));
     if (e instanceof AiRefused) throw refusal(e.message_ar, e.message_ar);
-    if (e instanceof AiNotConfigured) throw E.notConfigured("AI");
+    if (e instanceof AiNotConfigured) throw E.notConfigured("Healthy AI");
     if (e instanceof Error && e.message === "timeout") throw new HttpError(504, "ai_timeout", "الرد تأخّر أكثر من اللازم، فأعدنا لك الكريدت تلقائيًا. حاول مرة أخرى.", "The answer took too long, so your credit was refunded automatically. Please try again.");
     throw new HttpError(502, "ai_failed", "تعذّر توليد نتيجة صالحة هذه المرة. أعدنا لك الكريدت تلقائيًا، حاول مرة أخرى.", "We couldn't produce a valid result this time. Your credit was refunded automatically; please try again.");
   }
@@ -129,7 +129,7 @@ export async function scanMeal(a: Auth, image: unknown, note: unknown, uiLang?: 
   if (!validImage(image)) throw E.bad("الصورة غير صالحة أو كبيرة جدًا. التقط صورة أخرى (JPEG أو PNG أو WebP).", "The photo is invalid or too large. Take another one (JPEG, PNG or WebP).");
   const text = typeof note === "string" ? note.trim().slice(0, 200) : "";
   if (text && isRefusalRequest(text)) throw refusal();
-  if (!aiConfigured()) throw E.notConfigured("AI");
+  if (!aiConfigured()) throw E.notConfigured("Healthy AI");
   const lang = detectLang(text, asLang(uiLang, a.profile.language === "en" ? "en" : "ar"));
   await enforceGenerationLimits(a.username);
 
@@ -159,7 +159,7 @@ export async function scanMeal(a: Auth, image: unknown, note: unknown, uiLang?: 
     const reason = e instanceof AiRefused ? "no_food" : e instanceof Error ? e.message.slice(0, 120) : "failed";
     must(await db().from("hl_ai_requests").update({ status: "refunded", error: reason, tokens_in: failUsage.tokensIn, tokens_out: failUsage.tokensOut, est_cost_usd: estimateCostUsd(failUsage) }).eq("id", req.id));
     if (e instanceof AiRefused) throw refusal(e.message_ar, e.message_ar);
-    if (e instanceof AiNotConfigured) throw E.notConfigured("AI");
+    if (e instanceof AiNotConfigured) throw E.notConfigured("Healthy AI");
     if (e instanceof Error && e.message === "timeout") throw new HttpError(504, "ai_timeout", "التحليل تأخّر أكثر من اللازم، فأعدنا لك الكريدت تلقائيًا. حاول مرة أخرى.", "The analysis took too long, so your credit was refunded automatically. Please try again.");
     throw new HttpError(502, "ai_failed", "تعذّر تحليل الصورة بدقة كافية. أعدنا لك الكريدت تلقائيًا. جرّب صورة أوضح من فوق وبإضاءة أفضل.", "We couldn't analyse the photo reliably. Your credit was refunded automatically. Try a clearer top-down photo in better light.");
   }

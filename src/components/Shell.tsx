@@ -10,7 +10,7 @@ import { Sheet, Spinner } from "./ui";
 const MAIN = [
   { href: "/today", icon: "home", ar: "اليوم", en: "Today" },
   { href: "/meals", icon: "utensils", ar: "الأكل", en: "Eat", also: ["/plan"] },
-  { href: "/chef", icon: "sparkles", ar: "AI", en: "AI", primary: true },
+  { href: "/chef", icon: "sparkles", ar: "Healthy AI", en: "Healthy AI", primary: true },
   { href: "/progress", icon: "chart", ar: "تقدمي", en: "Progress" },
   { href: "/community", icon: "users", ar: "المجتمع", en: "Community" },
 ] as { href: string; icon: string; ar: string; en: string; primary?: boolean; also?: string[] }[];
