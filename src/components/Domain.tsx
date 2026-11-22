@@ -27,22 +27,47 @@ export function CreditBalance({ b, className = "" }: { b: Balances | null; class
   const { tr } = useApp();
   if (!b) return null;
   const date = b.planExpiresAt ? new Date(b.planExpiresAt).toLocaleDateString(tr("ar-EG", "en-GB"), { day: "numeric", month: "long", year: "numeric" }) : null;
+  const R = 34, C = 2 * Math.PI * R;
+  const full = Math.max(10, b.total);
+  const parts = [
+    { label: tr("من الخطة", "Plan"), v: b.plan, color: "#10b981" },
+    { label: tr("من الباقات", "Packs"), v: b.pack, color: "#f59e0b" },
+    { label: tr("مكافآت", "Rewards"), v: b.trial, color: "#8b5cf6" },
+  ];
+  let offset = 0;
   return (
-    <div className={`rounded-2xl border border-sun-100 bg-sun-50 p-3.5 ${className}`}>
-      <div className="flex items-center gap-2 text-sun-600">
-        <Icon name="bolt" size={20} />
-        <span className="text-sm font-extrabold text-ink">{tr("رصيدك من الكريدت", "Your credits")}</span>
-        <span className="ms-auto text-2xl font-extrabold tabular-nums text-ink">{b.total}</span>
+    <div className={`rounded-3xl border border-sun-100 bg-gradient-to-br from-sun-50 via-white to-brand-50 p-4 shadow-(--shadow-card) ${className}`}>
+      <div className="flex items-center gap-4">
+        <div className="relative h-24 w-24 shrink-0" role="img" aria-label={tr(`${b.total} طلب AI متاح`, `${b.total} AI requests available`)}>
+          <svg viewBox="0 0 80 80" className="h-full w-full -rotate-90">
+            <circle cx="40" cy="40" r={R} fill="none" stroke="#fde68a" strokeOpacity=".45" strokeWidth="9" />
+            {b.total > 0 && parts.filter((p) => p.v > 0).map((p) => {
+              const len = (p.v / full) * C;
+              const el = <circle key={p.label} cx="40" cy="40" r={R} fill="none" stroke={p.color} strokeWidth="9" strokeLinecap="round" strokeDasharray={`${Math.max(len - 3, 0.1)} ${C}`} strokeDashoffset={-offset} />;
+              offset += len;
+              return el;
+            })}
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-2xl font-extrabold leading-none tabular-nums text-ink">{b.total}</span>
+            <span className="mt-0.5 text-[10px] font-extrabold text-ink-soft">{tr("طلب AI", "AI requests")}</span>
+          </div>
+        </div>
+        <ul className="min-w-0 flex-1 space-y-1.5">
+          {parts.map((p) => (
+            <li key={p.label} className="flex items-center gap-2 text-sm font-bold">
+              <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: p.color }} />
+              <span className="flex-1 text-ink-soft">{p.label}</span>
+              <span className="tabular-nums text-ink">{p.v}</span>
+            </li>
+          ))}
+          <li className="pt-1"><Link href="/pricing" className="inline-flex items-center gap-1 text-xs font-extrabold text-brand-700"><Icon name="plus" size={14} />{tr("اشحن طلبات", "Get more requests")}</Link></li>
+        </ul>
       </div>
-      <dl className="mt-2 grid grid-cols-3 gap-2 text-center text-xs font-bold text-ink-soft">
-        <div className="rounded-xl bg-white/70 p-2"><dt>{tr("من الخطة", "Plan")}</dt><dd className="text-base font-extrabold text-ink tabular-nums">{b.plan}</dd></div>
-        <div className="rounded-xl bg-white/70 p-2"><dt>{tr("من الباقات", "Packs")}</dt><dd className="text-base font-extrabold text-ink tabular-nums">{b.pack}</dd></div>
-        <div className="rounded-xl bg-white/70 p-2"><dt>{tr("مكافأة", "Reward")}</dt><dd className="text-base font-extrabold text-ink tabular-nums">{b.trial}</dd></div>
-      </dl>
-      <p className="mt-2 text-xs font-semibold text-ink-soft">
+      <p className="mt-3 text-xs font-semibold text-ink-soft">
         {b.planActive && date
-          ? tr(`كريدت الخطة ينتهي مع نهاية الخطة في ${date}. كريدت الباقات لا ينتهي.`, `Plan credits expire when your plan ends on ${date}. Pack credits never expire.`)
-          : tr("كريدت الباقات لا ينتهي. كريدت الخطة الشهرية ينتهي بانتهاء الخطة.", "Pack credits never expire. Monthly-plan credits expire when the plan ends.")}
+          ? tr(`طلبات الخطة تنتهي مع الخطة في ${date}، وطلبات الباقات لا تنتهي.`, `Plan requests expire with the plan on ${date}; pack requests never expire.`)
+          : tr("طلبات الباقات لا تنتهي، وطلبات الخطة الشهرية تنتهي بانتهائها.", "Pack requests never expire; monthly-plan requests expire with the plan.")}
       </p>
     </div>
   );

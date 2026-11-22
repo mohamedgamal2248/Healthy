@@ -43,10 +43,10 @@ export function Shell({ children }: { children: ReactNode }) {
           </Link>
           <div className="flex items-center gap-2">
             {me?.balances && (
-              <Link href="/pricing" className="chip !border-sun-100 !bg-sun-50 !text-sun-600" aria-label={tr("رصيد الكريدت", "Credit balance")}>
-                <Icon name="bolt" size={16} />
-                <span className="font-extrabold tabular-nums">{me.balances.total}</span>
-                <span className="hidden sm:inline">{tr("كريدت", "credits")}</span>
+              <Link href="/pricing" className="flex h-9 items-center gap-1.5 rounded-full border border-sun-100 bg-gradient-to-br from-sun-50 to-white ps-1 pe-3 transition active:scale-95" aria-label={tr("رصيد طلبات AI", "AI requests balance")}>
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-sun-500 text-white shadow-sm"><Icon name="bolt" size={15} filled /></span>
+                <span className="text-sm font-extrabold tabular-nums text-ink">{me.balances.total}</span>
+                <span className="hidden text-xs font-bold text-ink-soft sm:inline">AI</span>
               </Link>
             )}
             <button className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-white text-xs font-extrabold text-ink-soft transition active:scale-90" onClick={() => setLang(lang === "ar" ? "en" : "ar")} aria-label={tr("تغيير اللغة", "Switch language")} dir="ltr">
