@@ -142,9 +142,9 @@ function TodayInner() {
 
       <section className="grid gap-4 md:grid-cols-2">
         <Link href="/chef" className="card flex items-center gap-4 !border-brand-200 bg-gradient-to-br from-brand-50 to-white transition hover:shadow-md">
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-600 text-white"><Icon name="chef" size={30} /></span>
+          <span className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-full border-4 border-white bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lg"><Icon name="sparkles" size={26} /></span>
           <div className="flex-1">
-            <p className="h2">{tr("الكوتش", "AI Coach")}</p>
+            <p className="h2">{tr("الكوتش", "Coach")}</p>
             <p className="muted">{tr("وجبات وتمارين وتحديات على مقاسك", "Meals, workouts and challenges made for you")}</p>
           </div>
           <Icon name={lang === "ar" ? "chevronL" : "chevronR"} size={22} className="text-brand-600" />
