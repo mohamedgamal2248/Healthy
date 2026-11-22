@@ -3,7 +3,7 @@ import { requireDisclaimer, requireVerified } from "@/server/auth";
 import { chefGenerate } from "@/server/chef";
 import { getBalances } from "@/server/credits";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 export const POST = route(async (req) => {
   const a = await requireVerified(req);

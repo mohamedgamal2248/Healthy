@@ -6,7 +6,7 @@ import { answerFollowUp } from "@/server/ai/recipe";
 import { isRefusalRequest } from "@/server/ai/safety";
 import { refusal, type RecipeContent } from "@/server/chef";
 
-export const maxDuration = 90;
+export const maxDuration = 300;
 const DAILY_FOLLOWUP_CAP = 20; // protects provider cost; follow-ups never deduct credits
 
 /** Free follow-up on the user's own recipe thread: no credit is deducted. */

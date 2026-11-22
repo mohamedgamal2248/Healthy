@@ -22,4 +22,4 @@ Prices live in `src/config/pricing.ts`.
 
 ## Notes
 - KYC: Pi's `/me` does not always expose KYC. `PI_KYC_MODE=strict` requires an explicit flag; default on testnet treats Pi-authenticated users as verified so end-to-end tests are possible. Use `strict` before any Mainnet work.
-- AI: set `AI_PROVIDER` (`anthropic` | `openai`), `AI_MODEL`, `AI_API_KEY`. Without them the AI features show "not configured".
+- AI: default provider is the Meta Model API with `muse-ember-1.0` (`AI_PROVIDER=meta`); set `AI_API_KEY`. `anthropic` / `openai` are also supported. Without them the AI features show "not configured".

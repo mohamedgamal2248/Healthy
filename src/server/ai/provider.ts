@@ -9,20 +9,43 @@ export class AiProviderError extends Error {}
 
 export type AiMessage = { role: "user" | "assistant"; content: string };
 
+const provider = () => (process.env.AI_PROVIDER ?? "meta").toLowerCase();
+/** Meta Model API defaults to Muse Ember; other providers need AI_MODEL set explicitly. */
+const modelName = () => process.env.AI_MODEL || (provider() === "meta" ? "muse-ember-1.0" : "");
+
 export function aiConfigured(): boolean {
-  return !!(process.env.AI_API_KEY && process.env.AI_MODEL);
+  return !!(process.env.AI_API_KEY && modelName());
 }
 
 export async function callModel(opts: { system: string; messages: AiMessage[]; maxTokens?: number; temperature?: number }): Promise<string> {
   const key = process.env.AI_API_KEY;
-  const model = process.env.AI_MODEL;
+  const model = modelName();
   if (!key || !model) throw new AiNotConfigured();
-  const provider = (process.env.AI_PROVIDER ?? "anthropic").toLowerCase();
+  const prov = provider();
   const maxTokens = opts.maxTokens ?? 1800;
   const temperature = opts.temperature ?? 0.4;
 
   try {
-    if (provider === "anthropic") {
+    if (prov === "meta") {
+      // Meta Model API: OpenAI-compatible Chat Completions. Muse Ember always reasons, so keep the effort
+      // low (default is "max": slow and costly) and leave headroom in max_completion_tokens for reasoning.
+      const base = (process.env.AI_BASE_URL || "https://api.meta.ai/v1").replace(/\/$/, "");
+      const res = await fetch(`${base}/chat/completions`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model,
+          reasoning_effort: process.env.AI_REASONING_EFFORT || "low",
+          max_completion_tokens: maxTokens + 4000,
+          messages: [{ role: "system", content: opts.system }, ...opts.messages],
+        }),
+        signal: AbortSignal.timeout(100000),
+      });
+      if (!res.ok) throw new AiProviderError(`meta ${res.status}`);
+      const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      return data.choices?.[0]?.message?.content ?? "";
+    }
+    if (prov === "anthropic") {
       const base = (process.env.AI_BASE_URL || "https://api.anthropic.com").replace(/\/$/, "");
       const res = await fetch(`${base}/v1/messages`, {
         method: "POST",
