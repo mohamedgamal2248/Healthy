@@ -150,7 +150,7 @@ function Inner() {
   return (
     <div className="mx-auto max-w-2xl space-y-5 py-5">
       <PageHeader title={tr("ملفي الصحي", "My health profile")} sub={`@${p.username}`} action={p.kyc_verified ? <VerifiedBadge /> : undefined} />
-      {!p.kyc_verified && <Notice tone="warn" icon="shieldCheck">{tr("حسابك غير موثّق (KYC). الشراء والكوتش والمجتمع تحتاج حساب Pi موثّق.", "Your account is not KYC-verified. Purchases, AI Coach and community need a verified Pi account.")}</Notice>}
+      {!p.kyc_verified && <Notice tone="warn" icon="shieldCheck">{tr("حسابك غير موثّق (KYC). الشراء وAI والمجتمع تحتاج حساب Pi موثّق.", "Your account is not KYC-verified. Purchases, AI and community need a verified Pi account.")}</Notice>}
       <section className="card space-y-5">
         <h2 className="h2">{steps[0].title}</h2>{steps[0].body}
       </section>
