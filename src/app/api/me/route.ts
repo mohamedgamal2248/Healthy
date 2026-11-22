@@ -4,6 +4,7 @@ import { ok, readJson, route, E } from "@/server/http";
 import { adminUsernames, requireUser } from "@/server/auth";
 import { getBalances } from "@/server/credits";
 import { rateLimit } from "@/server/ratelimit";
+import { validTz } from "@/lib/dates";
 
 export const GET = route(async (req) => {
   const a = await requireUser(req);
@@ -34,6 +35,12 @@ export const PATCH = route(async (req) => {
   const { accept_disclaimer, ...fields } = parsed.data;
   const update: Record<string, unknown> = { ...fields, updated_at: new Date().toISOString() };
   const merged = { ...a.profile, ...fields };
+  if (fields.timezone !== undefined && fields.timezone !== a.profile.timezone) {
+    const last = a.profile.timezone_changed_at ? new Date(a.profile.timezone_changed_at).getTime() : 0;
+    if (Date.now() - last < 7 * 86400_000) throw E.bad("يمكن تغيير المنطقة الزمنية مرة كل أسبوع.", "The time zone can be changed once a week.");
+    update.timezone = validTz(fields.timezone);
+    update.timezone_changed_at = new Date().toISOString();
+  }
   if (accept_disclaimer) {
     if (!merged.age || !merged.goal) throw E.bad("العمر والهدف مطلوبان قبل الموافقة.", "Age and goal are required before accepting.");
     update.disclaimer_accepted_at = a.profile.disclaimer_accepted_at ?? new Date().toISOString();
@@ -59,8 +66,8 @@ export const DELETE = route(async (req) => {
   }
   await del("hl_recipes");
   await del("hl_ai_requests");
-  await del("hl_referrals", "invited");
-  await del("hl_referrals", "referrer");
+  // referral rows are kept (usernames only) so the per-inviter cap and one-reward-per-invite rules survive deletion
+  await del("hl_group_challenge_checks");
   must(await db().from("hl_profiles").update({
     age: null, sex: null, weight_kg: null, height_cm: null, goal: null, activity: null, conditions: [], disclaimer_accepted_at: null,
     leaderboard_visible: false, deleted_at: new Date().toISOString(), token_version: (a.profile.token_version ?? 0) + 1, updated_at: new Date().toISOString(),

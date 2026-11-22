@@ -50,8 +50,9 @@ export async function verifyAccessToken(accessToken: string): Promise<PiMe> {
  *    so every Pi-authenticated user is treated as verified for end-to-end testing.
  */
 export function isKycVerified(me: PiMe): boolean {
-  const network = process.env.NEXT_PUBLIC_PI_NETWORK ?? "testnet";
-  const mode = process.env.PI_KYC_MODE ?? (network === "mainnet" ? "strict" : "testnet");
+  // Fails CLOSED: only an explicit NEXT_PUBLIC_PI_NETWORK=testnet (or PI_KYC_MODE=testnet) relaxes the KYC check.
+  const network = process.env.NEXT_PUBLIC_PI_NETWORK ?? "mainnet";
+  const mode = process.env.PI_KYC_MODE ?? (network === "testnet" ? "testnet" : "strict");
   if (mode === "testnet") return true;
   const flag = (me as Record<string, unknown>).kyc_verified ?? (me as Record<string, unknown>).kycVerified ?? (me as { credentials?: Record<string, unknown> }).credentials?.kyc_verified;
   return flag === true;

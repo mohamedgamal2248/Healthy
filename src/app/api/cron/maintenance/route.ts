@@ -1,15 +1,19 @@
 import { db, must } from "@/server/supabase";
 import { ok, route, E } from "@/server/http";
+import { refundCredit } from "@/server/credits";
 import { reconcileOne } from "@/server/purchases";
+import { timingSafeEqual } from "node:crypto";
 
 export const maxDuration = 120;
 
 /** Daily housekeeping (Vercel Cron). Secured with CRON_SECRET: Vercel sends it as a Bearer token. */
 export const GET = route(async (req) => {
   const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) throw E.notFound();
+  const got = Buffer.from(req.headers.get("authorization") ?? "");
+  const want = Buffer.from(`Bearer ${secret ?? ""}`);
+  if (!secret || got.length !== want.length || !timingSafeEqual(got, want)) throw E.notFound();
   const now = Date.now();
-  const out = { reconciled: 0, expiredPurchases: 0, cacheDeleted: 0, limitsDeleted: 0 };
+  const out = { reconciled: 0, expiredPurchases: 0, cacheDeleted: 0, limitsDeleted: 0, refundedHung: 0 };
 
   // 1. finish stuck payments
   const stuck = must(
@@ -24,6 +28,9 @@ export const GET = route(async (req) => {
   // 2. quotes older than a day that never got a payment id are dead
   const dead = must(await db().from("hl_purchases").update({ status: "cancelled", fail_reason: "expired" }).eq("status", "pending").is("pi_payment_id", null).lt("created_at", new Date(now - 86400_000).toISOString()).select("id")) as { id: string }[];
   out.expiredPurchases = dead.length;
+  // 2b. AI requests left "pending" (function killed mid-call): give the credit back
+  const hung = must(await db().from("hl_ai_requests").select("id").eq("status", "pending").lt("created_at", new Date(now - 5 * 60_000).toISOString()).limit(200)) as { id: string }[];
+  for (const h of hung) { try { await refundCredit(h.id); out.refundedHung++; } catch (e) { console.error("[cron] refund", h.id, e instanceof Error ? e.message : e); } }
   // 3. caches
   const cache = must(await db().from("hl_ai_cache").delete().lt("created_at", new Date(now - 30 * 86400_000).toISOString()).select("key")) as { key: string }[];
   out.cacheDeleted = cache.length;

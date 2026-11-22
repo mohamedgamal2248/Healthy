@@ -38,6 +38,16 @@ async function cachedOutput(key: string, kind: CoachKind): Promise<Recipe | Card
   return parsed.data;
 }
 
+
+/** Closes the check-then-insert race: if more than one of this user's requests is pending, this one backs off before spending a credit. */
+async function assertSoleInFlight(username: string, requestId: string) {
+  const r = await db().from("hl_ai_requests").select("id", { count: "exact", head: true }).eq("username", username).eq("status", "pending").gte("created_at", new Date(Date.now() - AI_LIMITS.inFlightWindowMs).toISOString());
+  if ((r.count ?? 0) > 1) {
+    await db().from("hl_ai_requests").update({ status: "failed", credit_cost: 0, error: "concurrent" }).eq("id", requestId);
+    throw new HttpError(429, "in_flight", "عندك طلب قيد التنفيذ بالفعل. انتظر حتى ينتهي.", "You already have a request running. Please wait for it to finish.");
+  }
+}
+
 export const refusal = (ar = REFUSAL_AR, en = REFUSAL_EN) => new HttpError(422, "refused", ar, en);
 
 export function wrapContent(kind: CoachKind, out: Recipe | Card, conditions: string[]): CoachContent {
@@ -68,6 +78,7 @@ export async function coachGenerate(a: Auth, prompt: string, kindIn: unknown = "
     await db().from("hl_ai_requests").insert({ username: a.username, type: "recipe", input_summary: `[${kind}] ${text}`.slice(0, 200), credit_cost: RECIPE_COST, status: "pending" }).select("id").single(),
   ) as { id: string };
 
+  await assertSoleInFlight(a.username, req.id);
   const spent = await spendCredit(a.username, req.id);
   if (!spent) {
     must(await db().from("hl_ai_requests").update({ status: "failed", credit_cost: 0, error: "no_credits" }).eq("id", req.id));
@@ -125,6 +136,7 @@ export async function scanMeal(a: Auth, image: unknown, note: unknown, uiLang?: 
   const req = must(
     await db().from("hl_ai_requests").insert({ username: a.username, type: "recipe", input_summary: `[scan] ${text}`.slice(0, 200), credit_cost: RECIPE_COST, status: "pending" }).select("id").single(),
   ) as { id: string };
+  await assertSoleInFlight(a.username, req.id);
   const spent = await spendCredit(a.username, req.id);
   if (!spent) {
     must(await db().from("hl_ai_requests").update({ status: "failed", credit_cost: 0, error: "no_credits" }).eq("id", req.id));

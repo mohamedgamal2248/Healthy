@@ -12,6 +12,8 @@ export function CameraCapture({ onCapture, onClose, onUnavailable }: { onCapture
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  const unavailableRef = useRef(onUnavailable);
+  useEffect(() => { unavailableRef.current = onUnavailable; });
   const stop = useCallback(() => { streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null; }, []);
 
   useEffect(() => {
@@ -25,11 +27,11 @@ export function CameraCapture({ onCapture, onClose, onUnavailable }: { onCapture
         const v = videoRef.current;
         if (v) { v.srcObject = stream; await v.play().catch(() => {}); setReady(true); }
       } catch {
-        if (!cancelled) onUnavailable();
+        if (!cancelled) unavailableRef.current();
       }
     })();
     return () => { cancelled = true; stop(); };
-  }, [onUnavailable, stop]);
+  }, [stop]);
 
   const snap = async () => {
     const v = videoRef.current;

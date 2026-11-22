@@ -2,6 +2,7 @@ import { ok, readJson, route } from "@/server/http";
 import { requireDisclaimer, requireUser, requireVerified } from "@/server/auth";
 import { createPlan, planForWeek, planSafety } from "@/server/plan";
 import { hasActivePlan, getBalances } from "@/server/credits";
+import { rateLimit } from "@/server/ratelimit";
 import { addDays, weekStart } from "@/lib/dates";
 import { PLAN_REGENERATE_COST } from "@/config/pricing";
 
@@ -19,6 +20,7 @@ export const GET = route(async (req) => {
 
 export const POST = route(async (req) => {
   const a = await requireVerified(req);
+  await rateLimit("plan", a.username, 10, 3600);
   requireDisclaimer(a);
   const body = await readJson<{ mode?: string }>(req).catch(() => ({ mode: "auto" }));
   const plan = await createPlan(a, body.mode === "regenerate" ? "regenerate" : "auto");

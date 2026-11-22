@@ -10,6 +10,6 @@ export const GET = route(async () => {
     rate: { usdPerPi: quotes[0].rate.usdPerPi, source: quotes[0].rate.source, asOf: quotes[0].rate.asOf, mode: quotes[0].mode },
     quoteTtlMin: QUOTE_TTL_MIN,
     trialCredits: TRIAL_CREDITS,
-    network: process.env.NEXT_PUBLIC_PI_NETWORK ?? "testnet",
+    network: process.env.NEXT_PUBLIC_PI_NETWORK ?? "mainnet",
   });
 });

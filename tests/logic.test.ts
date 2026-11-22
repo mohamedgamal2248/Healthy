@@ -6,7 +6,7 @@ import { dailyCalories, clampCalories, weeklyAdjustment } from "../src/lib/nutri
 import { buildWeekPlan } from "../src/lib/planner";
 import { MEAL_SEEDS } from "../src/data/meals";
 import { paymentMismatch, memoFor, completedProperly } from "../src/server/payment-verify";
-import { isRefusalRequest, outputIsSafe } from "../src/server/ai/safety";
+import { isRefusalRequest, normalizeText, outputIsSafe } from "../src/server/ai/safety";
 import { RecipeSchema } from "../src/server/ai/recipe";
 import { PRICING } from "../src/config/pricing";
 import { signSession, verifySession } from "../src/server/session";
@@ -83,7 +83,13 @@ test("payment verification rejects wrong amount / payer / memo / cancelled / dir
   assert.equal(paymentMismatch(pay({ direction: "app_to_user" }), purchase, "uid-a"), "wrong_direction");
   assert.equal(paymentMismatch(pay({ status: { cancelled: true } }), purchase, "uid-a"), "cancelled");
   assert.equal(paymentMismatch(pay(), { ...purchase, amount_pi: 0.1 }, "uid-a"), "bad_quote"); // quotes are whole Pi >= 1
-  assert.equal(paymentMismatch(pay(), { ...purchase, created_at: new Date(Date.now() - 31 * 60_000).toISOString() }, "uid-a"), "quote_expired");
+  const old = { ...purchase, created_at: new Date(Date.now() - 31 * 60_000).toISOString() };
+  assert.equal(paymentMismatch(pay(), old, "uid-a", { enforceTtl: true }), "quote_expired"); // opening a payment on a stale quote
+  assert.equal(paymentMismatch(pay(), old, "uid-a"), null); // an already-paid payment must still be grantable
+  assert.equal(normalizeText("تَشـخيص"), "تشخيص");
+  assert.equal(isRefusalRequest("meal plan for my kid"), true);
+  assert.equal(isRefusalRequest("طفلي عايز رجيم"), true);
+  assert.equal(isRefusalRequest("quick chicken lunch"), false);
   assert.equal(completedProperly(pay({ status: { developer_completed: true, cancelled: false } }), "TX"), true);
   assert.equal(completedProperly(pay(), "TX"), false); // not completed yet
   assert.equal(PRICING.plan_monthly.days, 30);

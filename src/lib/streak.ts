@@ -11,6 +11,8 @@ export function effectiveStreak(s: StreakState, today: string): number {
 /** Apply a completed challenge on `today`. At least one completion per day keeps the streak alive. */
 export function applyCompletion(s: StreakState, today: string): StreakState {
   const total = s.total + 1;
+  // A day earlier than the last counted one can never move the streak (no going back in time).
+  if (s.last !== null && today < s.last) return { ...s, total };
   if (s.last === today) return { ...s, total };
   const continues = s.last !== null && dayDiff(today, s.last) === 1;
   const current = continues ? s.current + 1 : 1;

@@ -22,17 +22,25 @@ export const hasMedicalFlag = (conditions: string[]) => conditions.some((c) => c
 const REFUSAL_PATTERNS = [
   /تشخيص|شخّص|شخص لي|عندي (مرض|ورم|سرطان)|أعراض مرض/,
   /(علاج|يعالج|أعالج|دواء|أدوية|روشتة)\s*(ل|من)?/,
-  /جرعة|جرعات|مكمل|مكملات|فيتامينات\s*حبوب|حبوب\s*تخسيس/,
+  /جرعة|جرعات|جرعه|مكمل|مكملات|فيتامينات\s*حبوب|حبوب\s*تخسيس|دوا\b|انسولين|insulin|medicine|medication|pills?\b/i,
   /(دايت|رجيم|نظام|خطة|وجبات|أكل)[^.؟!]{0,25}(لطفل|لابني|لبنتي|للرضيع|لرضيع|لأطفال|لولدي|لابنتي)/,
   /diagnos|prescri|treat my|cure|dosage|supplement|diet (plan )?for (my )?(child|kid|baby|son|daughter)/i,
 ];
 
+/** Fold tashkeel, tatweel, zero-width marks and hamza/ya/ta-marbuta variants so simple obfuscation does not slip through. */
+export function normalizeText(t: string): string {
+  return t.normalize("NFKC").replace(/[\u064B-\u065F\u0670\u0640\u200B-\u200F\u202A-\u202E]/g, "").replace(/[أإآ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه").toLowerCase();
+}
+const CHILD_WORDS = /(طفل|اطفال|ابني|بنتي|رضيع|ولدي|ابنتي|صغيري|ولد|toddler|child|kid|baby|infant|son\b|daughter|year[- ]old)/;
+const PLAN_WORDS = /(دايت|رجيم|ريجيم|نظام|خطه|وجبات|اكل|وصفه|تمرين|تحدي|diet|meal plan|plan|recipe|workout|menu)/;
 export function isRefusalRequest(text: string): boolean {
-  return REFUSAL_PATTERNS.some((p) => p.test(text));
+  const n = normalizeText(text);
+  if (CHILD_WORDS.test(n) && PLAN_WORDS.test(n)) return true;
+  return REFUSAL_PATTERNS.some((p) => p.test(text) || p.test(n));
 }
 
 // Words that must never appear in generated output (fasting, medicine, supplements, doses).
-const FORBIDDEN_OUTPUT = /صيام|صوم متقطع|مكمل|مكملات|دواء|أدوية|جرعة|جرعات|يعالج|يشفي|علاج للسكر|supplement|dosage|medication|fasting|cures?\b/i;
+const FORBIDDEN_OUTPUT = /صيام|صوم متقطع|مكمل|مكملات|دواء|أدوية|جرعة|جرعات|يعالج|يشفي|علاج للسكر|supplement|dosage|medication|fasting|\bcures?\b|medicine|insulin/i;
 export const outputIsSafe = (text: string) => !FORBIDDEN_OUTPUT.test(text);
 
 export const kcalAboveFloor = (dailyKcal: number) => dailyKcal >= MIN_DAILY_KCAL;
