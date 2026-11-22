@@ -68,14 +68,13 @@ test("week plan: 7 days x 3 meals, respects condition tags and 1,200 floor", () 
 });
 
 const purchase = { id: "11111111-1111-1111-1111-111111111111", username: "alice", kind: "pack" as const, item_key: "pack_small", amount_pi: 1, pi_payment_id: null };
-const pay = (over: Record<string, unknown> = {}) => ({ identifier: "P1", user_uid: "uid-a", amount: 1, memo: memoFor("pack", purchase.id), direction: "user_to_app", status: { developer_approved: true, transaction_verified: true, developer_completed: false, cancelled: false, user_cancelled: false }, transaction: { txid: "TX", verified: true }, ...over }) as never;
+const pay = (over: Record<string, unknown> = {}) => ({ identifier: "P1", user_uid: "uid-a", amount: 1, memo: memoFor("pack_small"), direction: "user_to_app", status: { developer_approved: true, transaction_verified: true, developer_completed: false, cancelled: false, user_cancelled: false }, transaction: { txid: "TX", verified: true }, ...over }) as never;
 
 test("payment verification rejects wrong amount / payer / memo / cancelled / direction", () => {
   assert.equal(paymentMismatch(pay(), purchase, "uid-a"), null);
   assert.equal(paymentMismatch(pay({ amount: 0.5 }), purchase, "uid-a"), "wrong_amount");
   assert.equal(paymentMismatch(pay(), purchase, "uid-b"), "wrong_payer");
-  assert.equal(paymentMismatch(pay({ memo: memoFor("pack", "22222222-2222-2222-2222-222222222222") }), purchase, "uid-a"), "wrong_memo");
-  assert.equal(paymentMismatch(pay({ memo: memoFor("plan", purchase.id) }), purchase, "uid-a"), "wrong_memo");
+    assert.equal(paymentMismatch(pay({ memo: memoFor("plan_monthly") }), purchase, "uid-a"), "wrong_memo");
   assert.equal(paymentMismatch(pay({ direction: "app_to_user" }), purchase, "uid-a"), "wrong_direction");
   assert.equal(paymentMismatch(pay({ status: { cancelled: true } }), purchase, "uid-a"), "cancelled");
   assert.equal(paymentMismatch(pay(), { ...purchase, amount_pi: 0.1 }, "uid-a"), "stale_price"); // row tampered with

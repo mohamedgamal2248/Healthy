@@ -15,6 +15,7 @@ type Today = {
   date: string; challenges: ChallengeItem[]; swapUsed: boolean; streak: { current: number; longest: number; total: number }; completedToday: number;
   meals: { breakfast: MealRow | null; lunch: MealRow | null; dinner: MealRow | null }; badges: { badge_key: string }[]; favourites: string[];
   reminder: "none" | "morning" | "inactive"; balances: Balances | null; profileReady: boolean;
+  community: { title_ar: string; title_en: string; members: number; checkedToday: number; joined: boolean; myDays: number } | null;
 };
 
 function TodayInner() {
@@ -26,13 +27,20 @@ function TodayInner() {
 
   if (!d) return <PageSkeleton />;
 
+  // Instant check-off: the UI updates immediately; the server confirms in the background and we reconcile.
   const done = async (id: string) => {
-    setBusy(true);
+    const first = d.completedToday === 0;
+    setD({
+      ...d,
+      challenges: d.challenges.map((c) => (c.id === id ? { ...c, status: "completed" as const } : c)),
+      completedToday: d.completedToday + 1,
+      streak: first ? { ...d.streak, current: d.streak.current + 1, longest: Math.max(d.streak.longest, d.streak.current + 1), total: d.streak.total + 1 } : { ...d.streak, total: d.streak.total + 1 },
+    });
     try {
       const r = await api<{ newBadges: string[] }>("/challenges/complete", { body: { id } });
       r.newBadges.forEach((k) => { const b = BADGES.find((x) => x.key === k); if (b) toast(tr(`شارة جديدة: ${b.ar}`, `New badge: ${b.en}`), "ok"); });
-      await load();
-    } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
+      load();
+    } catch (e) { toast(errMsg(e), "err"); load(); }
   };
   const swap = async (id: string) => {
     setBusy(true);
@@ -93,6 +101,18 @@ function TodayInner() {
         </Link>
         {me?.profile.kyc_verified && d.balances && <CreditBalance b={d.balances} />}
       </section>
+
+      {d.community && (
+        <Link href="/community" className="card flex items-center gap-4 !border-sun-100 bg-gradient-to-br from-sun-50 to-white transition hover:shadow-md">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-sun-500 text-white"><Icon name="users" size={28} /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-extrabold text-sun-600">{tr("تحدي الأسبوع الجماعي", "Weekly group challenge")}</p>
+            <p className="truncate font-extrabold">{lang === "ar" ? d.community.title_ar : d.community.title_en}</p>
+            <p className="muted">{d.community.joined ? tr(`أنت في اليوم ${d.community.myDays} من ٧`, `You're at day ${d.community.myDays} of 7`) : tr("انضم بضغطة واحدة", "Join with one tap")} · {tr(`${d.community.members} بايونير، ${d.community.checkedToday} سجّلوا اليوم`, `${d.community.members} pioneers, ${d.community.checkedToday} checked in today`)}</p>
+          </div>
+          <Icon name={lang === "ar" ? "chevronL" : "chevronR"} size={22} className="text-sun-600" />
+        </Link>
+      )}
 
       <section><h2 className="h2 mb-3">{tr("شاراتك", "Your badges")}</h2><BadgeGrid earned={d.badges} /></section>
     </div>

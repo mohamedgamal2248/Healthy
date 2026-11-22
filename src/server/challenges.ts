@@ -94,9 +94,10 @@ async function completedCountOfType(username: string, type: string): Promise<num
 
 export async function awardBadges(username: string, current: number): Promise<string[]> {
   const keys = new Set(streakBadges(current));
-  if ((await completedCountOfType(username, "no_sugar")) >= 7) keys.add("sugar_hero");
-  if ((await completedCountOfType(username, "water")) >= 10) keys.add("water_champ");
-  if ((await completedCountOfType(username, "walk")) + (await completedCountOfType(username, "steps")) >= 10) keys.add("walker");
+  const [sugar, water, walk, steps] = await Promise.all(["no_sugar", "water", "walk", "steps"].map((t) => completedCountOfType(username, t)));
+  if (sugar >= 7) keys.add("sugar_hero");
+  if (water >= 10) keys.add("water_champ");
+  if (walk + steps >= 10) keys.add("walker");
   if (!keys.size) return [];
   const have = new Set((must(await db().from("hl_badges").select("badge_key").eq("username", username)) as { badge_key: string }[]).map((b) => b.badge_key));
   const fresh = [...keys].filter((k) => !have.has(k));
