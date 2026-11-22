@@ -184,7 +184,8 @@ test("meal-photo analysis: schema, consistency checks and image validation", () 
   assert.equal(scanInconsistency(bad2), "macros_mismatch");
   const bad3 = ScanSchema.parse({ ...goodScan, totals: { ...goodScan.totals, calories: { low: 900, mid: 720, high: 860 } } });
   assert.equal(scanInconsistency(bad3), "range_order");
-  assert.ok(validImage("data:image/jpeg;base64,/9j/4AAQ"));
+  const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x03, 0x00, 0x04, 0x00, 0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01, 0xff, 0xd9]);
+  assert.ok(validImage("data:image/jpeg;base64," + jpg.toString("base64")));
   assert.ok(!validImage("data:image/svg+xml;base64,AAAA"));
   assert.ok(!validImage("https://x.com/a.jpg"));
   assert.ok(!validImage("data:image/jpeg;base64," + "A".repeat(2_600_000)));
@@ -206,4 +207,22 @@ test("'I have these ingredients': ready first, then missing 1-2, pantry basics a
   assert.equal(matchByIngredients(meals, ["__none__"]).filter((m) => m.missing_keys.length > 0).length, 0);
   const ing = matchByIngredients(meals, ["eggs"]).filter((m) => m.missing_keys.length === 0);
   assert.ok(ing.every((m) => meals.find((x) => x.id === m.id)!.ingredient_keys.every((k) => k === "eggs" || ["onion", "garlic", "lemon"].includes(k))));
+});
+
+test("daily calorie floor, refusal sanitising, image header checks", async () => {
+  const { dailyKcalTooLow, safeRefusalText } = await import("../src/server/ai/safety");
+  const { imageSize, validImage } = await import("../src/server/ai/scan");
+  assert.equal(dailyKcalTooLow("Eat 800 calories a day for a week"), true);
+  assert.equal(dailyKcalTooLow("كل يوم 900 سعرة"), true);
+  assert.equal(dailyKcalTooLow("This lunch is 450 kcal"), false);
+  assert.equal(dailyKcalTooLow("Aim for 1800 calories daily"), false);
+  assert.equal(safeRefusalText("<b>x</b> http://evil", "fallback"), "fallback");
+  assert.equal(safeRefusalText("x".repeat(400), "fallback"), "fallback");
+  assert.equal(safeRefusalText("Sorry, only health topics.", "fb"), "Sorry, only health topics.");
+  const png = Buffer.alloc(33); Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(png); png.write("IHDR", 12, "ascii"); png.writeUInt32BE(800, 16); png.writeUInt32BE(600, 20);
+  assert.deepEqual(imageSize(png, "png"), { w: 800, h: 600 });
+  assert.equal(validImage("data:image/png;base64," + png.toString("base64")), true);
+  png.writeUInt32BE(9000, 16);
+  assert.equal(validImage("data:image/png;base64," + png.toString("base64")), false); // too large a side
+  assert.equal(validImage("data:image/jpeg;base64," + Buffer.from("not an image at all, just text").toString("base64")), false);
 });

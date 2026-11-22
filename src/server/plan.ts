@@ -5,10 +5,10 @@ import { addDays, weekStart } from "@/lib/dates";
 import { bmr, dailyCalories, dailyWaterCups, weeklyAdjustment, type Goal, type Activity, type Sex } from "@/lib/nutrition";
 import { buildWeekPlan, requiredTags, type PlanMealRef, type PlanDay } from "@/lib/planner";
 import { hasActivePlan, refundCredit, spendCredit } from "./credits";
-import { aiConfigured } from "./ai/provider";
+import { aiConfigured, trackUsage, estimateCostUsd, type Usage } from "./ai/provider";
 import { generateRecipe } from "./ai/recipe";
 import { cautionsFor, hasMedicalFlag, DOCTOR_NOTE_AR, DOCTOR_NOTE_EN } from "./ai/safety";
-import { PLAN_REGENERATE_COST } from "@/config/pricing";
+import { AI_LIMITS, PLAN_REGENERATE_COST } from "@/config/pricing";
 import { effectiveStreak } from "@/lib/streak";
 import { loadStreak, recentCompletedCount } from "./challenges";
 
@@ -55,20 +55,33 @@ async function generate(a: Auth, week: string, kind: "first" | "refresh" | "rege
 
   // Complete slots the catalogue cannot fill (e.g. no meal carries the required condition tags) with AI.
   let aiFilled = 0;
+  let aiUsage: Usage = { tokensIn: 0, tokensOut: 0, searches: 0 };
   if (built.gaps.length && aiConfigured()) {
     const need = requiredTags(p.conditions);
     const typeAr = { breakfast: "فطار", lunch: "غدا", dinner: "عشا" } as const;
-    const results = await Promise.allSettled(
-      built.gaps.slice(0, 6).map((g) =>
-        generateRecipe(`وصفة ${typeAr[g.type]} بحوالي ${g.kcal} سعرة حرارية${need.includes("low_salt") ? "، قليلة الملح" : ""}${need.includes("diabetes_friendly") ? "، مناسبة لمريض السكر" : ""}`, { goal: p.goal, conditions: p.conditions, lang: p.language === "en" ? "en" : "ar" }),
-      ),
-    );
-    results.forEach((r, i) => {
-      if (r.status !== "fulfilled") return;
-      const g = built.gaps[i];
-      built.days[g.dayIndex].slots.push({ type: g.type, source: "ai", name_ar: r.value.name, name_en: r.value.name, servings: 1, calories: Math.round(r.value.calories), protein_g: Math.round(r.value.protein), recipe: r.value });
-      aiFilled++;
-    });
+    // Tracked + time-boxed like every other AI call; slots whose calories stray far from the target stay unfilled.
+    const budget = Math.min(50_000, AI_LIMITS.timeoutMs - 5_000);
+    let usage: Usage = { tokensIn: 0, tokensOut: 0, searches: 0 };
+    try {
+      const tracked = await trackUsage(
+        () => Promise.allSettled(
+          built.gaps.slice(0, 4).map((g) =>
+            generateRecipe(`وصفة ${typeAr[g.type]} بحوالي ${g.kcal} سعرة حرارية${need.includes("low_salt") ? "، قليلة الملح" : ""}${need.includes("diabetes_friendly") ? "، مناسبة لمريض السكر" : ""}`, { goal: p.goal, conditions: p.conditions, lang: p.language === "en" ? "en" : "ar" }),
+          ),
+        ),
+        budget,
+      );
+      usage = tracked.usage;
+      tracked.result.forEach((r, i) => {
+        if (r.status !== "fulfilled") return;
+        const g = built.gaps[i];
+        const kcal = Math.round(r.value.calories);
+        if (kcal < g.kcal * 0.65 || kcal > g.kcal * 1.35) return;
+        built.days[g.dayIndex].slots.push({ type: g.type, source: "ai", name_ar: r.value.name, name_en: r.value.name, servings: 1, calories: kcal, protein_g: Math.round(r.value.protein), recipe: r.value });
+        aiFilled++;
+      });
+    } catch (e) { console.error("[plan] ai gap fill", e instanceof Error ? e.message : e); }
+    aiUsage = usage;
     for (const d of built.days) {
       const order = { breakfast: 0, lunch: 1, dinner: 2 } as const;
       d.slots.sort((x, y) => order[x.type] - order[y.type]);
@@ -76,6 +89,9 @@ async function generate(a: Auth, week: string, kind: "first" | "refresh" | "rege
     }
   }
   const unfilled = built.gaps.length - aiFilled;
+  const aiWasNeeded = built.gaps.length > 0 && aiConfigured();
+  // A paid regenerate whose AI part produced nothing is not delivered work: the caller refunds it.
+  if (requestId && aiWasNeeded && aiFilled === 0) throw new HttpError(502, "ai_failed", "تعذّر إكمال الخطة هذه المرة. أعدنا لك الكريدت تلقائيًا، حاول مرة أخرى.", "We couldn't complete the plan this time. Your credit was refunded automatically; please try again.");
   const planJson = { days: built.days, notes: { gaps_unfilled: unfilled, ai_filled: aiFilled } };
 
   const row = must(
@@ -84,8 +100,8 @@ async function generate(a: Auth, week: string, kind: "first" | "refresh" | "rege
 
   if (aiFilled > 0 || requestId) {
     // Audit trail for AI usage inside plan generation (credit cost is recorded on the request itself).
-    if (requestId) must(await db().from("hl_ai_requests").update({ status: "completed", output: { week, calorieTarget, aiFilled } }).eq("id", requestId));
-    else must(await db().from("hl_ai_requests").insert({ username: a.username, type: "plan", input_summary: `plan ${week} (ai gap fill x${aiFilled})`, credit_cost: 0, status: "completed" }));
+    if (requestId) must(await db().from("hl_ai_requests").update({ status: "completed", output: { week, calorieTarget, aiFilled }, tokens_in: aiUsage.tokensIn, tokens_out: aiUsage.tokensOut, searches: aiUsage.searches, est_cost_usd: estimateCostUsd(aiUsage) }).eq("id", requestId));
+    else must(await db().from("hl_ai_requests").insert({ username: a.username, type: "plan", input_summary: `plan ${week} (ai gap fill x${aiFilled})`, credit_cost: 0, status: "completed", tokens_in: aiUsage.tokensIn, tokens_out: aiUsage.tokensOut, searches: aiUsage.searches, est_cost_usd: estimateCostUsd(aiUsage) }));
   }
   return row;
 }

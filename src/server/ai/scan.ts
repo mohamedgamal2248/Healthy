@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { callModel, extractJson, AiNotConfigured } from "./provider";
+import { callModel, extractJson, AiNotConfigured, timeLeftMs } from "./provider";
 import { outputIsSafe } from "./safety";
 import { AiRefused, AiUnusable } from "./recipe";
 import { langInstruction, type Lang } from "./lang";
 
-const range = z.object({ low: z.number().min(0), mid: z.number().min(0), high: z.number().min(0) });
+const range = z.object({ low: z.number().min(0).max(5000), mid: z.number().min(0).max(5000), high: z.number().min(0).max(5000) });
 
 /** Structured result of a meal-photo analysis. */
 export const ScanSchema = z.object({
@@ -91,6 +91,9 @@ export function scanInconsistency(s: Scan): string | null {
   if (c.mid < 20 || c.mid > 3500) return "calories_out_of_range";
   const p = s.totals.protein_g;
   if (!(p.low <= p.mid && p.mid <= p.high)) return "protein_range_order";
+  if (p.high > Math.max(60, p.mid * 3) || p.high > 300) return "protein_out_of_range";
+  const grams = s.ingredients.reduce((n, i) => n + i.grams, 0);
+  if (grams > s.estimated_total_g * 1.6 + 50) return "grams_mismatch";
   const sum = s.ingredients.reduce((n, i) => n + i.kcal, 0);
   if (sum < c.mid * 0.7 || sum > c.mid * 1.3) return "ingredients_sum_mismatch";
   const macroKcal = 4 * p.mid + 4 * s.totals.carbs_g + 9 * s.totals.fat_g;
@@ -101,10 +104,47 @@ export function scanInconsistency(s: Scan): string | null {
 
 const DATA_URL = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
 export const MAX_IMAGE_BYTES = 1_800_000;
+export const MAX_IMAGE_SIDE = 4096;
+export const MIN_IMAGE_SIDE = 64;
+
+/** Read width/height from the file header (JPEG, PNG, WebP). Returns null if the bytes are not that image type. */
+export function imageSize(buf: Buffer, mime: string): { w: number; h: number } | null {
+  try {
+    if (mime === "png") {
+      if (buf.length < 24 || buf.readUInt32BE(0) !== 0x89504e47 || buf.toString("ascii", 12, 16) !== "IHDR") return null;
+      return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+    }
+    if (mime === "webp") {
+      if (buf.length < 30 || buf.toString("ascii", 0, 4) !== "RIFF" || buf.toString("ascii", 8, 12) !== "WEBP") return null;
+      const fmt = buf.toString("ascii", 12, 16);
+      if (fmt === "VP8X") return { w: 1 + buf.readUIntLE(24, 3), h: 1 + buf.readUIntLE(27, 3) };
+      if (fmt === "VP8L") { const b = buf.readUInt32LE(21); return { w: (b & 0x3fff) + 1, h: ((b >> 14) & 0x3fff) + 1 }; }
+      if (fmt === "VP8 ") return { w: buf.readUInt16LE(26) & 0x3fff, h: buf.readUInt16LE(28) & 0x3fff };
+      return null;
+    }
+    // jpeg: walk the segments until a start-of-frame marker
+    if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;
+    let i = 2;
+    while (i + 9 < buf.length) {
+      if (buf[i] !== 0xff) { i++; continue; }
+      const m = buf[i + 1];
+      if (m === 0xff) { i++; continue; }
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return { h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) };
+      i += 2 + buf.readUInt16BE(i + 2);
+    }
+    return null;
+  } catch { return null; }
+}
+
 export function validImage(dataUrl: unknown): dataUrl is string {
   if (typeof dataUrl !== "string" || !DATA_URL.test(dataUrl)) return false;
-  const b64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
-  return Math.floor((b64.length * 3) / 4) <= MAX_IMAGE_BYTES;
+  const comma = dataUrl.indexOf(",");
+  const b64 = dataUrl.slice(comma + 1);
+  if (Math.floor((b64.length * 3) / 4) > MAX_IMAGE_BYTES) return false;
+  const mime = dataUrl.slice(11, dataUrl.indexOf(";")); // data:image/<mime>;
+  const head = Buffer.from(b64.slice(0, 400_000), "base64"); // headers sit at the start; JPEG EXIF can be large
+  const s = imageSize(head, mime);
+  return !!s && s.w >= MIN_IMAGE_SIDE && s.h >= MIN_IMAGE_SIDE && s.w <= MAX_IMAGE_SIDE && s.h <= MAX_IMAGE_SIDE;
 }
 
 /** One attempt plus one retry; never retries past the time budget. */
@@ -114,7 +154,7 @@ export async function analyzeMealPhoto(image: string, note: string, profile: { g
   const t0 = Date.now();
   let last: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
-    if (attempt > 0 && Date.now() - t0 > 35_000) break;
+    if (attempt > 0 && Date.now() - t0 > 35_000 || timeLeftMs() < 25_000) break;
     try {
       const text = await callModel({ system, messages: [{ role: "user", content: userText, images: [image] }], maxTokens: 2200 });
       const raw = extractJson(text) as { is_food?: unknown; refusal_reason?: unknown };

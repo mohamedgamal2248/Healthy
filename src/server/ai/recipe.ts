@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { AiNotConfigured, callModel, extractJson, type AiMessage } from "./provider";
-import { outputIsSafe, REFUSAL_AR } from "./safety";
+import { AiNotConfigured, callModel, extractJson, type AiMessage, timeLeftMs } from "./provider";
+import { outputIsSafe, REFUSAL_AR, safeRefusalText } from "./safety";
 import { MIN_DAILY_KCAL } from "@/config/pricing";
 import { langInstruction, type Lang } from "./lang";
 
@@ -61,7 +61,7 @@ export function recipeSystemPrompt(p: ProfileContext): string {
 
 function validate(raw: unknown): Recipe {
   if (raw && typeof raw === "object" && "refusal" in raw) {
-    throw new AiRefused(typeof (raw as { refusal: unknown }).refusal === "string" ? ((raw as { refusal: string }).refusal) : REFUSAL_AR);
+    throw new AiRefused(safeRefusalText((raw as { refusal: unknown }).refusal, REFUSAL_AR));
   }
   const parsed = RecipeSchema.safeParse(raw);
   if (!parsed.success) throw new AiUnusable("schema");
@@ -76,7 +76,7 @@ export async function generateRecipe(userText: string, profile: ProfileContext):
   let lastErr: unknown;
   const t0 = Date.now();
   for (let attempt = 0; attempt < 2; attempt++) {
-    if (attempt > 0 && Date.now() - t0 > 35_000) break; // never retry past the time budget
+    if (attempt > 0 && Date.now() - t0 > 35_000 || timeLeftMs() < 25_000) break; // never retry past the time budget
     try {
       const text = await callModel({ system, messages, webSearch: true, maxTokens: 2500 });
       return validate(extractJson(text));
