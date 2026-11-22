@@ -180,7 +180,7 @@ export const ITEM_COPY = {
 export function itemBenefits(i: PriceItem, tr: (a: string, e: string) => string): string[] {
   return i.kind === "plan"
     ? [tr(`${i.credits} طلب AI شهريًا (وجبات، تمارين، تحديات)`, `${i.credits} AI requests per month (meals, workouts, challenges)`), tr("نظام غذائي شخصي يتجدد كل أسبوع", "Personal diet plan refreshed weekly"), tr("تقرير أسبوعي مفصّل", "Weekly report"), tr(`صالحة ${i.days} يومًا من تاريخ الدفع`, `Valid ${i.days} days from payment`)]
-    : [tr(`${i.credits} طلب AI (وجبات، تمارين، تحديات)`, `${i.credits} AI requests (meals, workouts, challenges)`), tr("بدون تاريخ انتهاء", "Never expires"), tr("كل طلب جديد = ١ كريدت، والأسئلة عليه مجانية", "Each new request = 1 credit; follow-up questions are free")];
+    : [tr(`${i.credits} طلب AI (وجبات، تمارين، تحديات)`, `${i.credits} AI requests (meals, workouts, challenges)`), tr("بدون تاريخ انتهاء", "Never expires"), tr("كل طلب جديد = ١ كريدت", "Each new request = 1 credit")];
 }
 
 /** Pi payment sheet for plan and pack purchases (U2A only). The server verifies before granting anything. */
