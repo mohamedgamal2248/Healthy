@@ -1,10 +1,12 @@
 import { db, must } from "@/server/supabase";
 import { ok, readJson, route, E } from "@/server/http";
 import { requireUser } from "@/server/auth";
+import { rateLimit } from "@/server/ratelimit";
 
 /** Share outside Pi Browser: the PiNet link shows the recipe read-only (no profile data). */
 export const POST = route<{ id: string }>(async (req, { params }) => {
   const a = await requireUser(req);
+  await rateLimit("share", a.username, 60, 3600);
   const { id } = await params;
   const { shared } = await readJson<{ shared?: boolean }>(req);
   const r = must(await db().from("hl_recipes").select("id,username").eq("id", id).maybeSingle()) as { username: string } | null;

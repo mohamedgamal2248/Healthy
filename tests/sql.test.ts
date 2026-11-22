@@ -5,9 +5,10 @@ import { PGlite } from "@electric-sql/pglite";
 
 async function db() {
   const pg = new PGlite();
-  let sql = readFileSync("supabase/migrations/0001_init.sql", "utf8");
-  sql = sql.replace(/revoke all on function[\s\S]*?;\s*$/m, "");
-  await pg.exec(sql);
+  for (const f of ["0001_init", "0002_cuisine_and_ai_cache", "0003_hardening_growth"]) {
+    const sql = readFileSync(`supabase/migrations/${f}.sql`, "utf8").replace(/revoke all on function[\s\S]*?;/g, "");
+    await pg.exec(sql);
+  }
   await pg.exec("insert into hl_profiles (username) values ('alice'),('bob')");
   return pg;
 }
@@ -78,4 +79,26 @@ test("one official weight per week", async () => {
   const pg = await db();
   await pg.exec("insert into hl_weight_logs (username,weight_kg,logged_date,is_official,week_start) values ('alice',80,'2026-11-21',true,'2026-11-21')");
   await assert.rejects(pg.exec("insert into hl_weight_logs (username,weight_kg,logged_date,is_official,week_start) values ('alice',79,'2026-11-22',true,'2026-11-21')"));
+});
+
+test("rate limiter: allows up to max per window, then blocks", async () => {
+  const pg = await db();
+  const hit = async () => (await pg.query<{ r: boolean }>("select hl_rate_hit('t:alice', 60, 3) r")).rows[0].r;
+  assert.deepEqual([await hit(), await hit(), await hit(), await hit()], [true, true, true, false]);
+  await pg.exec("update hl_rate_limits set window_start = now() - interval '2 minutes'");
+  assert.equal(await hit(), true); // window rolled over
+});
+
+test("referral reward: once per invited user, both sides credited, capped per inviter", async () => {
+  const pg = await db();
+  await pg.exec("insert into hl_profiles (username) values ('carol'),('dave'),('erin')");
+  await pg.exec("insert into hl_referrals (invited, referrer) values ('bob','alice'),('carol','alice'),('dave','alice')");
+  const reward = async (u: string, cap: number) => (await pg.query<{ r: string | null }>("select hl_reward_referral($1,1,$2) r", [u, cap])).rows[0].r;
+  assert.equal(await reward("bob", 2), "alice");
+  assert.equal(await reward("bob", 2), null); // never twice for the same invited user
+  assert.equal(await reward("carol", 2), "alice");
+  assert.equal(await reward("dave", 2), null); // inviter cap reached
+  assert.equal((await bal(pg, "alice")).trial, 2);
+  assert.equal((await bal(pg, "bob")).trial, 1);
+  assert.equal((await bal(pg, "dave")).trial, 0);
 });

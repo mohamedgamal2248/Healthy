@@ -18,6 +18,9 @@ export type Profile = {
   language: "ar" | "en";
   timezone: string;
   leaderboard_visible: boolean;
+  token_version: number;
+  deleted_at: string | null;
+  created_at: string;
 };
 
 export type Auth = { username: string; uid: string; profile: Profile; tz: string; today: string };
@@ -37,7 +40,8 @@ export async function requireUser(req: Request): Promise<Auth> {
   const claims = verifySession(bearer(req));
   if (!claims) throw E.unauth();
   const profile = must(await db().from("hl_profiles").select("*").eq("username", claims.u).maybeSingle()) as Profile | null;
-  if (!profile) throw E.unauth();
+  // Revocable sessions: bumping token_version (or deleting the account) invalidates every issued token.
+  if (!profile || profile.deleted_at || (claims.v ?? 0) !== (profile.token_version ?? 0)) throw E.unauth();
   const tz = clientTz(req, profile.timezone);
   return { username: profile.username, uid: claims.uid, profile, tz, today: localDate(tz) };
 }

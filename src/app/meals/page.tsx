@@ -1,10 +1,12 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useGet } from "@/lib/useGet";
 import { useApp } from "@/components/AppProvider";
 import { EmptyState, Gate, PageHeader, PageSkeleton } from "@/components/ui";
 import { MealCard } from "@/components/MealCard";
 import { Icon } from "@/components/Icon";
+import { EatTabs } from "@/components/EatTabs";
 import { INGREDIENTS, MEAL_TAGS } from "@/data/ingredients";
 import type { MealRow } from "@/server/meals";
 
@@ -14,21 +16,23 @@ function MealsInner() {
   const [type, setType] = useState("");
   const [cuisine, setCuisine] = useState("");
   const [q, setQ] = useState("");
+  const [qd, setQd] = useState("");
+  useEffect(() => { const t = setTimeout(() => setQd(q), 250); return () => clearTimeout(t); }, [q]);
   const [mode, setMode] = useState<"browse" | "have">("browse");
   const [have, setHave] = useState<string[]>([]);
-  const [meals, setMeals] = useState<MealRow[] | null>(null);
   const [favs, setFavs] = useState<string[]>([]);
 
-  const load = useCallback(async () => {
+  const qs = (() => {
     const p = new URLSearchParams();
     if (type) p.set("type", type);
     if (cuisine) p.set("cuisine", cuisine);
     if (tags.length) p.set("tags", tags.join(","));
-    if (q.trim()) p.set("q", q.trim());
+    if (qd.trim()) p.set("q", qd.trim());
     if (mode === "have") p.set("have", have.length ? have.join(",") : "__none__");
-    try { setMeals((await api<{ meals: MealRow[] }>(`/meals?${p}`)).meals); } catch (e) { toast(errMsg(e), "err"); }
-  }, [type, cuisine, tags, q, mode, have, toast, errMsg]);
-  useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
+    return p.toString();
+  })();
+  const { data: list } = useGet<{ meals: MealRow[] }>(`/meals?${qs}`, (e) => toast(errMsg(e), "err"));
+  const meals = list?.meals ?? null;
   useEffect(() => { api<{ meals: MealRow[] }>("/favourites").then((f) => setFavs(f.meals.map((m) => m.id))).catch(() => {}); }, []);
 
   const toggle = (arr: string[], v: string, set: (a: string[]) => void) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
@@ -41,6 +45,7 @@ function MealsInner() {
 
   return (
     <div className="py-5">
+      <EatTabs />
       <PageHeader title={tr("كتالوج الوجبات", "Meal catalogue")} sub={tr("وجبات مصرية صحية من مكونات رخيصة ومتوفرة", "Healthy Egyptian meals from cheap, easy-to-find ingredients")} />
       <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl bg-brand-50 p-1.5">
         {([["browse", tr("تصفح الوجبات", "Browse")], ["have", tr("عندي المكونات دي", "I have these ingredients")]] as const).map(([k, l]) => (

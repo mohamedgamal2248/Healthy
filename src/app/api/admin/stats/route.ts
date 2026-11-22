@@ -13,5 +13,10 @@ export const GET = route(async (req) => {
     count(db().from("hl_subscriptions").select("username", { count: "exact", head: true }).gt("expires_at", new Date().toISOString())),
   ]);
   const paid = must(await db().from("hl_purchases").select("amount_pi").eq("status", "completed")) as { amount_pi: number }[];
-  return ok({ users, challengesCompleted: completed, recipesGenerated: recipes, plansActive: plans, piReceived: Math.round(paid.reduce((s, p) => s + Number(p.amount_pi), 0) * 1e4) / 1e4 });
+  const cost = must(await db().from("hl_ai_requests").select("est_cost_usd,status,type").not("est_cost_usd", "is", null).limit(20000)) as { est_cost_usd: number; status: string; type: string }[];
+  const aiCostUsd = Math.round(cost.reduce((s, r) => s + Number(r.est_cost_usd), 0) * 1e4) / 1e4;
+  const avgCostUsd = cost.length ? Math.round((aiCostUsd / cost.length) * 1e5) / 1e5 : 0;
+  const refunded = cost.filter((r) => r.status === "refunded").length;
+  const audits = must(await db().from("hl_admin_audit").select("admin,action,target,created_at").order("created_at", { ascending: false }).limit(30));
+  return ok({ aiCostUsd, avgCostUsd, aiCalls: cost.length, aiRefunded: refunded, audit: audits, users, challengesCompleted: completed, recipesGenerated: recipes, plansActive: plans, piReceived: Math.round(paid.reduce((s, p) => s + Number(p.amount_pi), 0) * 1e4) / 1e4 });
 });

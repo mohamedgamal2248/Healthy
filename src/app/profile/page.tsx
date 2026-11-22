@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { clearGetCache } from "@/lib/useGet";
 import { useApp } from "@/components/AppProvider";
 import { Field, Gate, Notice, PageHeader, Spinner, VerifiedBadge } from "@/components/ui";
 import { DisclaimerBanner } from "@/components/Domain";
@@ -21,8 +22,43 @@ function Choice({ value, options, onChange, label }: { value: string; options: [
   );
 }
 
+function DataControls({ username, onDeleted }: { username: string; onDeleted: () => void }) {
+  const { tr, toast, errMsg } = useApp();
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const exportData = async () => {
+    try {
+      const data = await api("/me/export");
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+      const a = document.createElement("a"); a.href = url; a.download = "healthy-my-data.json"; a.click(); URL.revokeObjectURL(url);
+    } catch (e) { toast(errMsg(e), "err"); }
+  };
+  const del = async () => {
+    setBusy(true);
+    try { await api("/me", { method: "DELETE", body: { confirm } }); toast(tr("تم حذف بياناتك", "Your data was deleted"), "ok"); onDeleted(); }
+    catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
+  };
+  return (
+    <section className="card space-y-3">
+      <h2 className="h2">{tr("بياناتي", "My data")}</h2>
+      <p className="muted">{tr("حمّل نسخة من كل بياناتك، أو احذفها. الحذف يمسح ملفك الصحي ووزنك ونظامك ووصفاتك ونشاطك. سجلات الدفع والكريدت تبقى كسجل مالي بدون بيانات شخصية.", "Download a copy of your data, or delete it. Deleting erases your health profile, weight, plans, content and activity. Payment and credit records are kept as a financial record without personal data.")}</p>
+      <button className="btn-soft w-full" onClick={exportData}><Icon name="share" size={18} />{tr("تحميل بياناتي (JSON)", "Download my data (JSON)")}</button>
+      {!open ? (
+        <button className="btn-ghost w-full !text-rose-600" onClick={() => setOpen(true)}><Icon name="trash" size={18} />{tr("حذف حسابي وبياناتي", "Delete my account and data")}</button>
+      ) : (
+        <div className="space-y-2 rounded-2xl border border-rose-100 bg-rose-50 p-3">
+          <p className="text-sm font-bold text-rose-600">{tr("لا يمكن التراجع. اكتب اسم المستخدم للتأكيد:", "This cannot be undone. Type your username to confirm:")} <bdi dir="ltr">{username}</bdi></p>
+          <input className="field" dir="ltr" value={confirm} onChange={(e) => setConfirm(e.target.value)} aria-label="username" />
+          <button className="btn w-full bg-rose-600 text-white" disabled={busy || confirm.toLowerCase() !== username.toLowerCase()} onClick={del}>{busy ? <Spinner size={18} /> : <Icon name="trash" size={18} />}{tr("احذف نهائيًا", "Delete permanently")}</button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function Inner() {
-  const { me, tr, refresh, toast, errMsg, setLang, lang } = useApp();
+  const { me, tr, refresh, toast, errMsg, setLang, lang, signOut } = useApp();
   const router = useRouter();
   const p = me!.profile;
   const wizard = !p.disclaimer_accepted_at;
@@ -127,6 +163,7 @@ function Inner() {
         <p className="muted">{tr("لن يظهر وزنك أو حالتك الصحية أو نظامك الغذائي في أي مكان عام.", "Your weight, conditions and diet plan are never shown anywhere public.")}</p>
       </section>
       <DisclaimerBanner conditions={f.conditions} />
+      <DataControls username={p.username} onDeleted={() => { clearGetCache(); signOut(); }} />
       <button className="btn-primary w-full" disabled={saving || !ageOk || !f.goal} onClick={() => save(false)}>{saving ? <Spinner /> : <Icon name="check" />}{tr("حفظ التغييرات", "Save changes")}</button>
     </div>
   );

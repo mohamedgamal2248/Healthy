@@ -1,6 +1,7 @@
 import { db, must } from "@/server/supabase";
 import { ok, readJson, route, E } from "@/server/http";
 import { requireAdmin } from "@/server/auth";
+import { audit } from "@/server/audit";
 import { weekStart } from "@/lib/dates";
 
 /** Create / replace the weekly group challenge. Ranking and badges only: no fee, no Pi prize. */
@@ -10,5 +11,6 @@ export const POST = route(async (req) => {
   if (!title_ar || !title_en) throw E.bad();
   const week = weekStart(week_start && /^\d{4}-\d{2}-\d{2}$/.test(week_start) ? week_start : a.today);
   must(await db().from("hl_group_challenges").upsert({ week_start: week, challenge_id: challenge_id || null, title_ar, title_en }, { onConflict: "week_start" }));
+  await audit(a.username, "group.upsert", week, { title_en });
   return ok({ week_start: week });
 });

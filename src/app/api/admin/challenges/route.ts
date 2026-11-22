@@ -2,6 +2,8 @@ import { z } from "zod";
 import { db, must } from "@/server/supabase";
 import { ok, readJson, route, E } from "@/server/http";
 import { requireAdmin } from "@/server/auth";
+import { audit } from "@/server/audit";
+import { invalidatePoolCache } from "@/server/challenges";
 
 export const GET = route(async (req) => {
   await requireAdmin(req);
@@ -20,9 +22,11 @@ const Body = z.object({
 
 /** Create or update (including deactivate) a challenge in the rotating pool. */
 export const POST = route(async (req) => {
-  await requireAdmin(req);
+  const adm = await requireAdmin(req);
   const p = Body.safeParse(await readJson(req));
   if (!p.success) throw E.bad("بيانات التحدي غير صالحة (المعرّف: حروف إنجليزية صغيرة وأرقام وشرطات).", "Invalid challenge data.");
   must(await db().from("hl_challenges").upsert(p.data, { onConflict: "id" }));
+  invalidatePoolCache();
+  await audit(adm.username, "challenge.upsert", p.data.id, p.data);
   return ok({ ok: true });
 });

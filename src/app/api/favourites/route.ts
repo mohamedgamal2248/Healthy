@@ -1,6 +1,7 @@
 import { db, must } from "@/server/supabase";
 import { ok, readJson, route, E } from "@/server/http";
 import { requireUser } from "@/server/auth";
+import { rateLimit } from "@/server/ratelimit";
 
 export const GET = route(async (req) => {
   const a = await requireUser(req);
@@ -17,6 +18,7 @@ export const GET = route(async (req) => {
 /** Toggle a favourite. Saving a shared recipe also bumps its public save count. */
 export const POST = route(async (req) => {
   const a = await requireUser(req);
+  await rateLimit("fav", a.username, 120, 60);
   const { type, id } = await readJson<{ type?: string; id?: string }>(req);
   if ((type !== "meal" && type !== "recipe") || !id) throw E.bad();
   const existing = must(await db().from("hl_favourites").select("source_id").eq("username", a.username).eq("source_type", type).eq("source_id", id).maybeSingle());
@@ -29,7 +31,8 @@ export const POST = route(async (req) => {
       const r = must(await db().from("hl_recipes").select("id,username,shared").eq("id", id).maybeSingle()) as { username: string; shared: boolean } | null;
       if (!r || (r.username !== a.username && !r.shared)) throw E.notFound();
     }
-    must(await db().from("hl_favourites").insert({ username: a.username, source_type: type, source_id: id }));
+    // upsert: a double tap can never raise a duplicate-key error
+    must(await db().from("hl_favourites").upsert({ username: a.username, source_type: type, source_id: id }, { onConflict: "username,source_type,source_id", ignoreDuplicates: true }));
   }
   if (type === "recipe") {
     const c = await db().from("hl_favourites").select("source_id", { count: "exact", head: true }).eq("source_type", "recipe").eq("source_id", id);

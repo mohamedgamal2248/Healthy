@@ -1,6 +1,7 @@
 import { db, must } from "./supabase";
 import { ensureSeeded } from "./seed";
 import { grantTrial } from "./credits";
+import { rewardReferralIfAny } from "./referral";
 import { E } from "./http";
 import type { Auth } from "./auth";
 import { applyCompletion, effectiveStreak, streakBadges, type StreakState } from "@/lib/streak";
@@ -11,9 +12,14 @@ export type TodayChallenge = { id: string; challenge_id: string; status: "assign
 
 const DAILY_COUNT = 3;
 
+let poolCache: { at: number; rows: ChallengeRow[] } | null = null;
+export const invalidatePoolCache = () => { poolCache = null; };
 async function activePool(): Promise<ChallengeRow[]> {
+  if (poolCache && Date.now() - poolCache.at < 60_000) return poolCache.rows;
   await ensureSeeded();
-  return must(await db().from("hl_challenges").select("*").eq("active", true).order("id")) as ChallengeRow[];
+  const rows = must(await db().from("hl_challenges").select("*").eq("active", true).order("id")) as ChallengeRow[];
+  poolCache = { at: Date.now(), rows };
+  return rows;
 }
 
 /** Deterministic pick of N challenges with distinct types where possible. */
@@ -111,14 +117,14 @@ export async function completeChallenge(a: Auth, userChallengeId: string) {
   const row = must(await db().from("hl_user_challenges").select("id,status,date").eq("id", userChallengeId).eq("username", a.username).maybeSingle()) as { id: string; status: string; date: string } | null;
   if (!row) throw E.notFound();
   if (row.date !== a.today) throw E.bad("يمكنك إنجاز تحديات اليوم فقط.", "You can only complete today's challenges.");
-  if (row.status === "completed") return { newBadges: [] as string[], starterReward: false };
+  if (row.status === "completed") return { newBadges: [] as string[], starterReward: false, referralReward: false };
   if (row.status !== "assigned") throw E.bad();
 
   // Conditional update guards against double taps / concurrent requests counting twice.
   const upd = must(
     await db().from("hl_user_challenges").update({ status: "completed", completed_at: new Date().toISOString() }).eq("id", row.id).eq("status", "assigned").select("id"),
   ) as { id: string }[];
-  if (!upd.length) return { newBadges: [] as string[], starterReward: false };
+  if (!upd.length) return { newBadges: [] as string[], starterReward: false, referralReward: false };
 
   const next = applyCompletion(await loadStreak(a.username), a.today);
   must(
@@ -128,7 +134,8 @@ export async function completeChallenge(a: Auth, userChallengeId: string) {
   // Starter challenge: 7 days in a row earns the AI credits, once (unique ledger index guarantees it).
   let starterReward = false;
   if (next.current >= 7 && a.profile.kyc_verified) starterReward = await grantTrial(a.username);
-  return { newBadges, starterReward };
+  const referralReward = next.total === 1 && a.profile.kyc_verified ? await rewardReferralIfAny(a.username).catch(() => false) : false;
+  return { newBadges, starterReward, referralReward };
 }
 
 export async function lastActivityDate(username: string): Promise<string | null> {

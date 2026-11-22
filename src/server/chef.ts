@@ -3,7 +3,7 @@ import { HttpError, E } from "./http";
 import type { Auth } from "./auth";
 import { AI_LIMITS, RECIPE_COST } from "@/config/pricing";
 import { spendCredit, refundCredit } from "./credits";
-import { aiConfigured, AiNotConfigured } from "./ai/provider";
+import { aiConfigured, AiNotConfigured, trackUsage, estimateCostUsd, type Usage } from "./ai/provider";
 import { generateRecipe, AiRefused, RecipeSchema, type Recipe } from "./ai/recipe";
 import { generateCard, CardSchema, isCoachKind, type Card, type CoachKind } from "./ai/coach";
 import { enforceGenerationLimits, withDeadline } from "./ai/limits";
@@ -69,8 +69,9 @@ export async function coachGenerate(a: Auth, prompt: string, kindIn: unknown = "
     throw E.noCredits();
   }
 
+  let usage: Usage = { tokensIn: 0, tokensOut: 0, searches: 0 };
   try {
-    const out = await withDeadline(
+    const tracked = await trackUsage(() => withDeadline(
       (async () => {
         const key = recipeCacheKey(text, a.profile.goal, a.profile.conditions, kind);
         let o = await cachedOutput(key, kind);
@@ -81,18 +82,21 @@ export async function coachGenerate(a: Auth, prompt: string, kindIn: unknown = "
         }
         return o;
       })(),
-    );
+    ));
+    const out = tracked.result;
+    usage = tracked.usage;
     const content = wrapContent(kind, out, a.profile.conditions);
     const title = "name" in out ? out.name : "";
     const saved = must(
       await db().from("hl_recipes").insert({ username: a.username, title, content, source_request_id: req.id }).select("id,title,content,shared,like_count,save_count,created_at,username").single(),
     );
-    must(await db().from("hl_ai_requests").update({ status: "completed", output: out }).eq("id", req.id));
+    must(await db().from("hl_ai_requests").update({ status: "completed", output: out, tokens_in: usage.tokensIn, tokens_out: usage.tokensOut, searches: usage.searches, est_cost_usd: estimateCostUsd(usage) }).eq("id", req.id));
     return saved;
   } catch (e) {
     await refundCredit(req.id);
+    const failUsage = (e as { usage?: Usage }).usage ?? usage;
     const reason = e instanceof AiRefused ? "refused" : e instanceof AiNotConfigured ? "not_configured" : e instanceof Error ? e.message.slice(0, 120) : "failed";
-    must(await db().from("hl_ai_requests").update({ status: "refunded", error: reason }).eq("id", req.id));
+    must(await db().from("hl_ai_requests").update({ status: "refunded", error: reason, tokens_in: failUsage.tokensIn, tokens_out: failUsage.tokensOut, searches: failUsage.searches, est_cost_usd: estimateCostUsd(failUsage) }).eq("id", req.id));
     if (e instanceof AiRefused) throw refusal(e.message_ar, e.message_ar);
     if (e instanceof AiNotConfigured) throw E.notConfigured("الكوتش");
     if (e instanceof Error && e.message === "timeout") throw new HttpError(504, "ai_timeout", "الرد تأخّر أكثر من اللازم، فأعدنا لك الكريدت تلقائيًا. حاول مرة أخرى.", "The answer took too long, so your credit was refunded automatically. Please try again.");
