@@ -11,7 +11,6 @@ import { CoachThinking } from "@/components/CoachThinking";
 
 type Recipe = { id: string; title: string; content: CoachContent; shared: boolean };
 type Kind = "recipe" | "workout" | "challenge";
-type Msg = { id?: string; role: "user" | "assistant"; content: string };
 
 const EXAMPLES: Record<Kind, { ar: string; en: string }[]> = {
   recipe: [
@@ -42,11 +41,8 @@ function ChefInner() {
   const [kind, setKind] = useState<Kind>("recipe");
   const [busy, setBusy] = useState(false);
   const [recipe, setRecipe] = useState<Recipe | null>(null);
-  const [msgs, setMsgs] = useState<Msg[]>([]);
   const [fav, setFav] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
-  const [q, setQ] = useState("");
-  const [asking, setAsking] = useState(false);
   const [balances, setBalances] = useState<Balances | null>(me?.balances ?? null);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [loadingOpen, setLoadingOpen] = useState(!!openId);
@@ -58,8 +54,8 @@ function ChefInner() {
 
   const openRecipe = useCallback(async (id: string) => {
     try {
-      const r = await api<{ recipe: Recipe; messages: Msg[]; favourite: boolean; own: boolean }>(`/recipes/${id}`);
-      setRecipe(r.recipe); setMsgs(r.messages); setFav(r.favourite); setShareUrl(null);
+      const r = await api<{ recipe: Recipe; favourite: boolean; own: boolean }>(`/recipes/${id}`);
+      setRecipe(r.recipe); setFav(r.favourite); setShareUrl(null);
     } catch (e) { toast(errMsg(e), "err"); } finally { setLoadingOpen(false); }
   }, [toast, errMsg]);
   useEffect(() => { if (openId) openRecipe(openId); }, [openId, openRecipe]);
@@ -68,7 +64,7 @@ function ChefInner() {
     setBusy(true); setRefusal(null);
     try {
       const r = await api<{ recipe: Recipe; balances: Balances }>("/chef", { body: { prompt, kind, lang } });
-      setRecipe(r.recipe); setMsgs([]); setFav(false); setShareUrl(null); setBalances(r.balances);
+      setRecipe(r.recipe); setFav(false); setShareUrl(null); setBalances(r.balances);
       refresh();
       toast(tr("تم حفظ الوصفة في مكتبتك", "Recipe saved to your library"), "ok");
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -79,16 +75,6 @@ function ChefInner() {
     } finally { setBusy(false); }
   };
 
-  const ask = async () => {
-    if (!recipe || !q.trim()) return;
-    setAsking(true);
-    const question = q.trim();
-    try {
-      const r = await api<{ answer: string }>(`/recipes/${recipe.id}/followup`, { body: { question, lang } });
-      setMsgs((m) => [...m, { role: "user", content: question }, { role: "assistant", content: r.answer }]);
-      setQ("");
-    } catch (e) { toast(errMsg(e), "err"); } finally { setAsking(false); }
-  };
   const toggleFav = async () => { if (!recipe) return; setFav(!fav); try { await api("/favourites", { body: { type: "recipe", id: recipe.id } }); } catch (e) { setFav(fav); toast(errMsg(e), "err"); } };
   const share = async () => {
     if (!recipe) return;
@@ -109,7 +95,7 @@ function ChefInner() {
 
       {recipe ? (
         <>
-          <button className="btn-soft btn-sm" onClick={() => { setRecipe(null); setMsgs([]); }}><Icon name="plus" size={18} />{tr("طلب جديد", "New request")}</button>
+          <button className="btn-soft btn-sm" onClick={() => setRecipe(null)}><Icon name="plus" size={18} />{tr("طلب جديد", "New request")}</button>
           <ContentView
             content={recipe.content}
             actions={<>
@@ -118,14 +104,6 @@ function ChefInner() {
             </>}
           />
           {shareUrl && <div className="card flex items-center gap-2 !p-3"><Icon name="link" size={18} className="shrink-0 text-brand-600" /><input readOnly value={shareUrl} className="field !min-h-10 text-sm" dir="ltr" onFocus={(e) => e.currentTarget.select()} aria-label={tr("رابط المشاركة", "Share link")} /></div>}
-          <section className="card space-y-3">
-            <div className="flex items-center justify-between"><h2 className="h2">{tr("اسأل عن هذا المحتوى", "Ask about this")}</h2><span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-extrabold text-brand-800">{tr("مجاني، بدون كريدت", "Free, no credit")}</span></div>
-            <p className="muted">{tr("الوصفة الجديدة بكريدت واحد، لكن أي سؤال عن نفس الوصفة (تقليل الملح، بدائل، مناسبة للأطفال…) مجاني لأنه جزء من نفس الوصفة. بحد أقصى ٢٠ سؤالًا في اليوم.", "A new request costs 1 credit, but follow-up questions about the same result (less salt, substitutes, kids…) are free, up to 20 per day.")}</p>
-            {msgs.map((m, i) => (<div key={i} className={`max-w-[92%] rounded-2xl p-3 text-sm font-semibold leading-relaxed ${m.role === "user" ? "me-auto bg-brand-600 text-white" : "ms-auto bg-brand-50 text-ink"}`}>{m.content}</div>))}
-            {asking && <div className="rounded-2xl bg-brand-50"><CoachThinking kind={kind} compact /></div>}
-            <div className="flex flex-wrap gap-2">{[tr("أقلل الملح إزاي؟", "How do I cut the salt?"), tr("تنفع للأطفال؟", "Is it suitable for kids?")].map((s) => (<button key={s} className="chip" onClick={() => setQ(s)}>{s}</button>))}</div>
-            <div className="flex gap-2"><input className="field" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask()} placeholder={tr("اكتب سؤالك…", "Your question…")} maxLength={400} aria-label={tr("سؤال", "Question")} /><button className="btn-primary !px-4" onClick={ask} disabled={asking || !q.trim()} aria-label={tr("إرسال", "Send")}>{asking ? <Spinner size={20} /> : <Icon name="send" size={20} className="rtl:-scale-x-100" />}</button></div>
-          </section>
         </>
       ) : (
         busy ? (
@@ -143,7 +121,7 @@ function ChefInner() {
             {refusal && <Notice tone="warn">{refusal}</Notice>}
             {total === 0 && accepted && <Notice tone="warn" icon="bolt"><div className="flex flex-wrap items-center gap-3"><span>{tr("رصيدك من الكريدت خلص. اكسب ٣ كريدت بتحدي البداية (٧ أيام) أو اشترِ كريدت.", "You're out of AI requests. Earn 3 with the 7-day starter challenge, or get more.")}</span><Link href="/today" className="btn-soft btn-sm">{tr("تحدي البداية", "Starter challenge")}</Link><Link href="/pricing" className="btn-sun btn-sm">{tr("اشترِ كريدت", "Get requests")}</Link></div></Notice>}
             <button className="btn-primary w-full" onClick={generate} disabled={!canGenerate}>{busy ? <Spinner /> : <Icon name="sparkles" />}{busy ? tr("الكوتش بيجهّز طلبك…", "The coach is working on it…") : tr("اطلب من الكوتش — 1 كريدت", "Ask the coach — 1 credit")}</button>
-            <p className="muted text-center">{tr("لو فشل التوليد يرجع الكريدت تلقائيًا. الأسئلة التالية على نفس الوصفة مجانية.", "If generation fails the credit is refunded automatically. Follow-up questions on the same recipe are free.")}</p>
+            <p className="muted text-center">{tr("لو فشل التوليد يرجع الكريدت تلقائيًا.", "If generation fails, your credit is refunded automatically.")}</p>
           </section>
           <DisclaimerBanner conditions={me?.profile.conditions} compact />
         </>
