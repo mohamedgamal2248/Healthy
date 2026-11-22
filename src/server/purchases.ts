@@ -3,6 +3,7 @@ import { HttpError, E } from "./http";
 import type { Auth } from "./auth";
 import { PRICING, isItemKey } from "@/config/pricing";
 import { quote } from "./pi-price";
+import { hasActivePlan } from "./credits";
 import { approvePayment, cancelPayment, completePayment, getPayment, type PiPayment } from "./pi-backend";
 import { completedProperly, memoFor, paymentMismatch, type PurchaseRef } from "./payment-verify";
 
@@ -13,6 +14,10 @@ type PurchaseRow = PurchaseRef & { status: string };
 export async function createPurchase(a: Auth, itemKey: unknown) {
   if (!isItemKey(itemKey)) throw E.bad("عنصر غير معروف.", "Unknown item.");
   const item = PRICING[itemKey];
+  // Renewal opens only after the current 30 days end (no stacking while the plan is active).
+  if (item.kind === "plan" && (await hasActivePlan(a.username))) {
+    throw new HttpError(409, "plan_active", "خطتك الحالية ما زالت فعّالة. يفتح التجديد عند انتهائها.", "Your current plan is still active. Renewal opens when it ends.");
+  }
   const q = await quote(item.key); // live OKX rate, rounded up to a whole Pi
   const row = must(
     await db().from("hl_purchases").insert({ username: a.username, kind: item.kind, item_key: item.key, amount_pi: q.pricePi, status: "pending" }).select("id").single(),
