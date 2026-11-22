@@ -8,6 +8,7 @@ import { generateRecipe, AiRefused, RecipeSchema, type Recipe } from "./ai/recip
 import { generateCard, CardSchema, isCoachKind, type Card, type CoachKind } from "./ai/coach";
 import { enforceGenerationLimits, withDeadline } from "./ai/limits";
 import { createHash } from "node:crypto";
+import { detectLang, asLang } from "./ai/lang";
 import { cautionsFor, hasMedicalFlag, isRefusalRequest, DOCTOR_NOTE_AR, DOCTOR_NOTE_EN, REFUSAL_AR, REFUSAL_EN } from "./ai/safety";
 
 export type CoachContent = {
@@ -21,9 +22,9 @@ export type RecipeContent = CoachContent;
 
 const CACHE_DAYS = 30;
 /** Same kind + request text + goal + declared conditions => same cached answer (saves provider cost). */
-export function recipeCacheKey(text: string, goal: string | null, conditions: string[], kind: CoachKind = "recipe"): string {
+export function recipeCacheKey(text: string, goal: string | null, conditions: string[], kind: CoachKind = "recipe", lang: "ar" | "en" = "ar"): string {
   const norm = text.toLowerCase().replace(/[\p{P}\s]+/gu, " ").trim();
-  return createHash("sha256").update(`${kind}|${norm}|${goal ?? ""}|${[...conditions].sort().join(",")}`).digest("hex");
+  return createHash("sha256").update(`${kind}|${lang}|${norm}|${goal ?? ""}|${[...conditions].sort().join(",")}`).digest("hex");
 }
 
 async function cachedOutput(key: string, kind: CoachKind): Promise<Recipe | Card | null> {
@@ -51,9 +52,11 @@ export function wrapContent(kind: CoachKind, out: Recipe | Card, conditions: str
  *  limits (hour / day / one at a time / global) -> credit spent atomically -> model call under a hard
  *  deadline -> refund automatically on any failure, timeout, unusable output or refusal.
  */
-export async function coachGenerate(a: Auth, prompt: string, kindIn: unknown = "recipe") {
+export async function coachGenerate(a: Auth, prompt: string, kindIn: unknown = "recipe", uiLang?: unknown) {
   const kind: CoachKind = isCoachKind(kindIn) ? kindIn : "recipe";
   const text = prompt.trim();
+  // Answer in the language the user wrote in (falls back to the app language).
+  const lang = detectLang(text, asLang(uiLang, a.profile.language === "en" ? "en" : "ar"));
   if (text.length < 3 || text.length > AI_LIMITS.maxPromptChars) throw E.bad(`اكتب طلبًا قصيرًا (٣ إلى ${AI_LIMITS.maxPromptChars} حرفًا).`, `Keep your request short (3 to ${AI_LIMITS.maxPromptChars} characters).`);
   if (isRefusalRequest(text)) throw refusal();
   if (!aiConfigured()) throw E.notConfigured("الكوتش");
@@ -73,10 +76,10 @@ export async function coachGenerate(a: Auth, prompt: string, kindIn: unknown = "
   try {
     const tracked = await trackUsage(() => withDeadline(
       (async () => {
-        const key = recipeCacheKey(text, a.profile.goal, a.profile.conditions, kind);
+        const key = recipeCacheKey(text, a.profile.goal, a.profile.conditions, kind, lang);
         let o = await cachedOutput(key, kind);
         if (!o) {
-          const ctx = { goal: a.profile.goal, conditions: a.profile.conditions };
+          const ctx = { goal: a.profile.goal, conditions: a.profile.conditions, lang };
           o = kind === "recipe" ? await generateRecipe(text, ctx) : await generateCard(kind, text, ctx);
           await db().from("hl_ai_cache").upsert({ key, recipe: o, hits: 0, created_at: new Date().toISOString() }, { onConflict: "key" });
         }

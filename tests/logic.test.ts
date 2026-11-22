@@ -141,3 +141,13 @@ test("USD -> Pi rounds UP to a whole Pi and never below 1", () => {
   assert.equal(usdToPi(1.5, 1), 2);
   assert.equal(usdToPi(0.001, 5), 1);
 });
+
+import { detectLang, langInstruction } from "../src/server/ai/lang";
+test("AI answers in the language the user wrote in", () => {
+  assert.equal(detectLang("I have eggs and tomatoes", "ar"), "en");
+  assert.equal(detectLang("عندي بيض وطماطم", "en"), "ar");
+  assert.equal(detectLang("eggs وطماطم وبيض", "en"), "ar");
+  assert.equal(detectLang("123", "en"), "en");
+  assert.match(langInstruction("en"), /ENGLISH/);
+  assert.notEqual(recipeCacheKey("eggs", null, [], "recipe", "en"), recipeCacheKey("eggs", null, [], "recipe", "ar"));
+});

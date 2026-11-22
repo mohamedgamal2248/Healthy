@@ -7,6 +7,7 @@ import { isRefusalRequest } from "@/server/ai/safety";
 import { refusal, type CoachContent } from "@/server/chef";
 import { AI_LIMITS } from "@/config/pricing";
 import { withDeadline } from "@/server/ai/limits";
+import { detectLang, asLang } from "@/server/ai/lang";
 
 export const maxDuration = 90;
 const DAILY_FOLLOWUP_CAP = AI_LIMITS.followUpsPerDay; // protects provider cost; follow-ups never deduct credits
@@ -16,7 +17,7 @@ export const POST = route<{ id: string }>(async (req, { params }) => {
   const a = await requireVerified(req);
   requireDisclaimer(a);
   const { id } = await params;
-  const { question } = await readJson<{ question?: string }>(req);
+  const { question, lang: uiLang } = await readJson<{ question?: string; lang?: string }>(req);
   const q = (question ?? "").trim();
   if (q.length < 2 || q.length > 400) throw E.bad("اكتب سؤالك باختصار.", "Keep your question short.");
   if (isRefusalRequest(q)) throw refusal();
@@ -34,7 +35,7 @@ export const POST = route<{ id: string }>(async (req, { params }) => {
   const history = (must(await db().from("hl_recipe_messages").select("role,content").eq("recipe_id", id).order("created_at").limit(12)) as AiMessage[]) ?? [];
   const log = must(await db().from("hl_ai_requests").insert({ username: a.username, type: "follow-up", input_summary: q.slice(0, 200), credit_cost: 0, status: "pending" }).select("id").single()) as { id: string };
   try {
-    const answer = await withDeadline(answerFollowUp(r.content.recipe ?? r.content.card, history, q, { goal: a.profile.goal, conditions: a.profile.conditions }));
+    const answer = await withDeadline(answerFollowUp(r.content.recipe ?? r.content.card, history, q, { goal: a.profile.goal, conditions: a.profile.conditions, lang: detectLang(q, asLang(uiLang, a.profile.language === "en" ? "en" : "ar")) }));
     must(await db().from("hl_recipe_messages").insert([{ recipe_id: id, username: a.username, role: "user", content: q }, { recipe_id: id, username: a.username, role: "assistant", content: answer }]));
     must(await db().from("hl_ai_requests").update({ status: "completed" }).eq("id", log.id));
     return ok({ answer });

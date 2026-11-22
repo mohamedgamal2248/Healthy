@@ -67,7 +67,7 @@ function ChefInner() {
   const generate = async () => {
     setBusy(true); setRefusal(null);
     try {
-      const r = await api<{ recipe: Recipe; balances: Balances }>("/chef", { body: { prompt, kind } });
+      const r = await api<{ recipe: Recipe; balances: Balances }>("/chef", { body: { prompt, kind, lang } });
       setRecipe(r.recipe); setMsgs([]); setFav(false); setShareUrl(null); setBalances(r.balances);
       refresh();
       toast(tr("تم حفظ الوصفة في مكتبتك", "Recipe saved to your library"), "ok");
@@ -84,7 +84,7 @@ function ChefInner() {
     setAsking(true);
     const question = q.trim();
     try {
-      const r = await api<{ answer: string }>(`/recipes/${recipe.id}/followup`, { body: { question } });
+      const r = await api<{ answer: string }>(`/recipes/${recipe.id}/followup`, { body: { question, lang } });
       setMsgs((m) => [...m, { role: "user", content: question }, { role: "assistant", content: r.answer }]);
       setQ("");
     } catch (e) { toast(errMsg(e), "err"); } finally { setAsking(false); }
