@@ -1,7 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { useGet } from "@/lib/useGet";
 import { useApp, type Balances } from "@/components/AppProvider";
 import { EmptyState, Gate, Notice, PageHeader, PageSkeleton } from "@/components/ui";
 import { CreditBalance, ITEM_COPY } from "@/components/Domain";
@@ -18,8 +17,7 @@ const STATUS: Record<string, [string, string, string]> = {
 
 function Inner() {
   const { tr, lang, toast, errMsg } = useApp();
-  const [w, setW] = useState<W | null>(null);
-  useEffect(() => { api<W>("/wallet").then(setW).catch((e) => toast(errMsg(e), "err")); }, [toast, errMsg]);
+  const { data: w } = useGet<W>("/wallet", (e) => toast(errMsg(e), "err"));
   if (!w) return <PageSkeleton />;
   const loc = tr("ar-EG", "en-GB");
   const active = w.subscription && new Date(w.subscription.expires_at).getTime() > Date.now();

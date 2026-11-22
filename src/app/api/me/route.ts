@@ -3,12 +3,13 @@ import { db, must } from "@/server/supabase";
 import { ok, readJson, route, E } from "@/server/http";
 import { adminUsernames, requireUser } from "@/server/auth";
 import { getBalances } from "@/server/credits";
+import { rateLimit } from "@/server/ratelimit";
 
 export const GET = route(async (req) => {
   const a = await requireUser(req);
   const balances = a.profile.kyc_verified ? await getBalances(a.username) : null;
-  const { pi_uid: _uid, ...profile } = a.profile;
-  void _uid;
+  const { pi_uid: _uid, token_version: _tv, deleted_at: _d, created_at: _c, ...profile } = a.profile;
+  void _uid; void _tv; void _d; void _c;
   return ok({ profile, balances, isAdmin: adminUsernames().includes(a.username.toLowerCase()) });
 });
 
@@ -39,4 +40,30 @@ export const PATCH = route(async (req) => {
   }
   must(await db().from("hl_profiles").update(update).eq("username", a.username));
   return ok({ ok: true });
+});
+
+/**
+ * Delete account: erases health data, content and activity. Payment and credit-ledger rows are kept
+ * (financial record) but are detached from any personal data. All issued sessions stop working.
+ */
+export const DELETE = route(async (req) => {
+  const a = await requireUser(req);
+  await rateLimit("delete", a.username, 3, 3600);
+  const { confirm } = await readJson<{ confirm?: string }>(req);
+  if ((confirm ?? "").toLowerCase() !== a.username.toLowerCase()) throw E.bad("اكتب اسم المستخدم للتأكيد.", "Type your username to confirm.");
+  const u = a.username;
+  const del = async (t: string, col = "username") => must(await db().from(t).delete().eq(col, u));
+  for (const t of ["hl_weight_logs", "hl_habit_logs", "hl_diet_plans", "hl_weekly_reports", "hl_user_challenges", "hl_streaks", "hl_badges", "hl_favourites", "hl_recipe_likes", "hl_recipe_messages", "hl_group_challenge_members", "hl_ai_requests"]) {
+    if (t === "hl_ai_requests") continue; // recipes reference requests: delete recipes first
+    await del(t);
+  }
+  await del("hl_recipes");
+  await del("hl_ai_requests");
+  await del("hl_referrals", "invited");
+  await del("hl_referrals", "referrer");
+  must(await db().from("hl_profiles").update({
+    age: null, sex: null, weight_kg: null, height_cm: null, goal: null, activity: null, conditions: [], disclaimer_accepted_at: null,
+    leaderboard_visible: false, deleted_at: new Date().toISOString(), token_version: (a.profile.token_version ?? 0) + 1, updated_at: new Date().toISOString(),
+  }).eq("username", u));
+  return ok({ deleted: true });
 });

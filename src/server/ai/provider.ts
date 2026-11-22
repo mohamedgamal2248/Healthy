@@ -1,6 +1,27 @@
 // The only module that talks to a model provider. Provider, model and key come from env and never
 // reach the client. If nothing is configured we throw AiNotConfigured -- we never fabricate AI output.
-import { AI_LIMITS } from "@/config/pricing";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { AI_LIMITS, AI_PRICES } from "@/config/pricing";
+
+export type Usage = { tokensIn: number; tokensOut: number; searches: number };
+const usageStore = new AsyncLocalStorage<Usage>();
+const addUsage = (u: Partial<Usage>) => {
+  const s = usageStore.getStore();
+  if (!s) return;
+  s.tokensIn += u.tokensIn ?? 0; s.tokensOut += u.tokensOut ?? 0; s.searches += u.searches ?? 0;
+};
+/** Run `fn` and collect the real token / search usage of every provider call it makes. */
+export async function trackUsage<T>(fn: () => Promise<T>): Promise<{ result: T; usage: Usage }> {
+  const usage: Usage = { tokensIn: 0, tokensOut: 0, searches: 0 };
+  try {
+    const result = await usageStore.run(usage, fn);
+    return { result, usage };
+  } catch (e) {
+    (e as { usage?: Usage }).usage = usage;
+    throw e;
+  }
+}
+export const estimateCostUsd = (u: Usage) => (u.tokensIn * AI_PRICES.inputPerM + u.tokensOut * AI_PRICES.outputPerM) / 1e6 + u.searches * AI_PRICES.searchEach;
 
 export class AiNotConfigured extends Error {
   constructor() {
@@ -60,7 +81,8 @@ export async function callModel(opts: { system: string; messages: AiMessage[]; m
             signal: AbortSignal.timeout(AI_LIMITS.timeoutMs - 10_000),
           });
           if (res.ok) {
-            const data = (await res.json()) as { output?: { type: string; content?: { type: string; text?: string }[] }[] };
+            const data = (await res.json()) as { output?: { type: string; content?: { type: string; text?: string }[] }[]; usage?: { input_tokens?: number; output_tokens?: number } };
+            addUsage({ tokensIn: data.usage?.input_tokens, tokensOut: data.usage?.output_tokens, searches: (data.output ?? []).filter((o) => o.type === "web_search_call").length });
             const text = (data.output ?? []).filter((o) => o.type === "message").flatMap((o) => o.content ?? []).filter((c) => c.type === "output_text").map((c) => c.text ?? "").join("");
             if (text.trim()) return text;
           } else console.error("[ai] responses+web_search failed", res.status);
@@ -82,7 +104,8 @@ export async function callModel(opts: { system: string; messages: AiMessage[]; m
         signal: AbortSignal.timeout(AI_LIMITS.timeoutMs - 10_000),
       });
       if (!res.ok) throw new AiProviderError(`meta ${res.status}`);
-      const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      const data = (await res.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
+      addUsage({ tokensIn: data.usage?.prompt_tokens, tokensOut: data.usage?.completion_tokens });
       return data.choices?.[0]?.message?.content ?? "";
     }
     if (prov === "anthropic") {

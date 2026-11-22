@@ -39,6 +39,9 @@ export const MIN_DAILY_KCAL = 1200;
 /** A price quote is locked into the purchase for this long; after that a new quote is required. */
 export const QUOTE_TTL_MIN = 30;
 
+/** Provider price list used only to ESTIMATE cost per request (Meta Muse Ember, standard tier, USD per 1M tokens). */
+export const AI_PRICES = { inputPerM: 0.1, outputPerM: 0.5, searchEach: 0.0025 } as const;
+
 /** Abuse / cost controls for every AI request. */
 export const AI_LIMITS = {
   maxPromptChars: 400,          // user text per request

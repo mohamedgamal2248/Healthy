@@ -1,10 +1,12 @@
 import { db, must } from "@/server/supabase";
 import { ok, route, E } from "@/server/http";
 import { requireVerified } from "@/server/auth";
+import { rateLimit } from "@/server/ratelimit";
 import { currentGroup } from "@/server/community";
 
 export const POST = route(async (req) => {
   const a = await requireVerified(req);
+  await rateLimit("checkin", a.username, 60, 3600);
   const g = await currentGroup(a.today);
   const mem = must(await db().from("hl_group_challenge_members").select("username").eq("group_id", g.id).eq("username", a.username).maybeSingle());
   if (!mem) throw E.bad("انضم للتحدي أولًا.", "Join the challenge first.");

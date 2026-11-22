@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-export type SessionClaims = { u: string; uid: string; exp: number };
+export type SessionClaims = { u: string; uid: string; exp: number; v?: number };
 
 function secret(): string {
   const s = process.env.SESSION_SECRET;
@@ -11,8 +11,8 @@ const b64 = (b: Buffer | string) => Buffer.from(b).toString("base64url");
 const sign = (data: string) => createHmac("sha256", secret()).update(data).digest();
 
 /** Compact signed token (HMAC-SHA256). Stateless; carries only the Pi username and uid. */
-export function signSession(username: string, uid: string, ttlSec = 60 * 60 * 24 * 30): string {
-  const body = b64(JSON.stringify({ u: username, uid, exp: Math.floor(Date.now() / 1000) + ttlSec } satisfies SessionClaims));
+export function signSession(username: string, uid: string, version = 0, ttlSec = 60 * 60 * 24 * 7): string {
+  const body = b64(JSON.stringify({ u: username, uid, v: version, exp: Math.floor(Date.now() / 1000) + ttlSec } satisfies SessionClaims));
   return `${body}.${b64(sign(body))}`;
 }
 

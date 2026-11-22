@@ -1,6 +1,7 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
+import { useGet } from "@/lib/useGet";
 import { useApp } from "@/components/AppProvider";
 import { EmptyState, Gate, Notice, PageHeader, PageSkeleton, Spinner, VerifiedBadge } from "@/components/ui";
 import { Icon } from "@/components/Icon";
@@ -15,18 +16,16 @@ type R = { id: string; title: string; author: string; calories?: number; protein
 
 function Inner() {
   const { tr, lang, me, toast, errMsg } = useApp();
-  const [d, setD] = useState<C | null>(null);
+  const { data: d, reload: load } = useGet<C>("/community", (e) => toast(errMsg(e), "err"));
   const [busy, setBusy] = useState(false);
   const [btab, setBtab] = useState<"week" | "month">("week");
   const [rtab, setRtab] = useState<"top" | "new">("top");
-  const load = useCallback(() => api<C>("/community").then(setD).catch((e) => toast(errMsg(e), "err")), [toast, errMsg]);
-  useEffect(() => { load(); }, [load]);
   if (!d) return <PageSkeleton />;
   const act = async (path: string) => { setBusy(true); try { await api(path, { body: {} }); await load(); } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); } };
   const like = async (id: string) => { try { await api(`/recipes/${id}/like`, { body: {} }); load(); } catch (e) { toast(errMsg(e), "err"); } };
   const save = async (id: string) => { try { await api("/favourites", { body: { type: "recipe", id } }); load(); } catch (e) { toast(errMsg(e), "err"); } };
   const invite = async () => {
-    const url = (process.env.NEXT_PUBLIC_PINET_URL || window.location.origin).replace(/\/$/, "");
+    const url = `${(process.env.NEXT_PUBLIC_PINET_URL || window.location.origin).replace(/\/$/, "")}/?ref=${encodeURIComponent(me?.profile.username ?? "")}`;
     const text = tr(`انضم لتحدي الأسبوع معايا على Healthy: ${lang === "ar" ? d.group.title_ar : d.group.title_en}`, `Join this week's challenge with me on Healthy: ${d.group.title_en}`);
     try {
       if (navigator.share) await navigator.share({ title: "Healthy", text, url });
@@ -52,6 +51,7 @@ function Inner() {
           <button className="btn mt-4 !bg-white !text-sun-600" disabled={busy} onClick={() => act("/community/join")}>{busy ? <Spinner size={18} /> : <Icon name="plus" />}{tr("انضم بضغطة واحدة", "Join with one tap")}</button>
         )}
         <button className="btn mt-3 w-full !bg-white/20 !text-white" onClick={invite}><Icon name="share" size={18} />{tr("ادعُ أصحابك للتحدي", "Invite friends to the challenge")}</button>
+        <p className="mt-2 text-xs font-bold text-sun-100">{tr("كل صديق جديد يكمّل أول تحدٍّ: طلب AI مجاني لك وله (حتى ١٠ دعوات).", "Each new friend who completes a first challenge: a free AI request for you both (up to 10 invites).")}</p>
       </section>
       {d.hidden && <Notice tone="info" icon="eyeOff">{tr("أنت مخفي من لوحة المتصدرين (من الملف الشخصي).", "You are hidden from the leaderboard (set in your profile).")}</Notice>}
 

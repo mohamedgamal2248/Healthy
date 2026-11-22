@@ -10,7 +10,7 @@ import { TRIAL_CREDITS } from "@/config/pricing";
 
 export const GET = route(async (req) => {
   const a = await requireUser(req);
-  const [{ rows, swapUsed }, streak, meals, badges, favs, reminder, balances, community, rewarded] = await Promise.all([
+  const [{ rows, swapUsed }, streak, meals, badges, favs, reminder, balances, community, rewarded, coachUsed] = await Promise.all([
     ensureToday(a),
     loadStreak(a.username),
     mealsOfTheDay(a.today),
@@ -20,6 +20,7 @@ export const GET = route(async (req) => {
     a.profile.kyc_verified ? getBalances(a.username) : Promise.resolve(null),
     a.profile.kyc_verified ? groupSnapshot(a.username, a.today).catch(() => null) : Promise.resolve(null),
     db().from("hl_credit_ledger").select("id", { count: "exact", head: true }).eq("username", a.username).eq("reason", "trial_grant"),
+    db().from("hl_recipes").select("id", { count: "exact", head: true }).eq("username", a.username),
   ]);
   return ok({
     date: a.today,
@@ -34,6 +35,7 @@ export const GET = route(async (req) => {
     balances,
     community,
     starter: { rewarded: (rewarded.count ?? 0) > 0, reward: TRIAL_CREDITS },
+    checklist: { profile: !!a.profile.disclaimer_accepted_at, challenge: streak.total > 0, coach: (coachUsed.count ?? 0) > 0 },
     profileReady: !!a.profile.disclaimer_accepted_at,
   });
 });

@@ -6,15 +6,17 @@ import { Icon, Logo } from "./Icon";
 import { useApp } from "./AppProvider";
 import { Sheet, Spinner } from "./ui";
 
+// Bottom bar: the five things people do every day. Coach sits in the middle as the primary action.
 const MAIN = [
   { href: "/today", icon: "home", ar: "اليوم", en: "Today" },
-  { href: "/meals", icon: "utensils", ar: "وجبات", en: "Meals" },
-  { href: "/chef", icon: "sparkles", ar: "الكوتش", en: "Coach" },
+  { href: "/meals", icon: "utensils", ar: "الأكل", en: "Eat", also: ["/plan"] },
+  { href: "/chef", icon: "sparkles", ar: "الكوتش", en: "Coach", primary: true },
   { href: "/progress", icon: "chart", ar: "تقدمي", en: "Progress" },
-];
+  { href: "/community", icon: "users", ar: "المجتمع", en: "Community" },
+] as { href: string; icon: string; ar: string; en: string; primary?: boolean; also?: string[] }[];
+// Account menu (top bar) and desktop sidebar extras.
 const MORE = [
   { href: "/plan", icon: "plan", ar: "نظامي الغذائي", en: "My diet plan" },
-  { href: "/community", icon: "users", ar: "المجتمع", en: "Community" },
   { href: "/library", icon: "book", ar: "مكتبتي", en: "Library" },
   { href: "/pricing", icon: "coin", ar: "الأسعار والباقات", en: "Pricing" },
   { href: "/wallet", icon: "wallet", ar: "المحفظة", en: "Wallet" },
@@ -27,9 +29,9 @@ export function Shell({ children }: { children: ReactNode }) {
   const [more, setMore] = useState(false);
   const bare = path.startsWith("/r/"); // public shared recipe: minimal chrome
   const signedIn = !!me;
-  const items = [...MAIN.slice(0, 3), MORE[0], ...MAIN.slice(3), ...MORE.slice(1)];
+  const items = [MAIN[0], MAIN[1], MORE[0], MAIN[2], MAIN[3], MAIN[4], ...MORE.slice(1)] as { href: string; icon: string; ar: string; en: string }[];
   if (me?.isAdmin) items.push({ href: "/admin", icon: "settings", ar: "الإدارة", en: "Admin" });
-  const active = (h: string) => path === h || path.startsWith(h + "/");
+  const active = (h: string, also: string[] = []) => [h, ...also].some((x) => path === x || path.startsWith(x + "/"));
 
   return (
     <div className="min-h-dvh">
@@ -50,6 +52,11 @@ export function Shell({ children }: { children: ReactNode }) {
             <button className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-white text-xs font-extrabold text-ink-soft transition active:scale-90" onClick={() => setLang(lang === "ar" ? "en" : "ar")} aria-label={tr("تغيير اللغة", "Switch language")} dir="ltr">
               {lang === "ar" ? "EN" : "AR"}
             </button>
+            {signedIn && (
+              <button className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-sm font-extrabold uppercase text-white transition active:scale-90 lg:hidden" onClick={() => setMore(true)} aria-label={tr("حسابي", "My account")}>
+                {me!.profile.username.slice(0, 1)}
+              </button>
+            )}
             {!signedIn && ready && (
               <>
                 <Link href="/pricing" className="btn-ghost btn-sm hidden sm:inline-flex">{tr("الأسعار", "Pricing")}</Link>
@@ -77,33 +84,43 @@ export function Shell({ children }: { children: ReactNode }) {
             </div>
           </aside>
         )}
-        <main className={`min-w-0 flex-1 ${signedIn && !bare ? "pb-28 lg:pb-10" : "pb-10"}`}>{children}</main>
+        <main className={`min-w-0 flex-1 ${signedIn && !bare ? "pb-28 lg:pb-10" : "pb-10"}`}>
+          {children}
+          <footer className="mt-10 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 border-t border-line pt-4 text-xs font-bold text-ink-soft">
+            <Link href="/terms" className="underline-offset-2 hover:underline">{tr("الشروط والأحكام", "Terms")}</Link>
+            <Link href="/privacy" className="underline-offset-2 hover:underline">{tr("سياسة الخصوصية", "Privacy")}</Link>
+            <span dir="ltr">Healthy</span>
+          </footer>
+        </main>
       </div>
 
       {signedIn && !bare && (
         <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden" aria-label={tr("التنقل", "Navigation")}>
-          <ul className="mx-auto grid max-w-lg grid-cols-5">
-            {MAIN.map((i) => (
-              <li key={i.href}>
-                <Link href={i.href} aria-current={active(i.href) ? "page" : undefined} className={`flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-bold ${active(i.href) ? "text-brand-700" : "text-ink-soft"}`}>
-                  <span className={`flex h-8 w-12 items-center justify-center rounded-full transition ${active(i.href) ? "bg-brand-100" : ""}`}><Icon name={i.icon} size={22} /></span>
-                  {tr(i.ar, i.en)}
-                </Link>
-              </li>
-            ))}
-            <li>
-              <button onClick={() => setMore(true)} className="flex min-h-16 w-full flex-col items-center justify-center gap-0.5 text-[11px] font-bold text-ink-soft">
-                <span className="flex h-8 w-12 items-center justify-center"><Icon name="menu" size={22} /></span>
-                {tr("المزيد", "More")}
-              </button>
-            </li>
+          <ul className="mx-auto grid max-w-lg grid-cols-5 items-end">
+            {MAIN.map((i) =>
+              i.primary ? (
+                <li key={i.href} className="flex justify-center">
+                  <Link href={i.href} aria-current={active(i.href) ? "page" : undefined} className={`-mt-5 flex h-16 w-16 flex-col items-center justify-center rounded-full border-4 border-white text-[10px] font-extrabold text-white shadow-lg transition active:scale-95 ${active(i.href) ? "bg-brand-800" : "bg-gradient-to-br from-brand-500 to-brand-700"}`} aria-label={tr(i.ar, i.en)}>
+                    <Icon name={i.icon} size={24} />
+                    {tr(i.ar, i.en)}
+                  </Link>
+                </li>
+              ) : (
+                <li key={i.href}>
+                  <Link href={i.href} aria-current={active(i.href, i.also) ? "page" : undefined} className={`flex min-h-16 flex-col items-center justify-center gap-0.5 text-[11px] font-bold ${active(i.href, i.also) ? "text-brand-700" : "text-ink-soft"}`}>
+                    <span className={`flex h-8 w-12 items-center justify-center rounded-full transition ${active(i.href, i.also) ? "bg-brand-100" : ""}`}><Icon name={i.icon} size={22} /></span>
+                    {tr(i.ar, i.en)}
+                  </Link>
+                </li>
+              ),
+            )}
           </ul>
         </nav>
       )}
 
-      <Sheet open={more} onClose={() => setMore(false)} title={tr("المزيد", "More")}>
+      <Sheet open={more} onClose={() => setMore(false)} title={me ? `@${me.profile.username}` : tr("المزيد", "More")}>
         <div className="grid grid-cols-2 gap-2">
-          {[...MORE, ...(me?.isAdmin ? [{ href: "/admin", icon: "settings", ar: "الإدارة", en: "Admin" }] : [])].map((i) => (
+          {[...MORE, { href: "/terms", icon: "info", ar: "الشروط", en: "Terms" }, { href: "/privacy", icon: "lock", ar: "الخصوصية", en: "Privacy" }, ...(me?.isAdmin ? [{ href: "/admin", icon: "settings", ar: "الإدارة", en: "Admin" }] : [])].map((i) => (
             <Link key={i.href} href={i.href} onClick={() => setMore(false)} className="flex min-h-14 items-center gap-2.5 rounded-2xl border border-line bg-brand-50/40 px-3 font-bold text-ink">
               <Icon name={i.icon} size={20} className="text-brand-600" /> {tr(i.ar, i.en)}
             </Link>

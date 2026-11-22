@@ -1,6 +1,7 @@
 import { db, must } from "@/server/supabase";
 import { ok, readJson, route, E } from "@/server/http";
 import { requireAdmin } from "@/server/auth";
+import { audit } from "@/server/audit";
 
 export const GET = route(async (req) => {
   await requireAdmin(req);
@@ -9,7 +10,7 @@ export const GET = route(async (req) => {
 
 /** Override the daily meal for a date + meal type. meal_id = null clears the override. */
 export const POST = route(async (req) => {
-  await requireAdmin(req);
+  const adm = await requireAdmin(req);
   const { date, meal_type, meal_id } = await readJson<{ date?: string; meal_type?: string; meal_id?: string | null }>(req);
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !["breakfast", "lunch", "dinner"].includes(meal_type ?? "")) throw E.bad();
   if (!meal_id) must(await db().from("hl_meal_overrides").delete().eq("date", date).eq("meal_type", meal_type!));
@@ -18,5 +19,6 @@ export const POST = route(async (req) => {
     if (!m || m.meal_type !== meal_type) throw E.bad("الوجبة غير موجودة أو من نوع آخر.", "Meal not found or wrong type.");
     must(await db().from("hl_meal_overrides").upsert({ date, meal_type, meal_id }, { onConflict: "date,meal_type" }));
   }
+  await audit(adm.username, "rotation.set", `${date}:${meal_type}`, { meal_id });
   return ok({ ok: true });
 });

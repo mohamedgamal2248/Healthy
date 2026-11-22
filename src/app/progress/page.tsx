@@ -1,6 +1,7 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useGet } from "@/lib/useGet";
 import { useApp } from "@/components/AppProvider";
 import { Field, Gate, PageHeader, PageSkeleton, Spinner } from "@/components/ui";
 import { BadgeGrid } from "@/components/Challenge";
@@ -14,13 +15,12 @@ type P = {
 
 function Inner() {
   const { tr, toast, errMsg } = useApp();
-  const [d, setD] = useState<P | null>(null);
+  const { data: d, setData: setD, reload: load } = useGet<P>("/progress", (e) => toast(errMsg(e), "err"));
   const [w, setW] = useState("");
   const [sleep, setSleep] = useState("");
   const [steps, setSteps] = useState("");
   const [busy, setBusy] = useState(false);
-  const load = useCallback(() => api<P>("/progress").then((r) => { setD(r); setSleep(r.habitToday?.sleep_hours?.toString() ?? ""); setSteps(r.habitToday?.steps?.toString() ?? ""); }).catch((e) => toast(errMsg(e), "err")), [toast, errMsg]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (d) { setSleep(d.habitToday?.sleep_hours?.toString() ?? ""); setSteps(d.habitToday?.steps?.toString() ?? ""); } }, [d?.today, d?.habitToday?.sleep_hours, d?.habitToday?.steps]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!d) return <PageSkeleton />;
 
   const cups = d.habitToday?.water_cups ?? 0;

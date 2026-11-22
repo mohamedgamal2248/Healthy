@@ -21,7 +21,8 @@ export async function createPurchase(a: Auth, itemKey: unknown) {
   return { purchaseId: row.id, amount: q.pricePi, usd: q.usd, rate: q.rate.usdPerPi, memo: memoFor(item.key), metadata: { purchaseId: row.id, item: item.key } };
 }
 
-async function purchaseForPayment(a: Auth, payment: PiPayment): Promise<PurchaseRow> {
+type Payer = { username: string; uid: string };
+async function purchaseForPayment(a: Payer, payment: PiPayment): Promise<PurchaseRow> {
   const pid = String((payment.metadata as { purchaseId?: unknown } | undefined)?.purchaseId ?? "");
   if (!UUID_RE.test(pid)) throw payErr("wrong_memo");
   const p = must(await db().from("hl_purchases").select("id,username,kind,item_key,amount_pi,pi_payment_id,status,created_at").eq("id", pid).maybeSingle()) as PurchaseRow | null;
@@ -58,7 +59,7 @@ export async function approve(a: Auth, paymentId: string) {
 }
 
 /** Server completion: re-verify with the Pi API, complete, confirm, then grant atomically. */
-export async function complete(a: Auth, paymentId: string, txid: string) {
+export async function complete(a: Payer, paymentId: string, txid: string) {
   if (!txid) throw E.bad();
   const payment = await getPayment(paymentId);
   const purchase = await purchaseForPayment(a, payment);
@@ -86,4 +87,27 @@ export async function complete(a: Auth, paymentId: string, txid: string) {
 
 export async function cancel(a: Auth, purchaseId: string, reason: string) {
   await db().from("hl_purchases").update({ status: reason === "error" ? "failed" : "cancelled", fail_reason: reason }).eq("id", purchaseId).eq("username", a.username).in("status", ["pending", "approved"]);
+}
+
+/** Recover a payment the app never finished (user closed the app, network drop...). Idempotent and fully re-verified. */
+export async function reconcileOne(user: Payer, purchaseId: string, paymentId: string) {
+  const payment = await getPayment(paymentId);
+  if (payment.status.cancelled || payment.status.user_cancelled) {
+    await db().from("hl_purchases").update({ status: "cancelled", fail_reason: "cancelled_at_pi" }).eq("id", purchaseId).in("status", ["pending", "approved"]);
+    return "cancelled";
+  }
+  if (payment.transaction?.txid) {
+    await complete(user, paymentId, payment.transaction.txid);
+    return "completed";
+  }
+  return "waiting";
+}
+
+export async function reconcileMine(a: Auth): Promise<void> {
+  const rows = must(
+    await db().from("hl_purchases").select("id,pi_payment_id").eq("username", a.username).in("status", ["pending", "approved"]).not("pi_payment_id", "is", null).gte("created_at", new Date(Date.now() - 7 * 86400_000).toISOString()).limit(5),
+  ) as { id: string; pi_payment_id: string }[];
+  for (const r of rows) {
+    try { await reconcileOne({ username: a.username, uid: a.uid }, r.id, r.pi_payment_id); } catch (e) { console.error("[reconcile]", r.id, e instanceof Error ? e.message : e); }
+  }
 }

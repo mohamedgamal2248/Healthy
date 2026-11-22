@@ -1,7 +1,8 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { useGet } from "@/lib/useGet";
 import { useApp, type Balances } from "@/components/AppProvider";
 import { Gate, Notice, PageSkeleton } from "@/components/ui";
 import { BadgeGrid, ChallengeCard, StreakHeader, type ChallengeItem } from "@/components/Challenge";
@@ -16,15 +17,46 @@ type Today = {
   meals: { breakfast: MealRow | null; lunch: MealRow | null; dinner: MealRow | null }; badges: { badge_key: string }[]; favourites: string[];
   reminder: "none" | "morning" | "inactive"; balances: Balances | null; profileReady: boolean;
   starter: { rewarded: boolean; reward: number };
+  checklist: { profile: boolean; challenge: boolean; coach: boolean };
   community: { title_ar: string; title_en: string; members: number; checkedToday: number; joined: boolean; myDays: number } | null;
 };
 
+function Checklist({ d }: { d: Today }) {
+  const { tr } = useApp();
+  const [hidden, setHidden] = useState(true);
+  useEffect(() => { try { setHidden(localStorage.getItem("healthy.checklist") === "1"); } catch { setHidden(false); } }, []);
+  const steps = [
+    { done: d.checklist.profile, ar: "أكمل ملفك الصحي", en: "Complete your health profile", href: "/profile" },
+    { done: d.checklist.challenge, ar: "أنجز أول تحدٍّ", en: "Complete your first challenge", href: "/today" },
+    { done: d.checklist.coach, ar: "جرّب الكوتش", en: "Try the coach", href: "/chef" },
+    { done: d.starter.rewarded, ar: "أكمل تحدي البداية (٧ أيام)", en: "Finish the 7-day starter challenge", href: "/today" },
+  ];
+  const left = steps.filter((x) => !x.done).length;
+  if (hidden || left === 0) return null;
+  return (
+    <section className="card">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="h2">{tr("ابدأ من هنا", "Get started")}</h2>
+        <button className="text-xs font-extrabold text-ink-soft underline" onClick={() => { setHidden(true); try { localStorage.setItem("healthy.checklist", "1"); } catch {} }}>{tr("إخفاء", "Hide")}</button>
+      </div>
+      <ul className="space-y-1.5">
+        {steps.map((s) => (
+          <li key={s.ar}>
+            <Link href={s.href} className="flex min-h-11 items-center gap-3 rounded-xl px-2 font-bold hover:bg-brand-50">
+              <span className={`flex h-6 w-6 items-center justify-center rounded-full border-2 ${s.done ? "border-brand-600 bg-brand-600 text-white" : "border-brand-300"}`}>{s.done && <Icon name="check" size={14} />}</span>
+              <span className={s.done ? "text-ink-soft line-through" : ""}>{tr(s.ar, s.en)}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function TodayInner() {
   const { tr, toast, errMsg, lang, me } = useApp();
-  const [d, setD] = useState<Today | null>(null);
+  const { data: d, setData: setD, reload: load } = useGet<Today>("/today", (e) => toast(errMsg(e), "err"));
   const [busy, setBusy] = useState(false);
-  const load = useCallback(() => api<Today>("/today").then(setD).catch((e) => toast(errMsg(e), "err")), [toast, errMsg]);
-  useEffect(() => { load(); }, [load]);
 
   if (!d) return <PageSkeleton />;
 
@@ -38,7 +70,8 @@ function TodayInner() {
       streak: first ? { ...d.streak, current: d.streak.current + 1, longest: Math.max(d.streak.longest, d.streak.current + 1), total: d.streak.total + 1 } : { ...d.streak, total: d.streak.total + 1 },
     });
     try {
-      const r = await api<{ newBadges: string[]; starterReward?: boolean }>("/challenges/complete", { body: { id } });
+      const r = await api<{ newBadges: string[]; starterReward?: boolean; referralReward?: boolean }>("/challenges/complete", { body: { id } });
+      if (r.referralReward) toast(tr("مكافأة الدعوة: حصلت على طلب AI مجاني", "Invite reward: you earned a free AI request"), "ok");
       if (r.starterReward) toast(tr(`مبروك! كسبت ${d.starter.reward} كريدت للشيف AI`, `Congrats! You earned ${d.starter.reward} AI Coach credits`), "ok");
       r.newBadges.forEach((k) => { const b = BADGES.find((x) => x.key === k); if (b) toast(tr(`شارة جديدة: ${b.ar}`, `New badge: ${b.en}`), "ok"); });
       load();
@@ -70,6 +103,8 @@ function TodayInner() {
       )}
 
       <StreakHeader current={d.streak.current} longest={d.streak.longest} total={d.streak.total} doneToday={d.completedToday} />
+
+      <Checklist d={d} />
 
       {!d.starter.rewarded && me?.profile.kyc_verified && (
         <section className="card !border-sun-100 bg-gradient-to-br from-sun-50 to-white">

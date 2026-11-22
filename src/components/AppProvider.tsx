@@ -61,6 +61,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (l === "ar" || l === "en") setLangState(l);
     } catch {}
   }, []);
+  // Invite links look like /?ref=username: remember the inviter until the user signs in.
+  useEffect(() => {
+    try {
+      const ref = new URLSearchParams(window.location.search).get("ref");
+      if (ref && /^[A-Za-z0-9_.@-]{3,33}$/.test(ref)) localStorage.setItem("healthy.ref", ref);
+    } catch {}
+  }, []);
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
@@ -105,6 +112,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (token: string) => {
       rememberToken(token);
       const m = await refresh();
+      try {
+        const ref = localStorage.getItem("healthy.ref");
+        if (ref) {
+          localStorage.removeItem("healthy.ref");
+          await api("/referral", { body: { ref } }).catch(() => {});
+        }
+      } catch {}
       router.push(m && !m.profile.disclaimer_accepted_at ? "/profile" : "/today");
     },
     [refresh, router],

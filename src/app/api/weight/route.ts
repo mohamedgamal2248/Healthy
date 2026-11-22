@@ -2,6 +2,7 @@ import { z } from "zod";
 import { db, must } from "@/server/supabase";
 import { ok, readJson, route, E } from "@/server/http";
 import { requireUser } from "@/server/auth";
+import { rateLimit } from "@/server/ratelimit";
 import { weekStart } from "@/lib/dates";
 import { hasActivePlan } from "@/server/credits";
 import { createPlan } from "@/server/plan";
@@ -11,6 +12,7 @@ const Body = z.object({ weight_kg: z.number().min(20).max(400) });
 /** At most one official weekly entry feeds the diet plan; extra entries are kept as notes. */
 export const POST = route(async (req) => {
   const a = await requireUser(req);
+  await rateLimit("weight", a.username, 40, 3600);
   const parsed = Body.safeParse(await readJson(req));
   if (!parsed.success) throw E.bad("اكتب وزنًا صحيحًا بالكيلوجرام.", "Enter a valid weight in kg.");
   const week = weekStart(a.today);

@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { useGet } from "@/lib/useGet";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useApp, type Balances } from "@/components/AppProvider";
@@ -7,11 +8,47 @@ import { EmptyState, Gate, Notice, PageHeader, PageSkeleton, Spinner } from "@/c
 import { DisclaimerBanner, PaySheet } from "@/components/Domain";
 import { PricingGrid, type PriceItem } from "@/components/Pricing";
 import { Icon } from "@/components/Icon";
+import { EatTabs } from "@/components/EatTabs";
 import type { StoredPlan } from "@/server/plan";
 
 type Report = { week_start: string; weight_change: number | null; current_weight: number | null; streak: number; challenges_completed: number; favourite_meal: { name_ar: string; name_en: string } | null; avg_water: number | null; tip_ar: string; tip_en: string };
 type PlanResp = { subscribed: boolean; week?: string; current?: StoredPlan | null; next?: StoredPlan | null; balances?: Balances; regenerateCost?: number; safety?: { cautions: { ar: string; en: string }[]; doctor_note: { ar: string; en: string } | null } };
 const TYPE = { breakfast: ["فطار", "Breakfast", "sun"], lunch: ["غدا", "Lunch", "utensils"], dinner: ["عشا", "Dinner", "moon"] } as const;
+
+type ShopItem = { key: string | null; item: string; group: string; uses: number; sample: string[] };
+function Shopping({ week, which }: { week: string; which: "current" | "next" }) {
+  const { tr, lang } = useApp();
+  const { data } = useGet<{ items: ShopItem[] }>(`/plan/shopping?week=${which}`);
+  const storeKey = `healthy.shop.${week}.${which}`;
+  const [done, setDone] = useState<string[]>([]);
+  useEffect(() => { try { setDone(JSON.parse(localStorage.getItem(storeKey) ?? "[]")); } catch { setDone([]); } }, [storeKey]);
+  const toggle = (id: string) => setDone((d) => { const n = d.includes(id) ? d.filter((x) => x !== id) : [...d, id]; try { localStorage.setItem(storeKey, JSON.stringify(n)); } catch {} return n; });
+  if (!data || !data.items.length) return null;
+  const groups: Record<string, [string, string]> = { protein: ["بروتين", "Protein"], dairy: ["ألبان", "Dairy"], veg: ["خضار", "Vegetables"], fruit: ["فاكهة", "Fruit"], grain: ["نشويات", "Starches"], other: ["أخرى", "Other"] };
+  return (
+    <section className="card space-y-3">
+      <div className="flex items-center justify-between"><h2 className="h2">{tr("قائمة المشتريات", "Shopping list")}</h2><span className="muted tabular-nums">{done.length}/{data.items.length}</span></div>
+      <p className="muted">{tr("المكونات التي تحتاجها لوجبات هذا الأسبوع، مع عدد الوجبات التي تستخدمها.", "Ingredients for this week's meals, with how many meals use each.")}</p>
+      {Object.keys(groups).map((g) => {
+        const list = data.items.filter((i) => i.group === g);
+        if (!list.length) return null;
+        return (
+          <div key={g}>
+            <p className="label">{lang === "ar" ? groups[g][0] : groups[g][1]}</p>
+            <ul className="divide-y divide-line rounded-2xl border border-line">
+              {list.map((i) => { const id = i.key ?? i.item; const on = done.includes(id); return (
+                <li key={id}><button onClick={() => toggle(id)} className="flex min-h-12 w-full items-center gap-3 px-3 text-start" aria-pressed={on}>
+                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 ${on ? "border-brand-600 bg-brand-600 text-white" : "border-brand-300"}`}>{on && <Icon name="check" size={14} />}</span>
+                  <span className={`flex-1 font-bold ${on ? "text-ink-soft line-through" : ""}`}>{i.item}</span>
+                  <span className="text-xs font-bold text-ink-soft">{tr(`${i.uses} وجبات`, `${i.uses} meals`)}</span>
+                </button></li>); })}
+            </ul>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
 
 function Inner() {
   const { tr, lang, toast, errMsg, refresh, me } = useApp();
@@ -38,6 +75,7 @@ function Inner() {
     const plan = offer?.items.find((i) => i.key === "plan_monthly");
     return (
       <div className="mx-auto max-w-3xl space-y-5 py-5">
+        <EatTabs />
         <PageHeader title={tr("نظامي الغذائي", "My diet plan")} sub={tr("للمشتركين في الخطة الشهرية", "For monthly plan subscribers")} />
         <div className="card space-y-4 bg-gradient-to-br from-brand-50 to-white">
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-white"><Icon name="plan" size={30} /></span>
@@ -68,6 +106,7 @@ function Inner() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5 py-5">
+      <EatTabs />
       <PageHeader title={tr("نظامي الغذائي", "My diet plan")} sub={d.week ? tr(`أسبوع يبدأ ${fmt(d.week)}`, `Week starting ${fmt(d.week)}`) : undefined} />
       <DisclaimerBanner conditions={me?.profile.conditions} />
       {d.safety?.cautions.map((c, i) => (<Notice key={i} tone="warn">{lang === "ar" ? c.ar : c.en}</Notice>))}
@@ -105,6 +144,8 @@ function Inner() {
           </div>
         </>
       )}
+
+      {plan && <Shopping week={d.week ?? ""} which={which} />}
 
       <section className="card space-y-3">
         <div className="flex items-center justify-between gap-3"><h2 className="h2">{tr("تقرير الأسبوع", "Weekly report")}</h2><button className="btn-soft btn-sm" onClick={makeReport} disabled={busy}><Icon name="refresh" size={18} />{tr("تحديث التقرير", "Update report")}</button></div>

@@ -2,6 +2,8 @@ import { z } from "zod";
 import { db, must } from "@/server/supabase";
 import { ok, readJson, route, E } from "@/server/http";
 import { requireAdmin } from "@/server/auth";
+import { audit } from "@/server/audit";
+import { invalidateCatalogueCache } from "@/server/meals";
 import { INGREDIENT_MAP, MEAL_TAGS } from "@/data/ingredients";
 
 export const GET = route(async (req) => {
@@ -29,10 +31,12 @@ const Body = z.object({
 
 /** Add / edit / deactivate a catalogue meal. */
 export const POST = route(async (req) => {
-  await requireAdmin(req);
+  const adm = await requireAdmin(req);
   const p = Body.safeParse(await readJson(req));
   if (!p.success) throw E.bad("بيانات الوجبة غير صالحة: " + p.error.issues[0]?.path.join("."), "Invalid meal data: " + p.error.issues[0]?.path.join("."));
   const ingredient_keys = Array.from(new Set(p.data.ingredients.map((i) => i.key).filter(Boolean)));
   must(await db().from("hl_meals").upsert({ ...p.data, ingredient_keys }, { onConflict: "id" }));
+  invalidateCatalogueCache();
+  await audit(adm.username, "meal.upsert", p.data.id, { active: p.data.active, name_ar: p.data.name_ar });
   return ok({ ok: true });
 });
