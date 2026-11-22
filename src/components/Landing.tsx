@@ -13,7 +13,7 @@ export function Landing({ items, trial, meal, challenge }: { items: PriceItem[];
   const steps = [
     { icon: "check", ar: "تحدي كل يوم", en: "A challenge every day", d_ar: "٣ تحديات صغيرة تبني عادة صحية وتحافظ على سلسلتك.", d_en: "Three small challenges that build habits and keep your streak alive." },
     { icon: "utensils", ar: "وجبات مصرية رخيصة", en: "Cheap local meals", d_ar: "فطار وغدا وعشا من فول وعدس وبيض وقريش، بالسعرات والتكلفة.", d_en: "Breakfast, lunch and dinner from foul, lentils, eggs and cottage cheese, with calories and cost." },
-    { icon: "chef", ar: "شيف ذكاء اصطناعي", en: "AI Chef", d_ar: "اكتب اللي عندك في البيت واحصل على وصفة كاملة بكريدت واحد.", d_en: "Tell it what you have at home and get a full recipe for 1 credit." },
+    { icon: "chef", ar: "شيف ذكاء اصطناعي", en: "AI Coach", d_ar: "اكتب اللي عندك في البيت واحصل على وصفة كاملة بكريدت واحد.", d_en: "Tell it what you have at home and get a full recipe for 1 credit." },
     { icon: "plan", ar: "نظام غذائي شخصي", en: "A personal diet plan", d_ar: "خطة أسبوعية من ملفك الصحي تتجدد مع وزنك.", d_en: "A weekly plan from your own profile that updates with your weight." },
   ];
   return (

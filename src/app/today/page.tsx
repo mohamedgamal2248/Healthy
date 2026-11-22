@@ -39,7 +39,7 @@ function TodayInner() {
     });
     try {
       const r = await api<{ newBadges: string[]; starterReward?: boolean }>("/challenges/complete", { body: { id } });
-      if (r.starterReward) toast(tr(`مبروك! كسبت ${d.starter.reward} كريدت للشيف AI`, `Congrats! You earned ${d.starter.reward} AI Chef credits`), "ok");
+      if (r.starterReward) toast(tr(`مبروك! كسبت ${d.starter.reward} كريدت للشيف AI`, `Congrats! You earned ${d.starter.reward} AI Coach credits`), "ok");
       r.newBadges.forEach((k) => { const b = BADGES.find((x) => x.key === k); if (b) toast(tr(`شارة جديدة: ${b.ar}`, `New badge: ${b.en}`), "ok"); });
       load();
     } catch (e) { toast(errMsg(e), "err"); load(); }
@@ -62,7 +62,7 @@ function TodayInner() {
     <div className="space-y-6 py-5">
       {!d.profileReady && (
         <Notice tone="warn" icon="user">
-          <div className="flex flex-wrap items-center gap-3"><span>{tr("أكمل ملفك الصحي وأكّد التنبيه الصحي لتفعيل الشيف AI والنظام الغذائي.", "Complete your health profile and accept the disclaimer to unlock the AI Chef and diet plan.")}</span><Link href="/profile" className="btn-primary btn-sm">{tr("أكمل الملف", "Complete profile")}</Link></div>
+          <div className="flex flex-wrap items-center gap-3"><span>{tr("أكمل ملفك الصحي وأكّد التنبيه الصحي لتفعيل الكوتش والنظام الغذائي.", "Complete your health profile and accept the disclaimer to unlock the AI Coach and diet plan.")}</span><Link href="/profile" className="btn-primary btn-sm">{tr("أكمل الملف", "Complete profile")}</Link></div>
         </Notice>
       )}
       {d.reminder === "inactive" && (
@@ -76,7 +76,7 @@ function TodayInner() {
           <div className="flex items-center gap-3">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sun-500 text-white"><Icon name="bolt" size={26} /></span>
             <div className="min-w-0 flex-1">
-              <p className="font-extrabold">{tr(`تحدي البداية: اكسب ${d.starter.reward} كريدت للشيف AI`, `Starter challenge: earn ${d.starter.reward} AI Chef credits`)}</p>
+              <p className="font-extrabold">{tr(`تحدي البداية: اكسب ${d.starter.reward} كريدت للشيف AI`, `Starter challenge: earn ${d.starter.reward} AI Coach credits`)}</p>
               <p className="muted">{tr("أنجز تحديًا واحدًا على الأقل كل يوم لمدة ٧ أيام متتالية.", "Complete at least one challenge every day for 7 days in a row.")}</p>
             </div>
           </div>
@@ -109,7 +109,7 @@ function TodayInner() {
         <Link href="/chef" className="card flex items-center gap-4 !border-brand-200 bg-gradient-to-br from-brand-50 to-white transition hover:shadow-md">
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-brand-600 text-white"><Icon name="chef" size={30} /></span>
           <div className="flex-1">
-            <p className="h2">{tr("الشيف AI", "AI Chef")}</p>
+            <p className="h2">{tr("الكوتش", "AI Coach")}</p>
             <p className="muted">{tr("قولّه عندك إيه واحصل على وصفة كاملة", "Tell it what you have and get a full recipe")}</p>
           </div>
           <Icon name={lang === "ar" ? "chevronL" : "chevronR"} size={22} className="text-brand-600" />

@@ -1,5 +1,6 @@
 "use client";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { api } from "@/lib/api";
 import Link from "next/link";
 import { Icon } from "./Icon";
 import { useApp, type Balances } from "./AppProvider";
@@ -53,6 +54,47 @@ export type RecipeContent = {
   doctor_note: { ar: string; en: string } | null;
 };
 
+export type CoachContent = Omit<RecipeContent, "recipe"> & {
+  kind?: "recipe" | "workout" | "challenge";
+  recipe?: RecipeContent["recipe"];
+  card?: { name: string; summary: string; level?: string; duration_min?: number; sections: { heading: string; items: string[] }[]; tips: string[] };
+};
+
+/** Picks the right view for an AI Coach result (recipe, workout or challenge). */
+export function ContentView({ content, actions }: { content: CoachContent; actions?: ReactNode }) {
+  if (content.kind && content.kind !== "recipe" && content.card) return <CardView content={content} actions={actions} />;
+  return <RecipeView content={content as RecipeContent} actions={actions} />;
+}
+
+export function CardView({ content, actions }: { content: CoachContent; actions?: ReactNode }) {
+  const { tr, lang } = useApp();
+  const c = content.card!;
+  return (
+    <article className="card space-y-5">
+      <header>
+        <p className="text-xs font-extrabold text-brand-600">{content.kind === "workout" ? tr("برنامج تمرين", "Workout") : tr("تحدٍّ مخصص", "Custom challenge")}</p>
+        <h2 className="text-xl font-extrabold leading-snug">{c.name}</h2>
+        <p className="muted mt-1">{c.summary}</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {c.duration_min ? <span className="chip !cursor-default"><Icon name="clock" size={15} />{c.duration_min} {tr("د", "min")}</span> : null}
+          {c.level ? <span className="chip !cursor-default !bg-brand-50 !text-brand-700">{c.level}</span> : null}
+        </div>
+      </header>
+      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {c.sections.map((s, i) => (
+        <section key={i}>
+          <h3 className="h2 mb-2">{s.heading}</h3>
+          <ul className="space-y-2">{s.items.map((it, k) => (<li key={k} className="flex gap-3 rounded-2xl bg-brand-50/60 p-3 text-sm font-semibold"><Icon name="check" size={16} className="mt-0.5 shrink-0 text-brand-600" /><span>{it}</span></li>))}</ul>
+        </section>
+      ))}
+      {c.tips.length > 0 && <section><h3 className="h2 mb-2">{tr("نصائح", "Tips")}</h3><ul className="space-y-2">{c.tips.map((t, k) => (<li key={k} className="rounded-2xl bg-sun-50 p-3 text-sm">{t}</li>))}</ul></section>}
+      {content.cautions.map((x, k) => (<Notice key={k} tone="warn">{lang === "ar" ? x.ar : x.en}</Notice>))}
+      {content.doctor_note && <Notice tone="warn" icon="shieldCheck">{lang === "ar" ? content.doctor_note.ar : content.doctor_note.en}</Notice>}
+      <footer className="border-t border-line pt-3 text-xs font-semibold text-ink-soft">{tr(DISCLAIMER_AR, DISCLAIMER_EN)}</footer>
+    </article>
+  );
+}
+
 export function RecipeView({ content, actions }: { content: RecipeContent; actions?: ReactNode }) {
   const { tr, lang } = useApp();
   const r = content.recipe;
@@ -102,7 +144,7 @@ export function RecipeView({ content, actions }: { content: RecipeContent; actio
   );
 }
 
-type PriceItem = { key: "plan_monthly" | "pack_small" | "pack_large"; kind: "plan" | "pack"; pricePi: number; credits: number; days: number };
+type PriceItem = { key: "plan_monthly" | "pack_small" | "pack_large"; kind: "plan" | "pack"; pricePi: number; usd?: number; credits: number; days: number };
 
 export const ITEM_COPY = {
   plan_monthly: { ar: "الخطة الشهرية", en: "Monthly plan", icon: "sparkles" },
@@ -112,13 +154,21 @@ export const ITEM_COPY = {
 
 export function itemBenefits(i: PriceItem, tr: (a: string, e: string) => string): string[] {
   return i.kind === "plan"
-    ? [tr(`${i.credits} كريدت شهريًا للشيف AI`, `${i.credits} AI Chef credits per month`), tr("نظام غذائي شخصي يتجدد كل أسبوع", "Personal diet plan refreshed weekly"), tr("تقرير أسبوعي مفصّل", "Weekly report"), tr(`صالحة ${i.days} يومًا من تاريخ الدفع`, `Valid ${i.days} days from payment`)]
-    : [tr(`${i.credits} كريدت للشيف AI`, `${i.credits} AI Chef credits`), tr("بدون تاريخ انتهاء", "Never expires"), tr("وصفة جديدة = ١ كريدت", "One new recipe = 1 credit")];
+    ? [tr(`${i.credits} طلب AI شهريًا (وجبات، تمارين، تحديات)`, `${i.credits} AI requests per month (meals, workouts, challenges)`), tr("نظام غذائي شخصي يتجدد كل أسبوع", "Personal diet plan refreshed weekly"), tr("تقرير أسبوعي مفصّل", "Weekly report"), tr(`صالحة ${i.days} يومًا من تاريخ الدفع`, `Valid ${i.days} days from payment`)]
+    : [tr(`${i.credits} طلب AI (وجبات، تمارين، تحديات)`, `${i.credits} AI requests (meals, workouts, challenges)`), tr("بدون تاريخ انتهاء", "Never expires"), tr("كل طلب جديد = ١ كريدت، والأسئلة عليه مجانية", "Each new request = 1 credit; follow-up questions are free")];
 }
 
 /** Pi payment sheet for plan and pack purchases (U2A only). The server verifies before granting anything. */
-export function PaySheet({ item, onClose, onPaid }: { item: PriceItem | null; onClose: () => void; onPaid: () => void }) {
+export function PaySheet({ item: itemIn, onClose, onPaid }: { item: PriceItem | null; onClose: () => void; onPaid: () => void }) {
   const { tr, me, toast } = useApp();
+  const [fresh, setFresh] = useState<PriceItem | null>(null);
+  const [rate, setRate] = useState<number | null>(null);
+  useEffect(() => {
+    setFresh(null);
+    if (!itemIn) return;
+    api<{ items: PriceItem[]; rate: { usdPerPi: number } }>("/pricing").then((r) => { setFresh(r.items.find((x) => x.key === itemIn.key) ?? null); setRate(r.rate.usdPerPi); }).catch(() => {});
+  }, [itemIn]);
+  const item = fresh ?? itemIn;
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   if (!item) return null;
@@ -154,7 +204,7 @@ export function PaySheet({ item, onClose, onPaid }: { item: PriceItem | null; on
         <ul className="space-y-1.5 text-sm font-semibold">
           {itemBenefits(item, tr).map((b) => (<li key={b} className="flex items-center gap-2"><Icon name="check" size={16} className="text-brand-600" />{b}</li>))}
         </ul>
-        <Notice tone="info">{tr("دفعة واحدة من محفظتك إلى التطبيق. لا يوجد تجديد تلقائي: تجدّد يدويًا عند الانتهاء.", "A single payment from your wallet to the app. There is no automatic billing; you renew manually.")}</Notice>
+        <Notice tone="info">{tr("السعر محسوب لحظيًا بسعر Pi في OKX ومقرّب لأعلى لرقم صحيح، ويُثبَّت لمدة ٣٠ دقيقة بعد الضغط على ادفع. دفعة واحدة بلا تجديد تلقائي.", "The price follows the live Pi price on OKX, rounded up to a whole Pi, and is locked for 30 minutes once you tap pay. One payment, no auto-renewal.")}{item.usd !== undefined && rate ? <span className="mt-1 block text-xs">{tr(`≈ ${item.usd} دولار · 1 Pi ≈ ${rate.toFixed(4)} دولار`, `≈ $${item.usd} · 1 Pi ≈ $${rate.toFixed(4)}`)}</span> : null}</Notice>
         {msg && <Notice tone="bad">{msg}</Notice>}
         <button className="btn-primary w-full" onClick={pay} disabled={busy}>
           {busy ? <Spinner /> : <Icon name="pi" />} {busy ? tr("جاري الدفع…", "Processing…") : tr(`ادفع ${item.pricePi} Pi`, `Pay ${item.pricePi} Pi`)}

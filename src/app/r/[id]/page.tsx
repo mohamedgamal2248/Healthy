@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/server/supabase";
-import { RecipeView, type RecipeContent } from "@/components/Domain";
+import { ContentView, type CoachContent } from "@/components/Domain";
 import { VerifiedBadge } from "@/components/ui";
 import { Logo } from "@/components/Icon";
 
@@ -27,7 +27,7 @@ export default async function SharedRecipe({ params }: { params: Promise<{ id: s
         </div>
         <Link href="/" className="btn-primary mt-3 w-full">{lang === "ar" ? "جرّب التطبيق" : "Try the app"}</Link>
       </div>
-      <RecipeView content={r.content as RecipeContent} />
+      <ContentView content={r.content as CoachContent} />
     </div>
   );
 }
