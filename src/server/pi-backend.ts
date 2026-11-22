@@ -59,6 +59,9 @@ export function isKycVerified(me: PiMe): boolean {
 
 export const getPayment = (id: string) => piFetch<PiPayment>(`/payments/${encodeURIComponent(id)}`, { headers: { Authorization: `Key ${apiKey()}` } });
 
+export const cancelPayment = (id: string) =>
+  piFetch<PiPayment>(`/payments/${encodeURIComponent(id)}/cancel`, { method: "POST", headers: { Authorization: `Key ${apiKey()}`, "Content-Type": "application/json" }, body: "{}" });
+
 export const approvePayment = (id: string) =>
   piFetch<PiPayment>(`/payments/${encodeURIComponent(id)}/approve`, { method: "POST", headers: { Authorization: `Key ${apiKey()}`, "Content-Type": "application/json" }, body: "{}" });
 

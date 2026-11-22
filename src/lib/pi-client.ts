@@ -28,12 +28,10 @@ function init() {
 }
 
 /** A payment left open by an earlier session: finish it on the server (which re-verifies everything). */
-async function recoverIncomplete(p: PiPaymentDTO) {
-  try {
-    if (p.transaction?.txid) await api("/payments/complete", { body: { paymentId: p.identifier, txid: p.transaction.txid } });
-  } catch {
-    /* surfaced on the wallet screen if still pending */
-  }
+let pendingRecovery: Promise<void> = Promise.resolve();
+function recoverIncomplete(p: PiPaymentDTO) {
+  // Server decides: complete it if the transaction exists, otherwise cancel the stuck payment.
+  pendingRecovery = api("/payments/incomplete", { body: { paymentId: p.identifier } }).then(() => undefined, () => undefined);
 }
 
 export async function piSignIn(): Promise<string> {
@@ -49,6 +47,14 @@ export type PayResult = { ok: true } | { ok: false; reason: "cancelled" | "error
 export async function payWithPi(item: "plan_monthly" | "pack_small" | "pack_large"): Promise<PayResult> {
   if (!window.Pi) return { ok: false, reason: "error", ar: "افتح التطبيق من Pi Browser لإتمام الدفع.", en: "Open the app in Pi Browser to pay." };
   init();
+  // A saved app session does not mean the Pi SDK is authenticated in this page load. Without the "payments"
+  // scope (or with an unfinished earlier payment) createPayment fails, so authenticate first and settle leftovers.
+  try {
+    await window.Pi.authenticate(["username", "payments"], recoverIncomplete);
+    await pendingRecovery;
+  } catch (e) {
+    return { ok: false, reason: "error", ar: "تعذّر تفعيل صلاحية الدفع من Pi. أعد المحاولة.", en: `Could not enable Pi payments (${e instanceof Error ? e.message.slice(0, 60) : "auth"}). Please retry.` };
+  }
   const purchase = await api<{ purchaseId: string; amount: number; memo: string; metadata: Record<string, unknown> }>("/purchases", { body: { item } });
   return new Promise<PayResult>((resolve) => {
     let settled = false;
@@ -58,6 +64,7 @@ export async function payWithPi(item: "plan_monthly" | "pack_small" | "pack_larg
         resolve(r);
       }
     };
+    try {
     window.Pi!.createPayment(
       { amount: purchase.amount, memo: purchase.memo, metadata: purchase.metadata },
       {
@@ -73,11 +80,16 @@ export async function payWithPi(item: "plan_monthly" | "pack_small" | "pack_larg
           api("/payments/cancel", { body: { purchaseId: purchase.purchaseId, reason: "cancelled" } }).catch(() => {});
           done({ ok: false, reason: "cancelled" });
         },
-        onError: () => {
+        onError: (error) => {
           api("/payments/cancel", { body: { purchaseId: purchase.purchaseId, reason: "error" } }).catch(() => {});
-          done({ ok: false, reason: "error" });
+          const m = (error?.message ?? "").slice(0, 80);
+          done({ ok: false, reason: "error", ar: `تعذّر إتمام الدفع${m ? ` (${m})` : ""}. لم يتم منح أي شيء.`, en: `Payment could not be completed${m ? ` (${m})` : ""}. Nothing was granted.` });
         },
       },
     );
+    } catch (e) {
+      api("/payments/cancel", { body: { purchaseId: purchase.purchaseId, reason: "error" } }).catch(() => {});
+      done({ ok: false, reason: "error", ar: "تعذّر بدء الدفع من Pi. أعد المحاولة.", en: `Could not start the Pi payment (${e instanceof Error ? e.message.slice(0, 60) : "error"}).` });
+    }
   });
 }

@@ -3,7 +3,7 @@ import { HttpError, E } from "./http";
 import type { Auth } from "./auth";
 import { PRICING, isItemKey } from "@/config/pricing";
 import { quote } from "./pi-price";
-import { approvePayment, completePayment, getPayment, type PiPayment } from "./pi-backend";
+import { approvePayment, cancelPayment, completePayment, getPayment, type PiPayment } from "./pi-backend";
 import { completedProperly, memoFor, paymentMismatch, type PurchaseRef } from "./payment-verify";
 
 const UUID_RE = /^[0-9a-f-]{36}$/;
@@ -110,4 +110,24 @@ export async function reconcileMine(a: Auth): Promise<void> {
   for (const r of rows) {
     try { await reconcileOne({ username: a.username, uid: a.uid }, r.id, r.pi_payment_id); } catch (e) { console.error("[reconcile]", r.id, e instanceof Error ? e.message : e); }
   }
+}
+
+/**
+ * Pi reports a payment the app never finished ("incomplete payment"). If its transaction exists we complete it
+ * (fully re-verified); otherwise we cancel it so the user can start a new payment. Only the payer can trigger this.
+ */
+export async function handleIncomplete(a: Payer, paymentId: string) {
+  const payment = await getPayment(paymentId);
+  if (payment.user_uid !== a.uid) throw payErr("wrong_payer");
+  const pid = String((payment.metadata as { purchaseId?: unknown } | undefined)?.purchaseId ?? "");
+  if (!UUID_RE.test(pid)) throw payErr("wrong_memo");
+  const row = must(await db().from("hl_purchases").select("id,username,status").eq("id", pid).maybeSingle()) as { id: string; username: string; status: string } | null;
+  if (!row || row.username !== a.username) throw payErr("wrong_payer");
+  if (payment.transaction?.txid) {
+    await complete(a, paymentId, payment.transaction.txid);
+    return { result: "completed" as const };
+  }
+  if (!payment.status.cancelled && !payment.status.user_cancelled && !payment.status.developer_completed) await cancelPayment(paymentId);
+  await db().from("hl_purchases").update({ status: "cancelled", fail_reason: "incomplete_cancelled" }).eq("id", row.id).in("status", ["pending", "approved"]);
+  return { result: "cancelled" as const };
 }
