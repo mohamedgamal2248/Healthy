@@ -9,7 +9,7 @@ import { Sheet, Spinner } from "./ui";
 const MAIN = [
   { href: "/today", icon: "home", ar: "اليوم", en: "Today" },
   { href: "/meals", icon: "utensils", ar: "وجبات", en: "Meals" },
-  { href: "/chef", icon: "chef", ar: "الشيف AI", en: "AI Chef" },
+  { href: "/chef", icon: "sparkles", ar: "الكوتش", en: "Coach" },
   { href: "/progress", icon: "chart", ar: "تقدمي", en: "Progress" },
 ];
 const MORE = [

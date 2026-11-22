@@ -88,7 +88,7 @@ function Inner() {
           <h2 className="h2">{tr("وصفات المجتمع", "Community recipes")}</h2>
           <div className="flex gap-1.5">{([["top", tr("الأفضل", "Top")], ["new", tr("الأحدث", "Newest")]] as const).map(([k, l]) => (<button key={k} className="chip" aria-pressed={rtab === k} onClick={() => setRtab(k)}>{l}</button>))}</div>
         </div>
-        {(rtab === "top" ? d.topRecipes : d.latestRecipes).length === 0 ? <EmptyState icon="chef" title={tr("لا وصفات بعد", "No recipes yet")} body={tr("ولّد وصفة من الشيف AI ثم اضغط «انشر في المجتمع» لتظهر هنا ويحفظها الآخرون.", "Generate a recipe with the AI Chef, then press Publish to community so others can like and save it.")} /> : (
+        {(rtab === "top" ? d.topRecipes : d.latestRecipes).length === 0 ? <EmptyState icon="chef" title={tr("لا وصفات بعد", "No recipes yet")} body={tr("ولّد وصفة من الكوتش ثم اضغط «انشر في المجتمع» لتظهر هنا ويحفظها الآخرون.", "Generate a recipe with the AI Coach, then press Publish to community so others can like and save it.")} /> : (
           <ul className="space-y-2.5">{(rtab === "top" ? d.topRecipes : d.latestRecipes).map((r) => (
             <li key={r.id} className="card flex items-center gap-3 !p-3.5">
               <a href={`/r/${r.id}`} className="min-w-0 flex-1"><p className="truncate font-extrabold">{r.title}</p><p className="muted flex items-center gap-2"><bdi dir="ltr">@{r.author}</bdi><VerifiedBadge small /></p></a>

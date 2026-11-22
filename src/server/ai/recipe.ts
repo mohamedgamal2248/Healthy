@@ -39,6 +39,7 @@ const RULES = `قواعد صارمة:
 - أجب بالعربية (لهجة مبسّطة) فقط، واستخدم مكونات رخيصة ومتوفرة في مصر (فول، عدس، بيض، جبنة قريش، خضار موسمية، أرز، فراخ، تونة...) إلا إذا طلب المستخدم غير ذلك.
 - أنت تقدّم إرشادات غذائية عامة فقط. ممنوع التشخيص أو العلاج أو ذكر أي دواء أو مكمل غذائي أو جرعة، وممنوع التوصية بالصيام. ممنوع ادعاء أن الأكل يعالج أو يشفي مرضًا.
 - إذا طلب المستخدم تشخيصًا أو علاجًا أو نظامًا غذائيًا لطفل، أرجع فقط: {"refusal": "${REFUSAL_AR}"}
+- نطاقك الأكل الصحي فقط في هذا الطلب؛ أي طلب خارج الأكل والصحة العامة (برمجة، سياسة، ترجمة…) أرجع فيه فقط: {"refusal": "أنا كوتش للصحة فقط: أكل صحي، تمارين بسيطة، وتحديات وعادات يومية."}
 - السعرات والبروتين لحصة واحدة، أرقام واقعية.
 - لو الطلب عن طبق أو مكوّن غير مألوف ولا تعرف طريقة تحضيره المعتادة، استخدم أداة البحث على الويب للتأكد من الطريقة، ثم اكتب وصفتك الخاصة بصياغتك (لا تنسخ نصًا من أي موقع).
 - أرجع كائن JSON واحدًا فقط بدون أي نص قبله أو بعده.`;
@@ -54,7 +55,7 @@ function profileLines(p: ProfileContext): string {
 }
 
 export function recipeSystemPrompt(p: ProfileContext): string {
-  return `أنت "الشيف AI" في تطبيق صحتي لمستخدمي Pi في مصر. تكتب وصفة واحدة كاملة بصيغة JSON بالشكل التالي بالضبط:\n${SHAPE}\n\n${RULES}\n${profileLines(p)}`;
+  return `أنت "الكوتش" في تطبيق صحتي لمستخدمي Pi في مصر. تكتب وصفة واحدة كاملة بصيغة JSON بالشكل التالي بالضبط:\n${SHAPE}\n\n${RULES}\n${profileLines(p)}`;
 }
 
 function validate(raw: unknown): Recipe {
@@ -72,7 +73,9 @@ export async function generateRecipe(userText: string, profile: ProfileContext):
   const system = recipeSystemPrompt(profile);
   const messages: AiMessage[] = [{ role: "user", content: userText }];
   let lastErr: unknown;
+  const t0 = Date.now();
   for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0 && Date.now() - t0 > 35_000) break; // never retry past the time budget
     try {
       const text = await callModel({ system, messages, webSearch: true, maxTokens: 2500 });
       return validate(extractJson(text));
@@ -85,8 +88,8 @@ export async function generateRecipe(userText: string, profile: ProfileContext):
   throw new AiUnusable(lastErr instanceof Error ? lastErr.message : "unusable");
 }
 
-export async function answerFollowUp(recipe: Recipe, history: AiMessage[], question: string, profile: ProfileContext): Promise<string> {
-  const system = `أنت "الشيف AI" في تطبيق صحتي. المستخدم يسأل عن هذه الوصفة تحديدًا:\n${JSON.stringify(recipe)}\n\nأجب بالعربية في فقرة قصيرة وعملية (٣ إلى ٥ جمل). إرشادات غذائية عامة فقط: ممنوع التشخيص أو العلاج أو ذكر دواء أو مكمل أو جرعة أو الصيام. إذا سُئلت عن الأطفال فاذكر معلومة عامة وانصح بسؤال طبيب الأطفال ولا تضع نظامًا لطفل. إذا طُلب منك تشخيص أو علاج اعتذر بلطف.\n${profileLines(profile)}`;
+export async function answerFollowUp(recipe: unknown, history: AiMessage[], question: string, profile: ProfileContext): Promise<string> {
+  const system = `أنت "الكوتش" في تطبيق صحتي. المستخدم يسأل عن هذا المحتوى تحديدًا (وصفة أو تمرين أو تحدٍّ):\n${JSON.stringify(recipe)}\n\nأجب بالعربية في فقرة قصيرة وعملية (٣ إلى ٥ جمل). إرشادات غذائية عامة فقط: ممنوع التشخيص أو العلاج أو ذكر دواء أو مكمل أو جرعة أو الصيام. إذا سُئلت عن الأطفال فاذكر معلومة عامة وانصح بسؤال طبيب الأطفال ولا تضع نظامًا لطفل. إذا طُلب منك تشخيص أو علاج اعتذر بلطف.\n${profileLines(profile)}`;
   const text = (await callModel({ system, messages: [...history, { role: "user", content: question }], maxTokens: 600 })).trim();
   if (!text || !outputIsSafe(text)) throw new AiUnusable("followup");
   return text;

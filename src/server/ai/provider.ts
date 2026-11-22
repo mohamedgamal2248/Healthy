@@ -1,5 +1,7 @@
 // The only module that talks to a model provider. Provider, model and key come from env and never
 // reach the client. If nothing is configured we throw AiNotConfigured -- we never fabricate AI output.
+import { AI_LIMITS } from "@/config/pricing";
+
 export class AiNotConfigured extends Error {
   constructor() {
     super("AI provider not configured");
@@ -55,7 +57,7 @@ export async function callModel(opts: { system: string; messages: AiMessage[]; m
               tools: [{ type: "web_search", search_context_size: "low" }],
               ...cache,
             }),
-            signal: AbortSignal.timeout(100000),
+            signal: AbortSignal.timeout(AI_LIMITS.timeoutMs - 10_000),
           });
           if (res.ok) {
             const data = (await res.json()) as { output?: { type: string; content?: { type: string; text?: string }[] }[] };
@@ -77,7 +79,7 @@ export async function callModel(opts: { system: string; messages: AiMessage[]; m
           messages: [{ role: "system", content: opts.system }, ...opts.messages],
           ...cache,
         }),
-        signal: AbortSignal.timeout(100000),
+        signal: AbortSignal.timeout(AI_LIMITS.timeoutMs - 10_000),
       });
       if (!res.ok) throw new AiProviderError(`meta ${res.status}`);
       const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
@@ -89,7 +91,7 @@ export async function callModel(opts: { system: string; messages: AiMessage[]; m
         method: "POST",
         headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({ model, max_tokens: maxTokens, temperature, system: opts.system, messages: opts.messages }),
-        signal: AbortSignal.timeout(55000),
+        signal: AbortSignal.timeout(AI_LIMITS.timeoutMs - 10_000),
       });
       if (!res.ok) throw new AiProviderError(`anthropic ${res.status}`);
       const data = (await res.json()) as { content?: { type: string; text?: string }[] };
@@ -101,7 +103,7 @@ export async function callModel(opts: { system: string; messages: AiMessage[]; m
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
       body: JSON.stringify({ model, temperature, max_tokens: maxTokens, messages: [{ role: "system", content: opts.system }, ...opts.messages] }),
-      signal: AbortSignal.timeout(55000),
+      signal: AbortSignal.timeout(AI_LIMITS.timeoutMs - 10_000),
     });
     if (!res.ok) throw new AiProviderError(`openai ${res.status}`);
     const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };

@@ -2,14 +2,14 @@
 import { useEffect, useState } from "react";
 import { useApp } from "./AppProvider";
 
-// Animated cooking pot (inline SVG + CSS keyframes) shown while the AI Chef is working.
+// Animated cooking pot (inline SVG + CSS keyframes) shown while the AI Coach is working.
 export function CookingAnimation({ compact }: { compact?: boolean }) {
   const { tr } = useApp();
   const lines = [
-    tr("الشيف بيجهّز المكونات…", "The chef is prepping the ingredients…"),
-    tr("بنقلّب الوصفة على نار هادية…", "Stirring the recipe on a low flame…"),
-    tr("بنظبط السعرات والبروتين…", "Balancing calories and protein…"),
-    tr("لمسات أخيرة وتتقدّم الوصفة…", "Final touches, almost ready…"),
+    tr("الكوتش بيجمّع المعلومات…", "The coach is gathering what it needs…"),
+    tr("بنقلّب الطلب على نار هادية…", "Stirring it on a low flame…"),
+    tr("بنظبط التفاصيل والكميات…", "Balancing the details…"),
+    tr("لمسات أخيرة وجاهز…", "Final touches, almost ready…"),
   ];
   const [i, setI] = useState(0);
   useEffect(() => {

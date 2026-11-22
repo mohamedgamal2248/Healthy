@@ -5,7 +5,7 @@ import { hasActivePlan, getBalances } from "@/server/credits";
 import { addDays, weekStart } from "@/lib/dates";
 import { PLAN_REGENERATE_COST } from "@/config/pricing";
 
-export const maxDuration = 300;
+export const maxDuration = 120;
 
 /** Read-only: free users get `subscribed: false` (they see the offer, never a generated plan). */
 export const GET = route(async (req) => {

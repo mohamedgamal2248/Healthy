@@ -2,6 +2,7 @@ import { db, must } from "./supabase";
 import { HttpError, E } from "./http";
 import type { Auth } from "./auth";
 import { PRICING, isItemKey } from "@/config/pricing";
+import { quote } from "./pi-price";
 import { approvePayment, completePayment, getPayment, type PiPayment } from "./pi-backend";
 import { completedProperly, memoFor, paymentMismatch, type PurchaseRef } from "./payment-verify";
 
@@ -12,17 +13,18 @@ type PurchaseRow = PurchaseRef & { status: string };
 export async function createPurchase(a: Auth, itemKey: unknown) {
   if (!isItemKey(itemKey)) throw E.bad("عنصر غير معروف.", "Unknown item.");
   const item = PRICING[itemKey];
+  const q = await quote(item.key); // live OKX rate, rounded up to a whole Pi
   const row = must(
-    await db().from("hl_purchases").insert({ username: a.username, kind: item.kind, item_key: item.key, amount_pi: item.pricePi, status: "pending" }).select("id").single(),
+    await db().from("hl_purchases").insert({ username: a.username, kind: item.kind, item_key: item.key, amount_pi: q.pricePi, status: "pending" }).select("id").single(),
   ) as { id: string };
   // Amount and memo are decided on the server; the client only passes them to the Pi SDK.
-  return { purchaseId: row.id, amount: item.pricePi, memo: memoFor(item.key), metadata: { purchaseId: row.id, item: item.key } };
+  return { purchaseId: row.id, amount: q.pricePi, usd: q.usd, rate: q.rate.usdPerPi, memo: memoFor(item.key), metadata: { purchaseId: row.id, item: item.key } };
 }
 
 async function purchaseForPayment(a: Auth, payment: PiPayment): Promise<PurchaseRow> {
   const pid = String((payment.metadata as { purchaseId?: unknown } | undefined)?.purchaseId ?? "");
   if (!UUID_RE.test(pid)) throw payErr("wrong_memo");
-  const p = must(await db().from("hl_purchases").select("id,username,kind,item_key,amount_pi,pi_payment_id,status").eq("id", pid).maybeSingle()) as PurchaseRow | null;
+  const p = must(await db().from("hl_purchases").select("id,username,kind,item_key,amount_pi,pi_payment_id,status,created_at").eq("id", pid).maybeSingle()) as PurchaseRow | null;
   if (!p || p.username !== a.username) throw payErr("wrong_payer");
   return p;
 }

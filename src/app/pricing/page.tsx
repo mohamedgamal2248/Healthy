@@ -8,7 +8,7 @@ import { Notice, PageHeader } from "@/components/ui";
 
 export default function PricingPage() {
   const { tr, me, refresh, signIn, signingIn } = useApp();
-  const [data, setData] = useState<{ items: PriceItem[]; trialCredits: number; network: string } | null>(null);
+  const [data, setData] = useState<{ items: PriceItem[]; trialCredits: number; network: string; rate?: { usdPerPi: number; source: string; mode: string } } | null>(null);
   const [buy, setBuy] = useState<PriceItem | null>(null);
   const [expires, setExpires] = useState<string | null>(null);
   useEffect(() => { api<typeof data>("/pricing").then(setData).catch(() => {}); }, []);
@@ -20,6 +20,7 @@ export default function PricingPage() {
     <div className="mx-auto max-w-6xl py-6">
       <PageHeader title={tr("الأسعار والباقات", "Pricing and packs")} sub={tr("ادفع بـ Pi مرة واحدة، وتتفعّل الخدمة فور التحقق من الدفع على الخادم.", "Pay once with Pi; the service activates as soon as the server verifies the payment.")} />
       {data?.network !== "mainnet" && <div className="mb-4"><Notice tone="info">{tr("التطبيق الآن على شبكة Pi التجريبية (Testnet): المدفوعات بعملة Pi التجريبية.", "The app is on the Pi Testnet: payments use Test Pi.")}</Notice></div>}
+      {data?.rate && <div className="mb-4"><Notice tone="ok" icon="coin">{tr(`الأسعار بالدولار وتتحوّل لـ Pi بسعر اللحظة من OKX: 1 Pi ≈ ${data.rate.usdPerPi.toFixed(4)} دولار، مقرّبة لأعلى لرقم صحيح. السعر يتثبت ٣٠ دقيقة عند الشراء.`, `Prices are set in USD and converted to Pi at the live OKX rate: 1 Pi ≈ $${data.rate.usdPerPi.toFixed(4)}, rounded up to a whole Pi. The price locks for 30 minutes at purchase.`)}</Notice></div>}
       {me && (
         <div className="mb-6 grid gap-3 md:grid-cols-2">
           <CreditBalance b={me.balances} />

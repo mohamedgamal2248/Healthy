@@ -72,8 +72,8 @@ test("week plan: 7 days x 3 meals, respects condition tags and 1,200 floor", () 
   }
 });
 
-const purchase = { id: "11111111-1111-1111-1111-111111111111", username: "alice", kind: "pack" as const, item_key: "pack_small", amount_pi: 1, pi_payment_id: null };
-const pay = (over: Record<string, unknown> = {}) => ({ identifier: "P1", user_uid: "uid-a", amount: 1, memo: memoFor("pack_small"), direction: "user_to_app", status: { developer_approved: true, transaction_verified: true, developer_completed: false, cancelled: false, user_cancelled: false }, transaction: { txid: "TX", verified: true }, ...over }) as never;
+const purchase = { id: "11111111-1111-1111-1111-111111111111", username: "alice", kind: "pack" as const, item_key: "pack_small", amount_pi: 12, pi_payment_id: null, created_at: new Date().toISOString() };
+const pay = (over: Record<string, unknown> = {}) => ({ identifier: "P1", user_uid: "uid-a", amount: 12, memo: memoFor("pack_small"), direction: "user_to_app", status: { developer_approved: true, transaction_verified: true, developer_completed: false, cancelled: false, user_cancelled: false }, transaction: { txid: "TX", verified: true }, ...over }) as never;
 
 test("payment verification rejects wrong amount / payer / memo / cancelled / direction", () => {
   assert.equal(paymentMismatch(pay(), purchase, "uid-a"), null);
@@ -82,7 +82,8 @@ test("payment verification rejects wrong amount / payer / memo / cancelled / dir
     assert.equal(paymentMismatch(pay({ memo: memoFor("plan_monthly") }), purchase, "uid-a"), "wrong_memo");
   assert.equal(paymentMismatch(pay({ direction: "app_to_user" }), purchase, "uid-a"), "wrong_direction");
   assert.equal(paymentMismatch(pay({ status: { cancelled: true } }), purchase, "uid-a"), "cancelled");
-  assert.equal(paymentMismatch(pay(), { ...purchase, amount_pi: 0.1 }, "uid-a"), "stale_price"); // row tampered with
+  assert.equal(paymentMismatch(pay(), { ...purchase, amount_pi: 0.1 }, "uid-a"), "bad_quote"); // quotes are whole Pi >= 1
+  assert.equal(paymentMismatch(pay(), { ...purchase, created_at: new Date(Date.now() - 31 * 60_000).toISOString() }, "uid-a"), "quote_expired");
   assert.equal(completedProperly(pay({ status: { developer_completed: true, cancelled: false } }), "TX"), true);
   assert.equal(completedProperly(pay(), "TX"), false); // not completed yet
   assert.equal(PRICING.plan_monthly.days, 30);
@@ -130,4 +131,13 @@ test("AI cache key is stable across punctuation/spacing and differs by goal/cond
 test("oversized AI input is refused before any request is made", async () => {
   process.env.AI_API_KEY = "k"; process.env.AI_PROVIDER = "meta";
   await assert.rejects(callModel({ system: "x".repeat(MAX_INPUT_TOKENS_ESTIMATE * 2 + 10), messages: [{ role: "user", content: "hi" }] }), /input too large/);
+});
+
+import { usdToPi } from "../src/server/pi-price";
+test("USD -> Pi rounds UP to a whole Pi and never below 1", () => {
+  assert.equal(usdToPi(0.6, 0.05411), 12); // 11.09 -> 12
+  assert.equal(usdToPi(2, 0.05411), 37); // 36.96 -> 37
+  assert.equal(usdToPi(1.5, 0.75), 2); // 2.0 exactly -> 2, 1.5 Pi would also round to 2
+  assert.equal(usdToPi(1.5, 1), 2);
+  assert.equal(usdToPi(0.001, 5), 1);
 });
