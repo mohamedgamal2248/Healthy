@@ -22,7 +22,7 @@ export function FreeTierCard({ trial }: { trial: number }) {
   );
 }
 
-export function PricingGrid({ items, trial, onBuy, buyLabel, locked }: { items: PriceItem[]; trial: number; onBuy?: (i: PriceItem) => void; buyLabel?: (i: PriceItem) => string; locked?: boolean }) {
+export function PricingGrid({ items, trial, onBuy, buyLabel, locked, lockedKeys = [], lockedNote }: { items: PriceItem[]; trial: number; onBuy?: (i: PriceItem) => void; buyLabel?: (i: PriceItem) => string; locked?: boolean; lockedKeys?: string[]; lockedNote?: (i: PriceItem) => string }) {
   const { tr } = useApp();
   const order: PriceItem["key"][] = ["plan_monthly", "pack_small", "pack_large"];
   const sorted = order.map((k) => items.find((i) => i.key === k)).filter(Boolean) as PriceItem[];
@@ -38,11 +38,17 @@ export function PricingGrid({ items, trial, onBuy, buyLabel, locked }: { items: 
             <p className="flex items-center gap-2 text-sm font-extrabold text-ink-soft"><Icon name={copy.icon} size={16} className="text-brand-600" />{tr(copy.ar, copy.en)}</p>
             <p className="mt-1 text-3xl font-extrabold tabular-nums">{i.pricePi} <span className="text-lg">Pi</span>{i.kind === "plan" && <span className="text-sm font-bold text-ink-soft"> / {tr("٣٠ يومًا", "30 days")}</span>}</p>
             <ul className="mt-4 flex-1 space-y-2 text-sm font-semibold">{itemBenefits(i, tr).map((b) => (<li key={b} className="flex gap-2"><Icon name="check" size={16} className="mt-1 shrink-0 text-brand-600" />{b}</li>))}</ul>
-            {onBuy && (
-              <button className={`mt-4 w-full ${featured ? "btn-primary" : "btn-soft"}`} onClick={() => onBuy(i)} disabled={locked}>
-                <Icon name="pi" size={18} /> {buyLabel ? buyLabel(i) : tr("اشترِ الآن", "Buy now")}
-              </button>
-            )}
+            {onBuy && (() => {
+              const off = lockedKeys.includes(i.key);
+              return (
+                <>
+                  <button className={`mt-4 w-full ${off ? "btn !bg-canvas !text-ink-soft border border-line opacity-60" : featured ? "btn-primary" : "btn-soft"}`} onClick={() => onBuy(i)} disabled={locked || off} aria-disabled={locked || off}>
+                    <Icon name={off ? "lock" : "pi"} size={18} /> {buyLabel ? buyLabel(i) : tr("اشترِ الآن", "Buy now")}
+                  </button>
+                  {off && lockedNote && <p className="mt-2 text-center text-xs font-bold text-ink-soft">{lockedNote(i)}</p>}
+                </>
+              );
+            })()}
           </div>
         );
       })}

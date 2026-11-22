@@ -33,7 +33,11 @@ function Inner() {
             <p className="muted">{tr("تنتهي في", "Ends on")} <b className="text-ink">{new Date(w.subscription.expires_at).toLocaleDateString(loc, { day: "numeric", month: "long", year: "numeric" })}</b></p>
           </>) : <p className="text-lg font-extrabold">{tr("غير مشترك", "No plan")}</p>}
           <p className="muted">{tr("لا تجديد تلقائي: التجديد دفعة جديدة تتم يدويًا.", "No auto-renewal: renewing is a new manual payment.")}</p>
-          <Link href="/pricing" className="btn-soft btn-sm mt-2">{active ? tr("تجديد الخطة", "Renew plan") : tr("الأسعار والباقات", "Plans and packs")}</Link>
+          {active ? (
+            <button className="btn btn-sm mt-2 border border-line !bg-canvas !text-ink-soft opacity-60" disabled aria-disabled><Icon name="lock" size={16} />{tr("التجديد متاح بعد انتهاء الخطة", "Renewal opens when the plan ends")}</button>
+          ) : (
+            <Link href="/pricing" className="btn-soft btn-sm mt-2">{w.subscription ? tr("تجديد الخطة", "Renew plan") : tr("الأسعار والباقات", "Plans and packs")}</Link>
+          )}
         </div>
       </div>
       <section>

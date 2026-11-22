@@ -27,7 +27,7 @@ export default function PricingPage() {
             <div className="flex-1">
               <p className="text-sm font-extrabold text-ink-soft">{tr("الخطة الشهرية", "Monthly plan")}</p>
               <p className="text-lg font-extrabold">{planActive && expires ? tr(`فعّالة حتى ${new Date(expires).toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric" })}`, `Active until ${new Date(expires).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`) : tr("غير مفعّلة", "Not active")}</p>
-              {planActive && <p className="muted">{tr("لا يوجد تجديد تلقائي: اضغط تجديد قبل الانتهاء أو بعده.", "No auto-renewal: renew manually before or after it ends.")}</p>}
+              {planActive && <p className="muted">{tr("لا يوجد تجديد تلقائي. يفتح زر التجديد عند انتهاء الـ ٣٠ يومًا.", "No auto-renewal. The renew button opens when the 30 days end.")}</p>}
             </div>
           </div>
         </div>
@@ -38,8 +38,10 @@ export default function PricingPage() {
           items={data.items}
           trial={data.trialCredits}
           locked={signingIn || (!!me && !verified)}
+          lockedKeys={planActive ? ["plan_monthly"] : []}
+          lockedNote={() => (expires ? tr(`التجديد متاح بعد ${new Date(expires).toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric" })}`, `Renewal opens on ${new Date(expires).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`) : "")}
           onBuy={(i) => (me ? setBuy(i) : signIn())}
-          buyLabel={(i) => (!me ? tr("سجّل الدخول للشراء", "Sign in to buy") : i.kind === "plan" ? (planActive ? tr("تجديد الخطة", "Renew plan") : tr("اشترك الآن", "Subscribe")) : tr("اشترِ الباقة", "Buy pack"))}
+          buyLabel={(i) => (!me ? tr("سجّل الدخول للشراء", "Sign in to buy") : i.kind === "plan" ? (planActive ? tr("الخطة فعّالة", "Plan active") : expires ? tr("تجديد الخطة", "Renew plan") : tr("اشترك الآن", "Subscribe")) : tr("اشترِ الباقة", "Buy pack"))}
         />
       )}
       <PaySheet item={buy} onClose={() => setBuy(null)} onPaid={() => { refresh(); api<{ subscription: { expires_at: string } | null }>("/wallet").then((w) => setExpires(w.subscription?.expires_at ?? null)).catch(() => {}); }} />
