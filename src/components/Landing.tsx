@@ -13,7 +13,7 @@ export function Landing({ items, trial, meal, challenge, ingredientsEn }: { item
   const steps = [
     { icon: "check", ar: "تحدي كل يوم", en: "A challenge every day", d_ar: "٣ تحديات صغيرة تبني عادة صحية وتحافظ على سلسلتك.", d_en: "Three small challenges that build habits and keep your streak alive." },
     { icon: "utensils", ar: "وجبات مصرية رخيصة", en: "Affordable meals", d_ar: "فطار وغدا وعشا من فول وعدس وبيض وقريش، بالسعرات والتكلفة.", d_en: "Breakfast, lunch and dinner from foul, lentils, eggs and cottage cheese, with calories and cost." },
-    { icon: "sparkles", ar: "الكوتش", en: "AI Coach", d_ar: "اطلب وجبة أو تمرينًا أو تحدي ٧ أيام واحصل على إجابة كاملة تناسبك بطلب واحد.", d_en: "Ask for a meal, a workout or a 7-day challenge and get a complete, personal answer for 1 request." },
+    { icon: "sparkles", ar: "AI", en: "AI", d_ar: "اطلب وجبة أو تمرينًا أو تحدي ٧ أيام واحصل على إجابة كاملة تناسبك بطلب واحد.", d_en: "Ask for a meal, a workout or a 7-day challenge and get a complete, personal answer for 1 request." },
     { icon: "plan", ar: "نظام غذائي شخصي", en: "A personal diet plan", d_ar: "خطة أسبوعية من ملفك الصحي تتجدد مع وزنك.", d_en: "A weekly plan from your own profile that updates with your weight." },
   ];
   return (
@@ -23,7 +23,7 @@ export function Landing({ items, trial, meal, challenge, ingredientsEn }: { item
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-sm font-extrabold text-brand-700 shadow-sm"><Icon name="shieldCheck" size={16} />{tr("لبايونيرز Pi الموثّقين", "For verified Pi Pioneers")}</span>
             <h1 className="mt-4 text-4xl font-extrabold leading-[1.25] text-brand-900 sm:text-5xl">{tr("صحتك تبدأ بتحدي صغير كل يوم", "Your health starts with one small challenge a day")}</h1>
-            <p className="mt-4 max-w-xl text-lg font-semibold text-ink-soft">{tr("تحديات يومية، وجبات صحية من مكونات رخيصة، وشيف ذكاء اصطناعي ونظام غذائي شخصي. ادفع بـ Pi فقط لما تحتاج الخدمات المدفوعة.", "Daily challenges, healthy meals from affordable ingredients, an AI coach for meals, workouts and challenges, and a personal diet plan. Pay with Pi only when you want the paid services.")}</p>
+            <p className="mt-4 max-w-xl text-lg font-semibold text-ink-soft">{tr("تحديات يومية، وجبات صحية من مكونات رخيصة، وشيف ذكاء اصطناعي ونظام غذائي شخصي. ادفع بـ Pi فقط لما تحتاج الخدمات المدفوعة.", "Daily challenges, healthy meals from affordable ingredients, AI for meals, workouts and challenges, and a personal diet plan. Pay with Pi only when you want the paid services.")}</p>
             <div className="mt-6 flex flex-wrap gap-3">
               {me ? (
                 <Link href="/today" className="btn-primary"><Icon name="home" />{tr("كمّل تحدي اليوم", "Continue today")}</Link>

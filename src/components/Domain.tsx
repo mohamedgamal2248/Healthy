@@ -93,7 +93,7 @@ export type CoachContent = Omit<RecipeContent, "recipe"> & {
   card?: { name: string; summary: string; level?: string; duration_min?: number; sections: { heading: string; items: string[] }[]; tips: string[] };
 };
 
-/** Picks the right view for an AI Coach result (recipe, workout or challenge). */
+/** Picks the right view for AI result (recipe, workout or challenge). */
 export function ContentView({ content, actions }: { content: CoachContent; actions?: ReactNode }) {
   if (content.kind === "scan" && content.scan) return <ScanView content={content} actions={actions} />;
   if (content.kind && content.kind !== "recipe" && content.card) return <CardView content={content} actions={actions} />;

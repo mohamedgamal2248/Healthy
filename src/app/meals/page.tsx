@@ -79,7 +79,7 @@ function MealsInner() {
       )}
 
       {meals === null ? <PageSkeleton /> : meals.length === 0 ? (
-        <EmptyState icon="utensils" title={mode === "have" && have.length === 0 ? tr("اختار مكوناتك", "Pick your ingredients") : tr("مفيش وجبات مطابقة", "No matching meals")} body={mode === "have" ? (have.length === 0 ? tr("اختار مكونات من فوق وهتظهر وجبات.", "Tick some ingredients above to see meals.") : tr("مفيش وجبة جاهزة بالمكونات دي في الكتالوج. اطلب من الكوتش وجبة جديدة منها.", "No catalogue meal fits these ingredients. Ask the coach to create one.")) : tr("جرّب تغيّر الفلاتر.", "Try changing the filters.")} />
+        <EmptyState icon="utensils" title={mode === "have" && have.length === 0 ? tr("اختار مكوناتك", "Pick your ingredients") : tr("مفيش وجبات مطابقة", "No matching meals")} body={mode === "have" ? (have.length === 0 ? tr("اختار مكونات من فوق وهتظهر وجبات.", "Tick some ingredients above to see meals.") : tr("مفيش وجبة جاهزة بالمكونات دي في الكتالوج. اطلب من AI وجبة جديدة منها.", "No catalogue meal fits these ingredients. Ask AI to create one.")) : tr("جرّب تغيّر الفلاتر.", "Try changing the filters.")} />
       ) : mode === "have" ? (
         <div className="space-y-6">
           {(() => {
@@ -112,7 +112,7 @@ function MealsInner() {
         <button onClick={() => setAiOpen(true)} className="card mt-6 flex w-full items-center gap-4 !border-brand-200 bg-gradient-to-br from-brand-50 to-white text-start transition hover:shadow-md">
           <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-white bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lg"><Icon name="sparkles" size={26} /></span>
           <span className="min-w-0 flex-1">
-            <span className="block font-extrabold">{tr("مش لاقي اللي عايزه؟ اطلب من الكوتش", "Can't find what you want? Ask the coach")}</span>
+            <span className="block font-extrabold">{tr("مش لاقي اللي عايزه؟ اطلب من AI", "Can't find what you want? Ask AI")}</span>
             <span className="muted block">{tr("وجبة جديدة من مكوناتك بالذات. بتخصم ١ كريدت (هنأكد معاك قبل الخصم).", "A brand-new meal from your exact ingredients. Uses 1 credit (we confirm before charging).")}</span>
           </span>
           <Icon name={lang === "ar" ? "chevronL" : "chevronR"} size={22} className="text-brand-600" />

@@ -9,7 +9,7 @@ import { CoachThinking } from "./CoachThinking";
 import { Notice, Sheet, Spinner } from "./ui";
 import { INGREDIENT_MAP } from "@/data/ingredients";
 
-/** "Create a meal from my ingredients with the AI Coach": explicit cost warning, then 1 request is spent. */
+/** "Create a meal from my ingredients with AI": explicit cost warning, then 1 request is spent. */
 export function IngredientsAiSheet({ open, onClose, keys }: { open: boolean; onClose: () => void; keys: string[] }) {
   const { tr, lang, me, refresh, errMsg, toast } = useApp();
   const router = useRouter();
@@ -38,13 +38,13 @@ export function IngredientsAiSheet({ open, onClose, keys }: { open: boolean; onC
   };
 
   return (
-    <Sheet open={open} onClose={busy ? () => {} : onClose} title={tr("اطلب وجبة من الكوتش", "Ask the coach for a meal")}>
+    <Sheet open={open} onClose={busy ? () => {} : onClose} title={tr("اطلب وجبة من AI", "Ask AI for a meal")}>
       {busy ? (
         <CoachThinking kind="recipe" />
       ) : (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-1.5">{names.map((n) => (<span key={n} className="rounded-full bg-brand-50 px-3 py-1 text-sm font-bold text-brand-800">{n}</span>))}</div>
-          <p className="muted">{tr("الكوتش هيبتكر وجبة جديدة مناسبة لهدفك من المكونات دي، بالسعرات والبروتين والخطوات.", "The coach will create a new meal for your goal from these ingredients, with calories, protein and steps.")}</p>
+          <p className="muted">{tr("AI هيبتكر وجبة جديدة مناسبة لهدفك من المكونات دي، بالسعرات والبروتين والخطوات.", "AI will create a new meal for your goal from these ingredients, with calories, protein and steps.")}</p>
           <Notice tone="warn" icon="bolt">
             <b>{tr("هيخصم ١ كريدت من رصيدك.", "This uses 1 AI request from your balance.")}</b>{" "}
             {tr(`رصيدك الحالي: ${total}. لو فشل الطلب يرجع الكريدت تلقائيًا.`, `Your balance: ${total}. If it fails, the request is refunded automatically.`)}

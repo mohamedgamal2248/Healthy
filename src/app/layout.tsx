@@ -8,7 +8,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
   title: "Healthy",
-  description: "Daily health challenges, healthy budget-friendly meals, an AI coach and personal diet plans for Pi Pioneers.",
+  description: "Daily health challenges, healthy budget-friendly meals, AI help and personal diet plans for Pi Pioneers.",
   icons: { icon: "/icon.svg" },
 };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#059669" };

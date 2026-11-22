@@ -107,7 +107,7 @@ function ChefInner() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 py-5">
-      <PageHeader title={tr("الكوتش", "AI Coach")} sub={tr("وجبات وتمارين وتحديات على مقاسك", "Meals, workouts and challenges made for you")} />
+      <PageHeader title={tr("AI", "AI")} sub={tr("وجبات وتمارين وتحديات على مقاسك", "Meals, workouts and challenges made for you")} />
       {!accepted && <Notice tone="warn" icon="user"><div className="flex flex-wrap items-center gap-3"><span>{tr("وافق على التنبيه الصحي في ملفك أولًا.", "Accept the health disclaimer in your profile first.")}</span><Link href="/profile" className="btn-primary btn-sm">{tr("افتح الملف", "Open profile")}</Link></div></Notice>}
 
       {recipe ? (
@@ -148,7 +148,7 @@ function ChefInner() {
                       <button className="flex min-h-28 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-brand-300 bg-brand-50 font-extrabold text-brand-800 transition active:scale-95" onClick={() => setCamOpen(true)}><Icon name="camera" size={32} />{tr("افتح الكاميرا", "Open camera")}</button>
                       <button className="flex min-h-28 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line bg-white font-extrabold text-ink-soft transition active:scale-95" onClick={() => fileRef.current?.click()}><Icon name="image" size={32} />{tr("اختر من الصور", "Choose a photo")}</button>
                     </div>
-                    <p className="muted">{tr("صوّر الوجبة من فوق وبإضاءة كويسة وخلّي الطبق كله ظاهر. الكوتش بيقدّر المكونات والسعرات والبروتين.", "Shoot the meal from above in good light with the whole plate visible. The coach estimates ingredients, calories and protein.")}</p>
+                    <p className="muted">{tr("صوّر الوجبة من فوق وبإضاءة كويسة وخلّي الطبق كله ظاهر. AI بيقدّر المكونات والسعرات والبروتين.", "Shoot the meal from above in good light with the whole plate visible. AI estimates ingredients, calories and protein.")}</p>
                   </>
                 )}
                 <Notice tone="warn" icon="bolt">
@@ -166,7 +166,7 @@ function ChefInner() {
             )}
             {refusal && <Notice tone="warn">{refusal}</Notice>}
             {total === 0 && accepted && <Notice tone="warn" icon="bolt"><div className="flex flex-wrap items-center gap-3"><span>{tr("رصيدك من الكريدت خلص. اكسب ٣ كريدت بتحدي البداية (٧ أيام) أو اشترِ كريدت.", "You're out of AI requests. Earn 3 with the 7-day starter challenge, or get more.")}</span><Link href="/today" className="btn-soft btn-sm">{tr("تحدي البداية", "Starter challenge")}</Link><Link href="/pricing" className="btn-sun btn-sm">{tr("اشترِ كريدت", "Get requests")}</Link></div></Notice>}
-            <button className="btn-primary w-full" onClick={generate} disabled={!canGenerate}>{busy ? <Spinner /> : <Icon name="sparkles" />}{busy ? tr("الكوتش بيجهّز طلبك…", "The coach is working on it…") : kind === "scan" ? tr("حلّل الوجبة — 1 كريدت", "Analyse meal — 1 credit") : tr("اطلب من الكوتش — 1 كريدت", "Ask the coach — 1 credit")}</button>
+            <button className="btn-primary w-full" onClick={generate} disabled={!canGenerate}>{busy ? <Spinner /> : <Icon name="sparkles" />}{busy ? tr("AI بيجهّز طلبك…", "AI is working on it…") : kind === "scan" ? tr("حلّل الوجبة — 1 كريدت", "Analyse meal — 1 credit") : tr("اطلب من AI — 1 كريدت", "Ask AI — 1 credit")}</button>
             <p className="muted text-center">{tr("لو فشل التوليد يرجع الكريدت تلقائيًا.", "If generation fails, your credit is refunded automatically.")}</p>
           </section>
           <DisclaimerBanner conditions={me?.profile.conditions} compact />

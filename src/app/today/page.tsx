@@ -28,7 +28,7 @@ function Checklist({ d }: { d: Today }) {
   const steps = [
     { done: d.checklist.profile, ar: "أكمل ملفك الصحي", en: "Complete your health profile", href: "/profile" },
     { done: d.checklist.challenge, ar: "أنجز أول تحدٍّ", en: "Complete your first challenge", href: "/today" },
-    { done: d.checklist.coach, ar: "جرّب الكوتش", en: "Try the coach", href: "/chef" },
+    { done: d.checklist.coach, ar: "جرّب AI", en: "Try AI", href: "/chef" },
     { done: d.starter.rewarded, ar: "أكمل تحدي البداية (٧ أيام)", en: "Finish the 7-day starter challenge", href: "/today" },
   ];
   const left = steps.filter((x) => !x.done).length;
@@ -95,7 +95,7 @@ function TodayInner() {
     <div className="space-y-6 py-5">
       {!d.profileReady && (
         <Notice tone="warn" icon="user">
-          <div className="flex flex-wrap items-center gap-3"><span>{tr("أكمل ملفك الصحي وأكّد التنبيه الصحي لتفعيل الكوتش والنظام الغذائي.", "Complete your health profile and accept the disclaimer to unlock the AI Coach and diet plan.")}</span><Link href="/profile" className="btn-primary btn-sm">{tr("أكمل الملف", "Complete profile")}</Link></div>
+          <div className="flex flex-wrap items-center gap-3"><span>{tr("أكمل ملفك الصحي وأكّد التنبيه الصحي لتفعيل AI والنظام الغذائي.", "Complete your health profile and accept the disclaimer to unlock AI and diet plan.")}</span><Link href="/profile" className="btn-primary btn-sm">{tr("أكمل الملف", "Complete profile")}</Link></div>
         </Notice>
       )}
       {d.reminder === "inactive" && (
@@ -144,7 +144,7 @@ function TodayInner() {
         <Link href="/chef" className="card flex items-center gap-4 !border-brand-200 bg-gradient-to-br from-brand-50 to-white transition hover:shadow-md">
           <span className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-full border-4 border-white bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lg"><Icon name="sparkles" size={26} /></span>
           <div className="flex-1">
-            <p className="h2">{tr("الكوتش", "Coach")}</p>
+            <p className="h2">{tr("AI", "AI")}</p>
             <p className="muted">{tr("وجبات وتمارين وتحديات على مقاسك", "Meals, workouts and challenges made for you")}</p>
           </div>
           <Icon name={lang === "ar" ? "chevronL" : "chevronR"} size={22} className="text-brand-600" />
