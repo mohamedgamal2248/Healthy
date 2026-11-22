@@ -30,7 +30,20 @@ export class AiNotConfigured extends Error {
 }
 export class AiProviderError extends Error {}
 
-export type AiMessage = { role: "user" | "assistant"; content: string };
+export type AiMessage = { role: "user" | "assistant"; content: string; /** data: URLs (jpeg/png/webp); sent as image parts to the model */ images?: string[] };
+
+const IMAGE_TOKENS_ESTIMATE = 2500; // generous estimate per image for the input-size guard
+type Part = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
+/** OpenAI-compatible message (Meta Chat Completions accepts the same image_url parts). */
+const toChatMessage = (m: AiMessage) => (m.images?.length ? { role: m.role, content: [{ type: "text", text: m.content } as Part, ...m.images.map((url) => ({ type: "image_url", image_url: { url } }) as Part)] } : { role: m.role, content: m.content });
+function toAnthropicMessage(m: AiMessage) {
+  if (!m.images?.length) return { role: m.role, content: m.content };
+  const parts = m.images.map((url) => {
+    const mm = /^data:(image\/[a-z+]+);base64,(.+)$/.exec(url);
+    return { type: "image", source: { type: "base64", media_type: mm?.[1] ?? "image/jpeg", data: mm?.[2] ?? "" } };
+  });
+  return { role: m.role, content: [...parts, { type: "text", text: m.content }] };
+}
 
 const provider = () => (process.env.AI_PROVIDER ?? "meta").toLowerCase();
 /** Meta Model API defaults to Muse Ember; other providers need AI_MODEL set explicitly. */
@@ -46,7 +59,7 @@ export const MAX_OUTPUT_TOKENS = 12_000;
 const estimateTokens = (s: string) => Math.ceil(s.length / 2); // conservative for Arabic
 
 export async function callModel(opts: { system: string; messages: AiMessage[]; maxTokens?: number; temperature?: number; webSearch?: boolean }): Promise<string> {
-  const approx = estimateTokens(opts.system) + opts.messages.reduce((n, m) => n + estimateTokens(m.content), 0);
+  const approx = estimateTokens(opts.system) + opts.messages.reduce((n, m) => n + estimateTokens(m.content) + (m.images?.length ?? 0) * IMAGE_TOKENS_ESTIMATE, 0);
   if (approx > MAX_INPUT_TOKENS_ESTIMATE) throw new AiProviderError("input too large");
   const key = process.env.AI_API_KEY;
   const model = modelName();
@@ -98,7 +111,7 @@ export async function callModel(opts: { system: string; messages: AiMessage[]; m
           model,
           reasoning_effort: effort,
           max_completion_tokens: maxTokens + 4000,
-          messages: [{ role: "system", content: opts.system }, ...opts.messages],
+          messages: [{ role: "system", content: opts.system }, ...opts.messages.map(toChatMessage)],
           ...cache,
         }),
         signal: AbortSignal.timeout(AI_LIMITS.timeoutMs - 10_000),
@@ -113,7 +126,7 @@ export async function callModel(opts: { system: string; messages: AiMessage[]; m
       const res = await fetch(`${base}/v1/messages`, {
         method: "POST",
         headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model, max_tokens: maxTokens, temperature, system: opts.system, messages: opts.messages }),
+        body: JSON.stringify({ model, max_tokens: maxTokens, temperature, system: opts.system, messages: opts.messages.map(toAnthropicMessage) }),
         signal: AbortSignal.timeout(AI_LIMITS.timeoutMs - 10_000),
       });
       if (!res.ok) throw new AiProviderError(`anthropic ${res.status}`);
@@ -125,7 +138,7 @@ export async function callModel(opts: { system: string; messages: AiMessage[]; m
     const res = await fetch(`${base}/chat/completions`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model, temperature, max_tokens: maxTokens, messages: [{ role: "system", content: opts.system }, ...opts.messages] }),
+      body: JSON.stringify({ model, temperature, max_tokens: maxTokens, messages: [{ role: "system", content: opts.system }, ...opts.messages.map(toChatMessage)] }),
       signal: AbortSignal.timeout(AI_LIMITS.timeoutMs - 10_000),
     });
     if (!res.ok) throw new AiProviderError(`openai ${res.status}`);

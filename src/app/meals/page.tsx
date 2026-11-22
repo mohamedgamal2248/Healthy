@@ -7,7 +7,8 @@ import { EmptyState, Gate, PageHeader, PageSkeleton } from "@/components/ui";
 import { MealCard } from "@/components/MealCard";
 import { Icon } from "@/components/Icon";
 import { EatTabs } from "@/components/EatTabs";
-import { INGREDIENTS, MEAL_TAGS } from "@/data/ingredients";
+import { INGREDIENTS, INGREDIENT_MAP, MEAL_TAGS } from "@/data/ingredients";
+import { IngredientsAiSheet } from "@/components/IngredientsAi";
 import type { MealRow } from "@/server/meals";
 
 function MealsInner() {
@@ -21,14 +22,18 @@ function MealsInner() {
   const [mode, setMode] = useState<"browse" | "have">("browse");
   const [have, setHave] = useState<string[]>([]);
   const [favs, setFavs] = useState<string[]>([]);
+  const [aiOpen, setAiOpen] = useState(false);
 
   const qs = (() => {
     const p = new URLSearchParams();
-    if (type) p.set("type", type);
-    if (cuisine) p.set("cuisine", cuisine);
-    if (tags.length) p.set("tags", tags.join(","));
-    if (qd.trim()) p.set("q", qd.trim());
-    if (mode === "have") p.set("have", have.length ? have.join(",") : "__none__");
+    if (mode === "have") {
+      p.set("have", have.length ? have.join(",") : "__none__"); // other filters are hidden in this mode, so they are not applied
+    } else {
+      if (type) p.set("type", type);
+      if (cuisine) p.set("cuisine", cuisine);
+      if (tags.length) p.set("tags", tags.join(","));
+      if (qd.trim()) p.set("q", qd.trim());
+    }
     return p.toString();
   })();
   const { data: list } = useGet<{ meals: MealRow[] }>(`/meals?${qs}`, (e) => toast(errMsg(e), "err"));
@@ -62,7 +67,7 @@ function MealsInner() {
         </div>
       ) : (
         <div className="card mb-5 space-y-4">
-          <p className="muted">{tr("اختار المكونات اللي عندك في البيت وهنعرض الوجبات اللي تقدر تعملها بيها فقط (الملح والزيت والتوابل متوفرة دائمًا). هذا الوضع مجاني ولا يستهلك كريدت.", "Tick what you have at home and we show only meals you can make with it (salt, oil and spices are assumed). This mode is free and uses no credits.")}</p>
+          <p className="muted">{tr("اختار المكونات اللي عندك. هنعرض الوجبات اللي تقدر تعملها دلوقتي، ثم وجبات ينقصها مكون أو اتنين بس. الملح والزيت والتوابل والبصل والتوم والليمون نعتبرها متوفرة. التصفح مجاني ولا يستهلك كريدت.", "Tick what you have. We show meals you can cook right now, then meals missing just one or two items. Salt, oil, spices, onion, garlic and lemon are assumed. Browsing is free and uses no credits.")}</p>
           {groups.map(([g, label]) => (
             <div key={g}>
               <p className="label">{label}</p>
@@ -74,10 +79,46 @@ function MealsInner() {
       )}
 
       {meals === null ? <PageSkeleton /> : meals.length === 0 ? (
-        <EmptyState icon="utensils" title={mode === "have" && have.length === 0 ? tr("اختار مكوناتك", "Pick your ingredients") : tr("مفيش وجبات مطابقة", "No matching meals")} body={mode === "have" ? tr("جرّب تضيف مكونات أكتر وهتظهر وجبات.", "Try ticking more ingredients to see meals.") : tr("جرّب تغيّر الفلاتر.", "Try changing the filters.")} />
+        <EmptyState icon="utensils" title={mode === "have" && have.length === 0 ? tr("اختار مكوناتك", "Pick your ingredients") : tr("مفيش وجبات مطابقة", "No matching meals")} body={mode === "have" ? (have.length === 0 ? tr("اختار مكونات من فوق وهتظهر وجبات.", "Tick some ingredients above to see meals.") : tr("مفيش وجبة جاهزة بالمكونات دي في الكتالوج. اطلب من الكوتش وجبة جديدة منها.", "No catalogue meal fits these ingredients. Ask the coach to create one.")) : tr("جرّب تغيّر الفلاتر.", "Try changing the filters.")} />
+      ) : mode === "have" ? (
+        <div className="space-y-6">
+          {(() => {
+            const ready = meals.filter((m) => !m.missing_keys?.length);
+            const almost = meals.filter((m) => m.missing_keys?.length);
+            const missingText = (m: MealRow) => (m.missing_keys ?? []).map((k) => (lang === "ar" ? INGREDIENT_MAP[k]?.ar : INGREDIENT_MAP[k]?.en) ?? k).join(tr("، ", ", "));
+            return (
+              <>
+                {ready.length > 0 && (
+                  <section>
+                    <h2 className="h2 mb-3 flex items-center gap-2"><Icon name="check" size={20} className="text-brand-600" />{tr(`جاهزة للطبخ دلوقتي (${ready.length})`, `Ready to cook now (${ready.length})`)}</h2>
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{ready.map((m) => (<MealCard key={m.id} meal={m} fav={favs.includes(m.id)} onFav={fav} />))}</div>
+                  </section>
+                )}
+                {almost.length > 0 && (
+                  <section>
+                    <h2 className="h2 mb-3 flex items-center gap-2"><Icon name="plus" size={20} className="text-sun-600" />{tr(`قربت تعملها: ينقصك مكون أو اتنين (${almost.length})`, `Almost there: missing 1–2 items (${almost.length})`)}</h2>
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{almost.map((m) => (<MealCard key={m.id} meal={m} missing={missingText(m)} fav={favs.includes(m.id)} onFav={fav} />))}</div>
+                  </section>
+                )}
+              </>
+            );
+          })()}
+        </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{meals.map((m) => (<MealCard key={m.id} meal={m} fav={favs.includes(m.id)} onFav={fav} />))}</div>
       )}
+
+      {mode === "have" && have.length > 0 && (
+        <button onClick={() => setAiOpen(true)} className="card mt-6 flex w-full items-center gap-4 !border-brand-200 bg-gradient-to-br from-brand-50 to-white text-start transition hover:shadow-md">
+          <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-white bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lg"><Icon name="sparkles" size={26} /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-extrabold">{tr("مش لاقي اللي عايزه؟ اطلب من الكوتش", "Can't find what you want? Ask the coach")}</span>
+            <span className="muted block">{tr("وجبة جديدة من مكوناتك بالذات. بتخصم ١ كريدت (هنأكد معاك قبل الخصم).", "A brand-new meal from your exact ingredients. Uses 1 credit (we confirm before charging).")}</span>
+          </span>
+          <Icon name={lang === "ar" ? "chevronL" : "chevronR"} size={22} className="text-brand-600" />
+        </button>
+      )}
+      <IngredientsAiSheet open={aiOpen} onClose={() => setAiOpen(false)} keys={have} />
     </div>
   );
 }

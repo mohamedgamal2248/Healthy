@@ -3,9 +3,9 @@ import { useEffect, useState } from "react";
 import { Icon } from "./Icon";
 import { useApp } from "./AppProvider";
 
-type Kind = "recipe" | "workout" | "challenge";
+type Kind = "recipe" | "workout" | "challenge" | "scan";
 
-const ICON: Record<Kind, string> = { recipe: "utensils", workout: "dumbbell", challenge: "flame" };
+const ICON: Record<Kind, string> = { recipe: "utensils", workout: "dumbbell", challenge: "flame", scan: "camera" };
 
 /** "Coach is working" loader: spinning ring with the category icon, rotating status text, and a skeleton of the result. */
 export function CoachThinking({ kind = "recipe", compact }: { kind?: Kind; compact?: boolean }) {
@@ -13,6 +13,7 @@ export function CoachThinking({ kind = "recipe", compact }: { kind?: Kind; compa
   const lines: Record<Kind, string[]> = {
     recipe: [tr("بنختار أنسب المكونات…", "Picking the best ingredients…"), tr("بنوازن السعرات والبروتين…", "Balancing calories and protein…"), tr("بنكتب طريقة التحضير…", "Writing the steps…"), tr("لمسات أخيرة على وجبتك…", "Final touches on your meal…")],
     workout: [tr("بنحدد مستواك…", "Gauging your level…"), tr("بنرتّب التمارين وفترات الراحة…", "Ordering moves and rest…"), tr("بنضيف الإحماء والتهدئة…", "Adding warm-up and cool-down…"), tr("لمسات أخيرة على برنامجك…", "Final touches on your workout…")],
+    scan: [tr("بنتعرّف على الأكل في الصورة…", "Recognising the food in your photo…"), tr("بنقدّر الحصة والمكونات…", "Estimating portion and ingredients…"), tr("بنحسب السعرات والبروتين…", "Calculating calories and protein…"), tr("بنراجع الأرقام…", "Double-checking the numbers…")],
     challenge: [tr("بنفكّر في تحدٍّ يناسبك…", "Designing a challenge for you…"), tr("بنقسّم الأيام لخطوات صغيرة…", "Splitting it into small daily steps…"), tr("بنضيف طريقة المتابعة…", "Adding a way to track it…"), tr("لمسات أخيرة على تحدّيك…", "Final touches on your challenge…")],
   };
   const l = lines[kind];

@@ -79,16 +79,84 @@ export type RecipeContent = {
   doctor_note: { ar: string; en: string } | null;
 };
 
+export type ScanResult = {
+  dish_name: string; dish_name_local?: string; confidence: "low" | "medium" | "high"; setting: string; portion: string; estimated_total_g: number;
+  ingredients: { name: string; grams: number; kcal: number; certainty: "seen" | "likely" }[];
+  totals: { calories: { low: number; mid: number; high: number }; protein_g: { low: number; mid: number; high: number }; carbs_g: number; fat_g: number };
+  notes: string[]; assumptions: string[];
+};
+
 export type CoachContent = Omit<RecipeContent, "recipe"> & {
-  kind?: "recipe" | "workout" | "challenge";
+  scan?: ScanResult;
+  kind?: "recipe" | "workout" | "challenge" | "scan";
   recipe?: RecipeContent["recipe"];
   card?: { name: string; summary: string; level?: string; duration_min?: number; sections: { heading: string; items: string[] }[]; tips: string[] };
 };
 
 /** Picks the right view for an AI Coach result (recipe, workout or challenge). */
 export function ContentView({ content, actions }: { content: CoachContent; actions?: ReactNode }) {
+  if (content.kind === "scan" && content.scan) return <ScanView content={content} actions={actions} />;
   if (content.kind && content.kind !== "recipe" && content.card) return <CardView content={content} actions={actions} />;
   return <RecipeView content={content as RecipeContent} actions={actions} />;
+}
+
+export function ScanView({ content, actions }: { content: CoachContent; actions?: ReactNode }) {
+  const { tr, lang } = useApp();
+  const s = content.scan!;
+  const conf = { low: tr("ثقة منخفضة", "Low confidence"), medium: tr("ثقة متوسطة", "Medium confidence"), high: tr("ثقة عالية", "High confidence") }[s.confidence];
+  const confTone = s.confidence === "high" ? "bg-brand-100 text-brand-800" : s.confidence === "medium" ? "bg-sun-100 text-sun-600" : "bg-rose-100 text-rose-600";
+  const setting = ({ home: tr("أكل بيت", "Home-cooked"), restaurant: tr("مطعم", "Restaurant"), street: tr("أكل شارع", "Street food"), packaged: tr("معبأ", "Packaged"), unknown: tr("غير محدد", "Unknown") } as Record<string, string>)[s.setting] ?? s.setting;
+  const c = s.totals.calories, p = s.totals.protein_g;
+  return (
+    <article className="card space-y-5">
+      <header>
+        <p className="text-xs font-extrabold text-brand-600">{tr("تحليل وجبة بالصورة (تقدير)", "Meal photo analysis (estimate)")}</p>
+        <h2 className="text-xl font-extrabold leading-snug">{lang === "ar" && s.dish_name_local ? s.dish_name_local : s.dish_name}</h2>
+        {lang === "en" && s.dish_name_local ? <p className="muted" dir="auto">{s.dish_name_local}</p> : null}
+        <div className="mt-2 flex flex-wrap gap-2">
+          <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${confTone}`}>{conf}</span>
+          <span className="chip !cursor-default">{setting}</span>
+          <span className="chip !cursor-default">~{Math.round(s.estimated_total_g)} g</span>
+        </div>
+      </header>
+      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      <section className="grid grid-cols-2 gap-3">
+        <div className="rounded-2xl bg-sun-50 p-3 text-center">
+          <Icon name="flame" size={20} className="mx-auto text-sun-500" />
+          <p className="text-3xl font-extrabold tabular-nums">{Math.round(c.mid)}</p>
+          <p className="text-xs font-bold text-ink-soft">{tr("سعرة (تقدير)", "kcal (estimate)")}</p>
+          <p className="mt-1 text-xs font-bold text-sun-600 tabular-nums">{Math.round(c.low)} – {Math.round(c.high)}</p>
+        </div>
+        <div className="rounded-2xl bg-brand-50 p-3 text-center">
+          <Icon name="bolt" size={20} className="mx-auto text-brand-600" />
+          <p className="text-3xl font-extrabold tabular-nums">{Math.round(p.mid)}<span className="text-base"> g</span></p>
+          <p className="text-xs font-bold text-ink-soft">{tr("بروتين (تقدير)", "protein (estimate)")}</p>
+          <p className="mt-1 text-xs font-bold text-brand-700 tabular-nums">{Math.round(p.low)} – {Math.round(p.high)} g</p>
+        </div>
+        <div className="rounded-2xl bg-sky-50 p-3 text-center"><p className="text-xl font-extrabold tabular-nums">{Math.round(s.totals.carbs_g)} g</p><p className="text-xs font-bold text-ink-soft">{tr("كربوهيدرات", "Carbs")}</p></div>
+        <div className="rounded-2xl bg-rose-50 p-3 text-center"><p className="text-xl font-extrabold tabular-nums">{Math.round(s.totals.fat_g)} g</p><p className="text-xs font-bold text-ink-soft">{tr("دهون", "Fat")}</p></div>
+      </section>
+      <section>
+        <h3 className="h2 mb-2">{tr("المكونات المقدّرة", "Estimated ingredients")}</h3>
+        <ul className="divide-y divide-line rounded-2xl border border-line">
+          {s.ingredients.map((i, k) => (
+            <li key={k} className="flex items-center gap-3 px-3.5 py-2.5">
+              <span className="min-w-0 flex-1 font-bold">{i.name}{i.certainty === "likely" && <span className="ms-2 rounded bg-canvas px-1.5 py-0.5 text-[10px] font-extrabold text-ink-soft">{tr("محتمل", "likely")}</span>}</span>
+              <span className="text-sm text-ink-soft tabular-nums">{Math.round(i.grams)} g</span>
+              <span className="w-16 text-end text-sm font-extrabold tabular-nums">{Math.round(i.kcal)} {tr("سعرة", "kcal")}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section><h3 className="h2 mb-1">{tr("الحصة", "Portion")}</h3><p className="text-sm font-semibold">{s.portion}</p></section>
+      {s.notes.length > 0 && <section><h3 className="h2 mb-2">{tr("ملاحظات", "Notes")}</h3><ul className="space-y-2">{s.notes.map((n, k) => (<li key={k} className="rounded-2xl bg-brand-50 p-3 text-sm">{n}</li>))}</ul></section>}
+      <section><h3 className="h2 mb-2">{tr("افتراضات التقدير", "How this was estimated")}</h3><ul className="space-y-2">{s.assumptions.map((n, k) => (<li key={k} className="rounded-2xl bg-sun-50 p-3 text-sm">{n}</li>))}</ul></section>
+      <Notice tone="info">{tr("هذه أرقام تقديرية من الصورة وليست قياسًا دقيقًا. الحصة والزيت والصلصات تغيّر النتيجة.", "These are photo-based estimates, not exact measurements. Portion, oil and sauces change the result.")}</Notice>
+      {content.cautions.map((x, k) => (<Notice key={k} tone="warn">{lang === "ar" ? x.ar : x.en}</Notice>))}
+      {content.doctor_note && <Notice tone="warn" icon="shieldCheck">{lang === "ar" ? content.doctor_note.ar : content.doctor_note.en}</Notice>}
+      <footer className="border-t border-line pt-3 text-xs font-semibold text-ink-soft">{tr(DISCLAIMER_AR, DISCLAIMER_EN)}</footer>
+    </article>
+  );
 }
 
 export function CardView({ content, actions }: { content: CoachContent; actions?: ReactNode }) {
