@@ -4,21 +4,35 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { AI_LIMITS, AI_PRICES } from "@/config/pricing";
 
 export type Usage = { tokensIn: number; tokensOut: number; searches: number };
-const usageStore = new AsyncLocalStorage<Usage>();
+type Ctx = { usage: Usage; ctl: AbortController; deadlineAt: number };
+const usageStore = new AsyncLocalStorage<Ctx>();
 const addUsage = (u: Partial<Usage>) => {
-  const s = usageStore.getStore();
+  const s = usageStore.getStore()?.usage;
   if (!s) return;
   s.tokensIn += u.tokensIn ?? 0; s.tokensOut += u.tokensOut ?? 0; s.searches += u.searches ?? 0;
 };
+/** Milliseconds left in the current tracked request's time budget (Infinity outside one). */
+export const timeLeftMs = () => { const c = usageStore.getStore(); return c ? c.deadlineAt - Date.now() : Infinity; };
+/** Abort signal for ONE provider call: it dies at the per-call limit or when the whole request budget runs out. */
+const callSignal = () => {
+  const c = usageStore.getStore();
+  const per = AI_LIMITS.timeoutMs - 10_000;
+  if (!c) return AbortSignal.timeout(per);
+  return AbortSignal.any([c.ctl.signal, AbortSignal.timeout(Math.max(1, Math.min(per, c.deadlineAt - Date.now())))]);
+};
 /** Run `fn` and collect the real token / search usage of every provider call it makes. */
-export async function trackUsage<T>(fn: () => Promise<T>): Promise<{ result: T; usage: Usage }> {
+export async function trackUsage<T>(fn: () => Promise<T>, budgetMs: number = AI_LIMITS.timeoutMs): Promise<{ result: T; usage: Usage }> {
   const usage: Usage = { tokensIn: 0, tokensOut: 0, searches: 0 };
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), budgetMs); // cancels the in-flight provider call instead of only ignoring it
   try {
-    const result = await usageStore.run(usage, fn);
+    const result = await usageStore.run({ usage, ctl, deadlineAt: Date.now() + budgetMs }, fn);
     return { result, usage };
   } catch (e) {
     (e as { usage?: Usage }).usage = usage;
     throw e;
+  } finally {
+    clearTimeout(timer);
   }
 }
 export const estimateCostUsd = (u: Usage) => (u.tokensIn * AI_PRICES.inputPerM + u.tokensOut * AI_PRICES.outputPerM) / 1e6 + u.searches * AI_PRICES.searchEach;
@@ -91,7 +105,7 @@ export async function callModel(opts: { system: string; messages: AiMessage[]; m
               tools: [{ type: "web_search", search_context_size: "low" }],
               ...cache,
             }),
-            signal: AbortSignal.timeout(AI_LIMITS.timeoutMs - 10_000),
+            signal: callSignal(),
           });
           if (res.ok) {
             const data = (await res.json()) as { output?: { type: string; content?: { type: string; text?: string }[] }[]; usage?: { input_tokens?: number; output_tokens?: number } };
@@ -114,7 +128,7 @@ export async function callModel(opts: { system: string; messages: AiMessage[]; m
           messages: [{ role: "system", content: opts.system }, ...opts.messages.map(toChatMessage)],
           ...cache,
         }),
-        signal: AbortSignal.timeout(AI_LIMITS.timeoutMs - 10_000),
+        signal: callSignal(),
       });
       if (!res.ok) throw new AiProviderError(`meta ${res.status}`);
       const data = (await res.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
@@ -127,10 +141,11 @@ export async function callModel(opts: { system: string; messages: AiMessage[]; m
         method: "POST",
         headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({ model, max_tokens: maxTokens, temperature, system: opts.system, messages: opts.messages.map(toAnthropicMessage) }),
-        signal: AbortSignal.timeout(AI_LIMITS.timeoutMs - 10_000),
+        signal: callSignal(),
       });
       if (!res.ok) throw new AiProviderError(`anthropic ${res.status}`);
-      const data = (await res.json()) as { content?: { type: string; text?: string }[] };
+      const data = (await res.json()) as { content?: { type: string; text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
+      addUsage({ tokensIn: data.usage?.input_tokens, tokensOut: data.usage?.output_tokens });
       return (data.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("");
     }
     // OpenAI-compatible chat completions
@@ -139,10 +154,11 @@ export async function callModel(opts: { system: string; messages: AiMessage[]; m
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
       body: JSON.stringify({ model, temperature, max_tokens: maxTokens, messages: [{ role: "system", content: opts.system }, ...opts.messages.map(toChatMessage)] }),
-      signal: AbortSignal.timeout(AI_LIMITS.timeoutMs - 10_000),
+      signal: callSignal(),
     });
     if (!res.ok) throw new AiProviderError(`openai ${res.status}`);
-    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    const data = (await res.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
+    addUsage({ tokensIn: data.usage?.prompt_tokens, tokensOut: data.usage?.completion_tokens });
     return data.choices?.[0]?.message?.content ?? "";
   } catch (e) {
     if (e instanceof AiProviderError) throw e;

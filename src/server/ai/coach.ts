@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { callModel, extractJson, AiNotConfigured } from "./provider";
-import { outputIsSafe, REFUSAL_AR } from "./safety";
+import { callModel, extractJson, AiNotConfigured, timeLeftMs } from "./provider";
+import { outputIsSafe, REFUSAL_AR, safeRefusalText } from "./safety";
 import { AiRefused, AiUnusable, type ProfileContext } from "./recipe";
 import { langInstruction } from "./lang";
 
@@ -58,11 +58,11 @@ export async function generateCard(kind: Exclude<CoachKind, "recipe">, userText:
   let last: unknown;
   const t0 = Date.now();
   for (let attempt = 0; attempt < 2; attempt++) {
-    if (attempt > 0 && Date.now() - t0 > 35_000) break; // never retry past the time budget
+    if (attempt > 0 && Date.now() - t0 > 35_000 || timeLeftMs() < 25_000) break; // never retry past the time budget
     try {
       const text = await callModel({ system, messages: [{ role: "user", content: userText }], maxTokens: 2200 });
       const raw = extractJson(text) as { refusal?: unknown };
-      if (raw && typeof raw === "object" && "refusal" in raw) throw new AiRefused(typeof raw.refusal === "string" ? raw.refusal : OFFTOPIC_AR);
+      if (raw && typeof raw === "object" && "refusal" in raw) throw new AiRefused(safeRefusalText(raw.refusal, OFFTOPIC_AR));
       const parsed = CardSchema.safeParse(raw);
       if (!parsed.success) throw new AiUnusable("schema");
       if (!outputIsSafe(JSON.stringify(parsed.data))) throw new AiUnusable("unsafe_content");

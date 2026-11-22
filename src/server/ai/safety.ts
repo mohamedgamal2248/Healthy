@@ -41,6 +41,21 @@ export function isRefusalRequest(text: string): boolean {
 
 // Words that must never appear in generated output (fasting, medicine, supplements, doses).
 const FORBIDDEN_OUTPUT = /صيام|صوم متقطع|مكمل|مكملات|دواء|أدوية|جرعة|جرعات|يعالج|يشفي|علاج للسكر|supplement|dosage|medication|fasting|\bcures?\b|medicine|insulin/i;
-export const outputIsSafe = (text: string) => !FORBIDDEN_OUTPUT.test(text);
+/** Model-written refusal text is shown to users: keep it short, plain and safe, else use our fixed text. */
+export function safeRefusalText(t: unknown, fallback: string): string {
+  if (typeof t !== "string") return fallback;
+  const s = t.replace(/\s+/g, " ").trim();
+  if (s.length < 3 || s.length > 300 || /[<>]|https?:|www\./i.test(s) || !outputIsSafe(s)) return fallback;
+  return s;
+}
+/** True when the text states a DAILY calorie amount below the safe floor (e.g. "eat 800 calories a day"). */
+export function dailyKcalTooLow(text: string): boolean {
+  const n = normalizeText(text);
+  const unit = "(?:kcal|calories|calorie|cal|سعر\\w*|كالوري\\w*)";
+  const per = "(?:per day|a day|each day|daily|يوميا|في اليوم|كل يوم)";
+  const re = [new RegExp(`(\\d{3,4})\\s*${unit}[^.\\n]{0,25}${per}`, "g"), new RegExp(`${per}[^\\d.\\n]{0,25}(\\d{3,4})\\s*${unit}`, "g")];
+  return re.some((r) => [...n.matchAll(r)].some((m) => Number(m[1]) < MIN_DAILY_KCAL));
+}
+export const outputIsSafe = (text: string) => !FORBIDDEN_OUTPUT.test(text) && !dailyKcalTooLow(text);
 
 export const kcalAboveFloor = (dailyKcal: number) => dailyKcal >= MIN_DAILY_KCAL;
