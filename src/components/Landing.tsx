@@ -33,7 +33,7 @@ export function Landing({ items, trial, meal, challenge, ingredientsEn }: { item
               <a href="#pricing" className="btn-soft">{tr("الأسعار", "Pricing")}</a>
             </div>
             {!me && <div className="mt-3"><DevLogin onLogin={devSignIn} /></div>}
-            <p className="mt-3 text-sm font-semibold text-ink-soft">{tr("تسجيل الدخول بحساب Pi فقط، بدون إيميل أو كلمة مرور. يعمل داخل Pi Browser.", "Sign-in is with your Pi account only: no email, no password. Works inside Pi Browser.")}</p>
+            <p className="mt-3 text-sm font-semibold text-ink-soft">{tr("تسجيل الدخول بحساب Pi فقط، بدون إيميل أو كلمة مرور. من متصفح عادي ستؤكد الدخول داخل Pi Browser ثم تعود هنا.", "Sign-in is with your Pi account only: no email, no password. From a regular browser you confirm in Pi Browser, then come back here.")}</p>
           </div>
 
           <div className="mx-auto w-full max-w-md space-y-3">

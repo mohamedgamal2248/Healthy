@@ -15,8 +15,18 @@ function randomState(): string {
   return Array.from(a, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Send the browser to Pi to sign in. A random `state` protects against forged callbacks. */
+/**
+ * Begin sign-in. We first go to our own /signin/start page, which then navigates to Pi WITHOUT a user gesture.
+ * Some browsers (Chrome on Android) hand a click-initiated link to accounts.pinet.com straight to the Pi Browser app,
+ * which cannot load a request that was never opened on the web page first. A script navigation shows Pi's
+ * "Continue in Pi Browser" page instead, which works.
+ */
 export function startPiOAuth() {
+  window.location.assign("/signin/start");
+}
+
+/** Build the authorize URL (with a fresh random `state` against forged callbacks) and go there. */
+export function goToPiAuthorize(): string {
   const state = randomState();
   try { sessionStorage.setItem(STATE_KEY, state); } catch { /* storage blocked: the callback will refuse, which is safe */ }
   const u = new URL(AUTHORIZE);
@@ -25,7 +35,7 @@ export function startPiOAuth() {
   u.searchParams.set("redirect_uri", redirectUri());
   u.searchParams.set("scope", "username");
   u.searchParams.set("state", state);
-  window.location.assign(u.toString());
+  return u.toString();
 }
 
 export type OAuthResult = { ok: true; accessToken: string } | { ok: false; error: string };

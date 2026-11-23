@@ -337,3 +337,17 @@ test("admin notification test is admin-only, self-only and rate limited", async 
   assert.doesNotMatch(src, /username\s*[:=]\s*\(?body|parsed\.data\.(username|uid|user)/); // body has no recipient field
   assert.match(src, /eq\("username", a\.username\)/); // only the admin's own push devices
 });
+
+test("sign-in hop page and install prompt rules", async () => {
+  const { readFileSync } = await import("node:fs");
+  const oauth = readFileSync("src/lib/pi-oauth.ts", "utf8");
+  assert.match(oauth, /assign\("\/signin\/start"\)/); // click goes to our page first (no direct app-link handoff)
+  const start = readFileSync("src/app/signin/start/page.tsx", "utf8");
+  assert.match(start, /window\.location\.replace/); // then a script navigation to Pi
+  assert.match(start, /Continue to Pi/); // manual fallback
+  const prompt = readFileSync("src/components/InstallPrompt.tsx", "utf8");
+  assert.match(prompt, /inPiBrowser/); // never shown inside Pi Browser
+  assert.match(prompt, /standalone/); // never shown once installed
+  const shell = readFileSync("src/components/Shell.tsx", "utf8");
+  assert.match(shell, /<InstallPrompt \/>/);
+});
