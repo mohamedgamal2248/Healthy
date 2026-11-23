@@ -6,7 +6,8 @@ import { api } from "./api";
 const cache = new Map<string, unknown>();
 export const clearGetCache = () => cache.clear();
 
-export function useGet<T>(path: string | null, onError?: (e: unknown) => void) {
+export function useGet<T>(path: string | null, onError?: (e: unknown) => void, opts: { anon?: boolean } = {}) {
+  const anon = !!opts.anon;
   const [data, setDataState] = useState<T | null>(path && cache.has(path) ? (cache.get(path) as T) : null);
   const errRef = useRef(onError);
   errRef.current = onError;
@@ -19,13 +20,13 @@ export function useGet<T>(path: string | null, onError?: (e: unknown) => void) {
   const reload = useCallback(async () => {
     if (!path) return;
     try {
-      const r = await api<T>(path);
+      const r = await api<T>(path, { anon });
       cache.set(path, r);
       setDataState(r);
     } catch (e) {
       errRef.current?.(e);
     }
-  }, [path]);
+  }, [path, anon]);
 
   useEffect(() => {
     setDataState(path && cache.has(path) ? (cache.get(path) as T) : null);

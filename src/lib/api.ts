@@ -38,7 +38,14 @@ export function deviceTz(): string {
   }
 }
 
-export async function api<T = unknown>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
+export async function api<T = unknown>(path: string, opts: { method?: string; body?: unknown; anon?: boolean } = {}): Promise<T> {
+  // anon: public, CDN-cacheable data. No token and no per-user headers, so every visitor shares one cached response.
+  if (opts.anon) {
+    const r = await fetch(`/api${path}`);
+    const d = await r.json().catch(() => null);
+    if (!r.ok) { const e = d?.error ?? {}; throw new ApiError(r.status, e.code ?? "error", e.ar ?? "حدث خطأ. حاول مرة أخرى.", e.en ?? "Something went wrong.", e); }
+    return d as T;
+  }
   const token = memoryToken ?? getToken();
   const res = await fetch(`/api${path}`, {
     method: opts.method ?? (opts.body ? "POST" : "GET"),

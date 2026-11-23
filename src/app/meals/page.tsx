@@ -36,9 +36,9 @@ function MealsInner() {
     }
     return p.toString();
   })();
-  const { data: list } = useGet<{ meals: MealRow[] }>(`/meals?${qs}`, (e) => toast(errMsg(e), "err"));
+  const { data: list } = useGet<{ meals: MealRow[] }>(`/public/meals?${qs}`, (e) => toast(errMsg(e), "err"), { anon: true });
   const meals = list?.meals ?? null;
-  useEffect(() => { api<{ meals: MealRow[] }>("/favourites").then((f) => setFavs(f.meals.map((m) => m.id))).catch(() => {}); }, []);
+  useEffect(() => { api<{ meals: string[] }>("/favourites/ids").then((f) => setFavs(f.meals)).catch(() => {}); }, []);
 
   const toggle = (arr: string[], v: string, set: (a: string[]) => void) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
   const fav = async (id: string) => {

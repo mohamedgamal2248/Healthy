@@ -46,7 +46,7 @@ async function visibleAuthors(names: string[]): Promise<Set<string>> {
 }
 
 /** Top shared recipes of the last 7 days by likes + saves from verified users. */
-export async function topRecipes(a: Auth) {
+export async function topRecipes() {
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
   const [likes, saves] = await Promise.all([
     db().from("hl_recipe_likes").select("recipe_id,username").gte("created_at", since).limit(2000),
@@ -64,16 +64,10 @@ export async function topRecipes(a: Auth) {
   const ids = [...score.keys()];
   if (!ids.length) return [];
   const recipes = must(await db().from("hl_recipes").select("id,username,title,content,like_count,save_count").in("id", ids).eq("shared", true)) as { id: string; username: string; title: string; content: { recipe: { calories: number; protein: number } }; like_count: number; save_count: number }[];
-  const [myLikes, myFavs] = await Promise.all([
-    db().from("hl_recipe_likes").select("recipe_id").eq("username", a.username).in("recipe_id", ids),
-    db().from("hl_favourites").select("source_id").eq("username", a.username).eq("source_type", "recipe").in("source_id", ids),
-  ]);
-  const liked = new Set((must(myLikes) as { recipe_id: string }[]).map((r) => r.recipe_id));
-  const saved = new Set((must(myFavs) as { source_id: string }[]).map((r) => r.source_id));
   const okAuthors = await visibleAuthors(recipes.map((r) => r.username));
   return recipes
     .filter((r) => okAuthors.has(r.username))
-    .map((r) => ({ id: r.id, title: r.title, author: r.username, calories: r.content?.recipe?.calories, protein: r.content?.recipe?.protein, likes: r.like_count, saves: r.save_count, score: score.get(r.id) ?? 0, liked: liked.has(r.id), saved: saved.has(r.id) }))
+    .map((r) => ({ id: r.id, title: r.title, author: r.username, calories: r.content?.recipe?.calories, protein: r.content?.recipe?.protein, likes: r.like_count, saves: r.save_count, score: score.get(r.id) ?? 0 }))
     .sort((x, y) => y.score - x.score)
     .slice(0, 10);
 }
@@ -111,18 +105,30 @@ export async function groupSnapshot(username: string, today: string) {
 }
 
 /** Newest shared recipes (so fresh content shows up even before it collects likes). */
-export async function latestRecipes(a: Auth) {
+export async function latestRecipes() {
   const rows = must(await db().from("hl_recipes").select("id,username,title,content,like_count,save_count,shared_at").eq("shared", true).order("shared_at", { ascending: false }).limit(10)) as { id: string; username: string; title: string; content: { recipe: { calories: number; protein: number } }; like_count: number; save_count: number }[];
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id);
-  const [myLikes, myFavs] = await Promise.all([
-    db().from("hl_recipe_likes").select("recipe_id").eq("username", a.username).in("recipe_id", ids),
-    db().from("hl_favourites").select("source_id").eq("username", a.username).eq("source_type", "recipe").in("source_id", ids),
-  ]);
-  const liked = new Set((must(myLikes) as { recipe_id: string }[]).map((r) => r.recipe_id));
-  const saved = new Set((must(myFavs) as { source_id: string }[]).map((r) => r.source_id));
   const okAuthors = await visibleAuthors(rows.map((r) => r.username));
-  return rows.filter((r) => okAuthors.has(r.username)).map((r) => ({ id: r.id, title: r.title, author: r.username, calories: r.content?.recipe?.calories, protein: r.content?.recipe?.protein, likes: r.like_count, saves: r.save_count, score: 0, liked: liked.has(r.id), saved: saved.has(r.id) }));
+  return rows.filter((r) => okAuthors.has(r.username)).map((r) => ({ id: r.id, title: r.title, author: r.username, calories: r.content?.recipe?.calories, protein: r.content?.recipe?.protein, likes: r.like_count, saves: r.save_count, score: 0 }));
 }
 
 export { addDays };
+
+export type PublicRecipe = { id: string; title: string; author: string; calories?: number; protein?: number; likes: number; saves: number };
+export type PublicCommunity = {
+  group: Group; board: Awaited<ReturnType<typeof leaderboard>>; monthBoard: Awaited<ReturnType<typeof monthlyBoard>>;
+  teams: { key: string; ar: string; en: string; members: number; days: number }[];
+  topRecipes: PublicRecipe[]; latestRecipes: PublicRecipe[]; stats: { members: number; checkedToday: number };
+};
+
+/** Everything on the community page that is the same for every visitor. Safe to serve from the CDN. */
+export async function publicCommunity(today: string): Promise<PublicCommunity> {
+  const group = await currentGroup(today);
+  const [board, top, latest, month, team, counts] = await Promise.all([
+    leaderboard(group.id), topRecipes(), latestRecipes(), monthlyBoard(today), teamBoard(group.id, ""),
+    memo(`gc:${group.id}:${today}`, 30_000, async () => (must(await db().rpc("hl_group_counts", { p_group: group.id, p_date: today })) as { members: number; checked: number }[])[0] ?? { members: 0, checked: 0 }),
+  ]);
+  const strip = (r: { id: string; title: string; author: string; calories?: number; protein?: number; likes: number; saves: number }): PublicRecipe => ({ id: r.id, title: r.title, author: r.author, calories: r.calories, protein: r.protein, likes: r.likes, saves: r.saves });
+  return { group, board, monthBoard: month, teams: team.teams.map((t) => ({ ...t })), topRecipes: top.map(strip), latestRecipes: latest.map(strip), stats: { members: Number(counts.members), checkedToday: Number(counts.checked) } };
+}

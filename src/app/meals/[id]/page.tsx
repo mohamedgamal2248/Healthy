@@ -11,7 +11,12 @@ import type { MealRow } from "@/server/meals";
 function Inner({ id }: { id: string }) {
   const { tr, lang, toast, errMsg } = useApp();
   const [m, setM] = useState<{ meal: MealRow; favourite: boolean } | null>(null);
-  useEffect(() => { api<{ meal: MealRow; favourite: boolean }>(`/meals/${id}`).then(setM).catch((e) => toast(errMsg(e), "err")); }, [id, toast, errMsg]);
+  useEffect(() => {
+    // The meal itself is public (CDN-cached); only the heart comes from the private favourites list.
+    Promise.all([api<{ meal: MealRow }>(`/public/meals/${id}`, { anon: true }), api<{ meals: string[] }>("/favourites/ids").catch(() => ({ meals: [] as string[] }))])
+      .then(([r, f]) => setM({ meal: r.meal, favourite: f.meals.includes(id) }))
+      .catch((e) => toast(errMsg(e), "err"));
+  }, [id, toast, errMsg]);
   if (!m) return <PageSkeleton />;
   const meal = m.meal;
   const toggle = async () => { setM({ ...m, favourite: !m.favourite }); try { await api("/favourites", { body: { type: "meal", id } }); } catch (e) { toast(errMsg(e), "err"); } };

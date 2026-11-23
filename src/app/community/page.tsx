@@ -6,24 +6,32 @@ import { useApp } from "@/components/AppProvider";
 import { EmptyState, Gate, Notice, PageHeader, PageSkeleton, Spinner, VerifiedBadge } from "@/components/ui";
 import { Icon } from "@/components/Icon";
 
-type C = {
-  group: { title_ar: string; title_en: string; week_start: string }; joined: boolean; myDays: number; checkedToday: boolean; hidden: boolean;
+type Pub = {
+  group: { title_ar: string; title_en: string; week_start: string };
   board: Row[];
-  topRecipes: R[]; latestRecipes: R[]; monthBoard: Row[]; teams: { key: string; ar: string; en: string; members: number; days: number }[]; myTeam: string; stats: { members: number; checkedToday: number };
+  topRecipes: PR[]; latestRecipes: PR[]; monthBoard: Row[]; teams: { key: string; ar: string; en: string; members: number; days: number }[]; stats: { members: number; checkedToday: number };
 };
+type Mine = { joined: boolean; myDays: number; checkedToday: boolean; hidden: boolean; myTeam: string; likedIds: string[]; savedIds: string[] };
+type PR = { id: string; title: string; author: string; calories?: number; protein?: number; likes: number; saves: number };
 type Row = { rank: number; username: string; days: number; streak: number };
-type R = { id: string; title: string; author: string; calories?: number; protein?: number; likes: number; saves: number; liked: boolean; saved: boolean };
+type R = PR & { liked: boolean; saved: boolean };
 
 function Inner() {
   const { tr, lang, me, toast, errMsg } = useApp();
-  const { data: d, reload: load } = useGet<C>("/community", (e) => toast(errMsg(e), "err"));
+  // Public part: same for everyone, served from the CDN. Private part: my participation, likes and saves.
+  const { data: pub, reload: reloadPub } = useGet<Pub>("/public/community", (e) => toast(errMsg(e), "err"), { anon: true });
+  const { data: mine, reload: load } = useGet<Mine>("/community/me", (e) => toast(errMsg(e), "err"));
+  // Likes / saves change immediately on screen; the cached public counters catch up within a minute.
+  const [ov, setOv] = useState<Record<string, { liked?: boolean; likes?: number; saved?: boolean; saves?: number }>>({});
   const [busy, setBusy] = useState(false);
   const [btab, setBtab] = useState<"week" | "month">("week");
   const [rtab, setRtab] = useState<"top" | "new">("top");
-  if (!d) return <PageSkeleton />;
-  const act = async (path: string) => { setBusy(true); try { await api(path, { body: {} }); await load(); } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); } };
-  const like = async (id: string) => { try { await api(`/recipes/${id}/like`, { body: {} }); load(); } catch (e) { toast(errMsg(e), "err"); } };
-  const save = async (id: string) => { try { await api("/favourites", { body: { type: "recipe", id } }); load(); } catch (e) { toast(errMsg(e), "err"); } };
+  if (!pub || !mine) return <PageSkeleton />;
+  const withMine = (r: PR): R => ({ ...r, liked: mine.likedIds.includes(r.id), saved: mine.savedIds.includes(r.id), ...ov[r.id] });
+  const d = { ...pub, ...mine, topRecipes: pub.topRecipes.map(withMine), latestRecipes: pub.latestRecipes.map(withMine) };
+  const act = async (path: string) => { setBusy(true); try { await api(path, { body: {} }); await Promise.all([load(), reloadPub()]); } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); } };
+  const like = async (id: string) => { try { const r = await api<{ liked: boolean; likes: number }>(`/recipes/${id}/like`, { body: {} }); setOv((o) => ({ ...o, [id]: { ...o[id], liked: r.liked, likes: r.likes } })); } catch (e) { toast(errMsg(e), "err"); } };
+  const save = async (id: string) => { try { const r = await api<{ favourite: boolean }>("/favourites", { body: { type: "recipe", id } }); const base = [...d.topRecipes, ...d.latestRecipes].find((x) => x.id === id); setOv((o) => ({ ...o, [id]: { ...o[id], saved: r.favourite, saves: Math.max(0, (base?.saves ?? 0) + (r.favourite === !!base?.saved ? 0 : r.favourite ? 1 : -1)) } })); } catch (e) { toast(errMsg(e), "err"); } };
   const invite = async () => {
     const url = `${(process.env.NEXT_PUBLIC_PINET_URL || window.location.origin).replace(/\/$/, "")}/?ref=${encodeURIComponent(me?.profile.username ?? "")}`;
     const text = tr(`انضم لتحدي الأسبوع معايا على Healthy: ${lang === "ar" ? d.group.title_ar : d.group.title_en}`, `Join this week's challenge with me on Healthy: ${d.group.title_en}`);
