@@ -7,14 +7,15 @@ import { Field, Gate, PageHeader, PageSkeleton, Spinner } from "@/components/ui"
 import { BadgeGrid } from "@/components/Challenge";
 import { WeightChart } from "@/components/Domain";
 import { Icon } from "@/components/Icon";
+import { WeeklyCard } from "@/components/WeeklyCard";
 
 type P = {
   today: string; weights: { weight_kg: number; logged_date: string; is_official: boolean }[]; habitToday: { water_cups: number | null; sleep_hours: number | null; steps: number | null } | null;
-  habitsWeek: { date: string; water_cups: number | null }[]; streak: { current: number; longest: number; total: number }; badges: { badge_key: string }[]; waterTarget: number;
+  habitsWeek: { date: string; water_cups: number | null }[]; weekDays: string[]; streak: { current: number; longest: number; total: number }; badges: { badge_key: string }[]; waterTarget: number;
 };
 
 function Inner() {
-  const { tr, toast, errMsg } = useApp();
+  const { tr, toast, errMsg, me } = useApp();
   const { data: d, setData: setD, reload: load } = useGet<P>("/progress", (e) => toast(errMsg(e), "err"));
   const [w, setW] = useState("");
   const [sleep, setSleep] = useState("");
@@ -47,6 +48,8 @@ function Inner() {
           <div key={l as string} className="card text-center !p-3"><Icon name={ic as string} size={24} className={`mx-auto ${c}`} /><p className="text-2xl font-extrabold tabular-nums">{v as number}</p><p className="text-xs font-bold text-ink-soft">{l as string}</p></div>
         ))}
       </div>
+
+      <WeeklyCard today={d.today} weekDays={d.weekDays ?? []} streak={d.streak.current} total={d.streak.total} username={me?.profile.username ?? ""} />
 
       <section className="card space-y-3">
         <div className="flex items-center justify-between"><h2 className="h2">{tr("الوزن", "Weight")}</h2>{last && first && pts.length > 1 && <span className="rounded-full bg-brand-50 px-3 py-1 text-sm font-extrabold text-brand-800 tabular-nums">{last.kg - first.kg > 0 ? "+" : ""}{(last.kg - first.kg).toFixed(1)} kg</span>}</div>

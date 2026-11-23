@@ -490,3 +490,17 @@ test("hourly reminders: both cron secrets accepted, others refused; plan-expiry 
   const route = readFileSync("src/app/api/cron/reminders/route.ts", "utf8");
   assert.match(route, /hl_claim_reminders/); assert.match(route, /hl_claim_expiry_notices/); // SQL claims = no double sends
 });
+
+test("duo challenge: verified-only, rate limited, single-use invites, no health data; share card is drawn on the device", async () => {
+  const { readFileSync } = await import("node:fs");
+  const d = readFileSync("src/server/duo.ts", "utf8");
+  assert.match(d, /is\("invitee", null\)/); // an invite can be accepted only once (atomic)
+  assert.match(d, /d\.inviter === a\.username/); // not your own invite
+  assert.match(d, /INVITE_VALID_DAYS/);
+  assert.doesNotMatch(d, /weight|conditions|goal/); // only names and day counts leave the server
+  assert.match(readFileSync("src/app/api/duo/join/route.ts", "utf8"), /rateLimit\("duo-join"/); // code guessing is throttled
+  assert.match(readFileSync("src/app/api/duo/route.ts", "utf8"), /requireVerified/);
+  const card = readFileSync("src/components/WeeklyCard.tsx", "utf8");
+  assert.doesNotMatch(card, /fetch\(|api\(/); // nothing is uploaded
+  assert.doesNotMatch(card, /weight|kg|condition/i); // no health data on the shared image
+});
