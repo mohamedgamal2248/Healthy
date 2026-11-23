@@ -15,7 +15,13 @@ const b64ToBytes = (s: string) => {
 
 /** "Install the app" + daily reminders. Works in an ordinary browser (Chrome, Safari home-screen app); Pi Browser may not support push. */
 export function AppFeatures() {
-  const { tr, toast, errMsg } = useApp();
+  const { tr, toast, errMsg, me, refresh } = useApp();
+  const [piBusy, setPiBusy] = useState(false);
+  const piOn = me?.profile.notify_pi !== false;
+  const togglePi = async () => {
+    setPiBusy(true);
+    try { await api("/me", { method: "PATCH", body: { notify_pi: !piOn } }); await refresh(); } catch (e) { toast(errMsg(e), "err"); } finally { setPiBusy(false); }
+  };
   const [install, setInstall] = useState<BIPEvent | null>(null);
   const [standalone, setStandalone] = useState(false);
   const [supported, setSupported] = useState(false);
@@ -78,6 +84,10 @@ export function AppFeatures() {
           <p className="muted">{ios ? tr("على iPhone: اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية» لتثبيت التطبيق وتفعيل التذكيرات.", "On iPhone: tap Share, then Add to Home Screen to install the app and enable reminders.") : tr("افتح الموقع من متصفح عادي (مثل Chrome) لتثبيته كتطبيق.", "Open the site in a regular browser (such as Chrome) to install it as an app.")}</p>
         )
       )}
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0"><p className="font-extrabold">{tr("تنبيه داخل تطبيق Pi", "Pi app notification")}</p><p className="muted">{tr("تذكير في مركز إشعارات Pi إذا لم تُكمل تحدي اليوم. يظهر فقط إذا سمحت به داخل Pi.", "A reminder in the Pi Notification Center if you haven't done today's challenge. Shown only if you allowed it inside Pi.")}</p></div>
+        <button className={piOn ? "btn-ghost btn-sm" : "btn-primary btn-sm"} disabled={piBusy} onClick={togglePi} aria-pressed={piOn}>{piBusy ? <Spinner size={16} /> : null}{piOn ? tr("إيقاف", "Turn off") : tr("تفعيل", "Turn on")}</button>
+      </div>
       {supported ? (
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0"><p className="font-extrabold">{tr("تذكير يومي", "Daily reminder")}</p><p className="muted">{denied ? tr("التنبيهات محظورة من إعدادات المتصفح.", "Notifications are blocked in your browser settings.") : tr("تنبيه واحد في اليوم إذا لم تُكمل تحدي اليوم.", "One notification a day if you haven't done today's challenge.")}</p></div>

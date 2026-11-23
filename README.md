@@ -162,6 +162,10 @@ The price is quoted in Pi by the server at purchase time and shown in the app be
 
 Healthy is an installable web app (manifest, icons, service worker). In a regular browser users can add it to the home screen and turn on a **daily reminder** (Web Push, VAPID): a daily cron (`/api/cron/reminders`) sends one notification only to people who have not completed a challenge that day in their own timezone. Subscriptions are stored per device in `hl_push_subscriptions` (deleted with the account); the service worker caches nothing. Pi Browser may not support Web Push; the feature simply stays off there.
 
+### Pi Notification Center (in-app notifications)
+
+Inside Pi, Healthy can reach Pioneers through the **Pi Notification Center** (`POST /v2/in_app_notifications/notify`, server API key). At sign-in the app also requests the `in_app_notifications` scope (falling back gracefully if a Pi version does not accept it). The daily job sends one reminder to people active in the last 30 days who have not completed a challenge today; Pi delivers it only to users who consented and have notifications on, and the notification opens `/today`. Limits respected: 256 per request, 48 per user per 24 hours (we send at most one). Users can turn it off in their profile (`notify_pi`).
+
 ## Healthy AI
 
 The AI layer is a provider abstraction (`src/server/ai/provider.ts`). Provider, model and key come from environment variables and never reach the client. Default: **Meta Model API, `muse-ember-1.0`** (`AI_PROVIDER=meta`); `anthropic` and OpenAI-compatible providers are also supported. If no key is configured, the AI features report "not configured" and never fabricate output.

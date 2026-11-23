@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { db, must } from "@/server/supabase";
 import { ok, route, E } from "@/server/http";
 import { dropSubscription, pushConfigured, sendPush, type Sub } from "@/server/push";
+import { NOTIFY_BATCH, sendPiNotifications, type PiNotification } from "@/server/pi-notify";
 import { needsReminder, reminderText } from "@/lib/reminder";
 import { DEFAULT_TZ, localDate, validTz } from "@/lib/dates";
 
@@ -14,9 +15,41 @@ export const GET = route(async (req) => {
   const got = Buffer.from(req.headers.get("authorization") ?? "");
   const want = Buffer.from(`Bearer ${secret ?? ""}`);
   if (!secret || got.length !== want.length || !timingSafeEqual(got, want)) throw E.notFound();
-  if (!pushConfigured()) return ok({ skipped: "push_not_configured" });
+  const out = { subscriptions: 0, sent: 0, skipped: 0, removed: 0, failed: 0, pi: { candidates: 0, requested: 0, delivered: 0, errors: 0 } };
+  if (pushConfigured()) await webPushPass(out);
+  await piPass(out);
+  return ok(out);
+});
 
-  const out = { subscriptions: 0, sent: 0, skipped: 0, removed: 0, failed: 0 };
+type Out = { subscriptions: number; sent: number; skipped: number; removed: number; failed: number; pi: { candidates: number; requested: number; delivered: number; errors: number } };
+
+/** Pi Notification Center: people active in the last 30 days who have not done a challenge today. */
+async function piPass(out: Out) {
+  const active = new Date(Date.now() - 30 * 86400_000).toISOString();
+  for (let from = 0; ; from += PAGE) {
+    const profs = must(await db().from("hl_profiles").select("username,pi_uid,timezone,language").not("pi_uid", "is", null).eq("notify_pi", true).is("deleted_at", null).gte("updated_at", active).order("username").range(from, from + PAGE - 1)) as { username: string; pi_uid: string; timezone: string | null; language: string | null }[];
+    if (!profs.length) break;
+    const streaks = must(await db().from("hl_streaks").select("username,current_streak,last_completed_date").in("username", profs.map((p) => p.username))) as { username: string; current_streak: number; last_completed_date: string | null }[];
+    const st = new Map(streaks.map((x) => [x.username, x]));
+    const items: PiNotification[] = [];
+    for (const p of profs) {
+      out.pi.candidates++;
+      const today = localDate(validTz(p.timezone || DEFAULT_TZ));
+      const sk = st.get(p.username);
+      if (!needsReminder(sk?.last_completed_date ?? null, today)) continue;
+      const alive = sk?.last_completed_date && sk.last_completed_date >= new Date(Date.parse(today) - 86400_000).toISOString().slice(0, 10);
+      const t = reminderText({ streak: alive ? sk?.current_streak ?? 0 : 0, lang: p.language === "ar" ? "ar" : "en" });
+      items.push({ user_uid: p.pi_uid, title: t.title, body: t.body, subroute: "/today" });
+    }
+    for (let i = 0; i < items.length; i += NOTIFY_BATCH) {
+      const r = await sendPiNotifications(items.slice(i, i + NOTIFY_BATCH));
+      out.pi.requested += r.requested; out.pi.delivered += r.delivered; if (r.error) out.pi.errors++;
+    }
+    if (profs.length < PAGE) break;
+  }
+}
+
+async function webPushPass(out: Out) {
   for (let from = 0; ; from += PAGE) {
     const subs = must(await db().from("hl_push_subscriptions").select("endpoint,p256dh,auth,username").order("endpoint").range(from, from + PAGE - 1)) as (Sub & { username: string })[];
     if (!subs.length) break;
@@ -43,5 +76,4 @@ export const GET = route(async (req) => {
     }
     if (subs.length < PAGE) break;
   }
-  return ok(out);
-});
+}

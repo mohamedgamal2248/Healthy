@@ -18,6 +18,7 @@ export type Profile = {
   language: "ar" | "en";
   timezone: string;
   leaderboard_visible: boolean;
+  notify_pi: boolean;
   token_version: number;
   deleted_at: string | null;
   created_at: string;
