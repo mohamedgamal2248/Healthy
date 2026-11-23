@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyCompletion, effectiveStreak, streakBadges } from "../src/lib/streak";
+import { applyCompletion, effectiveStreak, freezeAvailable, isFrozen, streakBadges, type StreakState } from "../src/lib/streak";
 import { addDays, weekStart, localDate } from "../src/lib/dates";
 import { dailyCalories, clampCalories, weeklyAdjustment } from "../src/lib/nutrition";
 import { buildWeekPlan } from "../src/lib/planner";
@@ -20,7 +20,8 @@ test("streak: consecutive days grow, same day doesn't, a gap resets and reads 0 
   s = applyCompletion(s, "2026-11-02");
   assert.equal(s.current, 2);
   assert.equal(effectiveStreak(s, "2026-11-03"), 2); // yesterday done, today pending
-  assert.equal(effectiveStreak(s, "2026-11-04"), 0); // a missed day broke it
+  assert.equal(effectiveStreak(s, "2026-11-04"), 2); // one missed day is forgiven by the freeze
+  assert.equal(effectiveStreak(s, "2026-11-05"), 0); // two missed days break it
   s = applyCompletion(s, "2026-11-05");
   assert.equal(s.current, 1); assert.equal(s.longest, 2);
   assert.deepEqual(streakBadges(30), ["streak_7", "streak_30"]);
@@ -430,4 +431,37 @@ test("pricing handoff effect cannot loop and consumes the purchase once", async 
   assert.doesNotMatch(s, /setHandoff\(\(h\) =>/); // the old code re-set a fresh object every run (endless render loop)
   assert.match(s, /signInStarted/); // sign-in is started once, not on every re-render
   assert.match(readFileSync("src/components/AppProvider.tsx", "utf8"), /pathname === "\/pricing"/); // login returns to the pending purchase
+});
+
+test("streak freeze: one missed day is bridged once, then it recharges after 7 days", () => {
+  let s: StreakState = { current: 5, longest: 5, last: "2026-11-10", total: 5, freezeUsed: null };
+  assert.equal(isFrozen(s, "2026-11-12"), true); // missed 11-11, freeze protects
+  s = applyCompletion(s, "2026-11-12"); // completing bridges the gap
+  assert.equal(s.current, 6); assert.equal(s.freezeUsed, "2026-11-12");
+  // a second single miss within 7 days is NOT forgiven
+  assert.equal(freezeAvailable(s, "2026-11-14"), false);
+  assert.equal(effectiveStreak(s, "2026-11-14"), 0);
+  const broken = applyCompletion(s, "2026-11-14");
+  assert.equal(broken.current, 1);
+  // after the cooldown it works again
+  const later = { ...s, last: "2026-11-17", freezeUsed: "2026-11-12" };
+  assert.equal(freezeAvailable(later, "2026-11-19"), true);
+  assert.equal(applyCompletion(later, "2026-11-19").current, 7);
+  // never bridges two missed days
+  assert.equal(applyCompletion({ current: 4, longest: 4, last: "2026-11-01", total: 4, freezeUsed: null }, "2026-11-04").current, 1);
+});
+
+test("food diary: catalogue/AI items are resolved on the server, manual entries are bounded, deletes are owner-only", async () => {
+  const { readFileSync } = await import("node:fs");
+  const r = readFileSync("src/app/api/food/route.ts", "utf8");
+  assert.match(r, /requireUser/);
+  assert.match(r, /rateLimit\("food"/);
+  assert.match(r, /calories: z\.number\(\)\.int\(\)\.min\(0\)\.max\(5000\)/);
+  assert.match(r, /resolveEntry\(a, r\.data\)/); // meal/recipe numbers come from the DB, not the client
+  assert.doesNotMatch(r, /Ref = z\.object\(\{[^}]*calories/); // the reference schema cannot carry numbers
+  assert.match(r, /eq\("username", a\.username\)/); // a user can only delete their own entries
+  const f = readFileSync("src/server/food.ts", "utf8");
+  assert.match(f, /eq\("username", a\.username\)\.maybeSingle\(\)/); // AI items must belong to the user
+  const m = readFileSync("src/app/api/me/route.ts", "utf8");
+  assert.match(m, /hl_food_log/); // erased with the account
 });
