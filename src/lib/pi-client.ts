@@ -19,7 +19,11 @@ declare global {
   }
 }
 
-export const isPiBrowser = () => typeof window !== "undefined" && !!window.Pi;
+/** The Pi SDK script defines window.Pi in EVERY browser, but its wallet/auth only works inside Pi Browser (or the Sandbox). */
+export const isPiBrowser = () => typeof navigator !== "undefined" && /PiBrowser/i.test(navigator.userAgent);
+const inFrame = () => { try { return window.self !== window.top; } catch { return true; } };
+/** True where Pi.authenticate / createPayment can work: Pi Browser, Pi Sandbox, or an iframe hosted by Pi. */
+export const canUsePiSdk = () => typeof window !== "undefined" && !!window.Pi && (isPiBrowser() || process.env.NEXT_PUBLIC_PI_SANDBOX === "true" || inFrame());
 let inited = false;
 function init() {
   if (inited || !window.Pi) return;
@@ -57,7 +61,7 @@ export type PayResult = { ok: true } | { ok: false; reason: "cancelled" | "error
 
 /** Standard U2A flow: create payment -> server approve -> user signs -> server complete (verified). */
 export async function payWithPi(item: "plan_monthly" | "pack_small" | "pack_large"): Promise<PayResult> {
-  if (!window.Pi) return { ok: false, reason: "error", ar: "افتح التطبيق من Pi Browser لإتمام الدفع.", en: "Open the app in Pi Browser to pay." };
+  if (!canUsePiSdk()) return { ok: false, reason: "error", ar: "افتح التطبيق من Pi Browser لإتمام الدفع.", en: "Open the app in Pi Browser to pay." };
   init();
   // A saved app session does not mean the Pi SDK is authenticated in this page load. Without the "payments"
   // scope (or with an unfinished earlier payment) createPayment fails, so authenticate first and settle leftovers.

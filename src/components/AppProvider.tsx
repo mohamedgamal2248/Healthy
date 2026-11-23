@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useRouter } from "next/navigation";
 import { api, ApiError, rememberToken, getToken } from "@/lib/api";
 import { clearGetCache } from "@/lib/useGet";
-import { piSignIn } from "@/lib/pi-client";
+import { canUsePiSdk, piSignIn } from "@/lib/pi-client";
 import { startPiOAuth } from "@/lib/pi-oauth";
 
 export type Lang = "ar" | "en";
@@ -47,7 +47,7 @@ export const useApp = () => {
 const waitForPi = async (ms = 4000) => {
   const t0 = Date.now();
   while (!window.Pi && Date.now() - t0 < ms) await new Promise((r) => setTimeout(r, 150));
-  return !!window.Pi;
+  return canUsePiSdk();
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
