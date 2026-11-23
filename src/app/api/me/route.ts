@@ -25,6 +25,7 @@ const Patch = z.object({
   language: z.enum(["ar", "en"]).optional(),
   timezone: z.string().max(60).optional(),
   leaderboard_visible: z.boolean().optional(),
+  notify_pi: z.boolean().optional(),
   accept_disclaimer: z.boolean().optional(),
 });
 

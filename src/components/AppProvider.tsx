@@ -12,7 +12,7 @@ export type Me = {
   profile: {
     username: string; kyc_verified: boolean; age: number | null; sex: "male" | "female" | null; weight_kg: number | null; height_cm: number | null;
     goal: "lose" | "gain" | "maintain" | null; activity: "low" | "medium" | "high" | null; conditions: string[];
-    disclaimer_accepted_at: string | null; language: Lang; timezone: string; leaderboard_visible: boolean;
+    disclaimer_accepted_at: string | null; language: Lang; timezone: string; leaderboard_visible: boolean; notify_pi?: boolean;
   };
   balances: Balances | null;
   isAdmin: boolean;

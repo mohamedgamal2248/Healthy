@@ -273,3 +273,32 @@ test("daily reminder rules and push subscription validation", async () => {
   assert.match(oauth, /state_mismatch/); // OAuth callback checks the state
   assert.doesNotMatch(oauth, /client_secret/);
 });
+
+test("Pi Notification Center: request shape, batch limit and consent scope", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { sendPiNotifications, NOTIFY_BATCH } = await import("../src/server/pi-notify");
+  assert.equal(NOTIFY_BATCH, 256); // documented maximum per request
+  const prev = process.env.PI_API_KEY;
+  delete process.env.PI_API_KEY;
+  assert.deepEqual(await sendPiNotifications([{ user_uid: "u", title: "t", body: "b", subroute: "/today" }]), { requested: 1, delivered: 0, error: "no_api_key" });
+  process.env.PI_API_KEY = "test";
+  await assert.rejects(() => sendPiNotifications(Array.from({ length: 257 }, () => ({ user_uid: "u", title: "t", body: "b", subroute: "/today" }))));
+  const calls: { url: string; init: RequestInit }[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string, init: RequestInit) => { calls.push({ url, init }); return new Response(JSON.stringify({ success: true, delivered_notifications: [{ id: "1" }] }), { status: 201 }); }) as typeof fetch;
+  try {
+    const r = await sendPiNotifications([{ user_uid: "uid-1", title: "Hi", body: "There", subroute: "/today" }]);
+    assert.deepEqual(r, { requested: 1, delivered: 1 });
+    assert.equal(calls[0].url, "https://api.minepi.com/v2/in_app_notifications/notify");
+    assert.equal((calls[0].init.headers as Record<string, string>).Authorization, "Key test"); // server API key, never the client
+    assert.deepEqual(JSON.parse(String(calls[0].init.body)), { notifications: [{ user_uid: "uid-1", title: "Hi", body: "There", subroute: "/today" }] });
+    globalThis.fetch = (async () => new Response('{"error":"quota"}', { status: 403 })) as typeof fetch;
+    assert.equal((await sendPiNotifications([{ user_uid: "u", title: "t", body: "b", subroute: "/today" }])).error, "http_403"); // never throws
+  } finally {
+    globalThis.fetch = realFetch;
+    if (prev === undefined) delete process.env.PI_API_KEY; else process.env.PI_API_KEY = prev;
+  }
+  assert.match(readFileSync("src/lib/pi-client.ts", "utf8"), /in_app_notifications/); // consent scope is requested at sign-in
+  const cron = readFileSync("src/app/api/cron/reminders/route.ts", "utf8");
+  assert.match(cron, /notify_pi/); // users can opt out
+});

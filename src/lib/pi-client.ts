@@ -34,10 +34,22 @@ function recoverIncomplete(p: PiPaymentDTO) {
   pendingRecovery = api("/payments/incomplete", { body: { paymentId: p.identifier } }).then(() => undefined, () => undefined);
 }
 
+/**
+ * Ask for username + payments + in_app_notifications (lets Healthy reach the user in the Pi Notification Center).
+ * If this Pi version does not accept the notifications scope, fall back to the scopes we strictly need.
+ */
+async function authenticate() {
+  try {
+    return await window.Pi!.authenticate(["username", "payments", "in_app_notifications"], recoverIncomplete);
+  } catch {
+    return await window.Pi!.authenticate(["username", "payments"], recoverIncomplete);
+  }
+}
+
 export async function piSignIn(): Promise<string> {
   if (!window.Pi) throw new Error("not_pi_browser");
   init();
-  const auth = await window.Pi.authenticate(["username", "payments"], recoverIncomplete);
+  const auth = await authenticate();
   return auth.accessToken;
 }
 
@@ -50,7 +62,7 @@ export async function payWithPi(item: "plan_monthly" | "pack_small" | "pack_larg
   // A saved app session does not mean the Pi SDK is authenticated in this page load. Without the "payments"
   // scope (or with an unfinished earlier payment) createPayment fails, so authenticate first and settle leftovers.
   try {
-    await window.Pi.authenticate(["username", "payments"], recoverIncomplete);
+    await authenticate();
     await pendingRecovery;
   } catch (e) {
     return { ok: false, reason: "error", ar: "تعذّر تفعيل صلاحية الدفع من Pi. أعد المحاولة.", en: `Could not enable Pi payments (${e instanceof Error ? e.message.slice(0, 60) : "auth"}). Please retry.` };
