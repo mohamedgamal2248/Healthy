@@ -71,6 +71,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const ref = new URLSearchParams(window.location.search).get("ref");
       if (ref && /^[A-Za-z0-9_.@-]{3,33}$/.test(ref)) localStorage.setItem("healthy.ref", ref);
+      const duo = new URLSearchParams(window.location.search).get("duo");
+      if (duo && /^[A-Za-z0-9]{6,24}$/.test(duo)) localStorage.setItem("healthy.duo", duo);
     } catch {}
   }, []);
   useEffect(() => {
@@ -135,12 +137,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
           localStorage.removeItem("healthy.ref");
           await api("/referral", { body: { ref } }).catch(() => {});
         }
+        const duo = localStorage.getItem("healthy.duo");
+        if (duo) {
+          localStorage.removeItem("healthy.duo");
+          const r = await api<{ joined: boolean }>("/duo/join", { body: { code: duo } }).catch(() => null);
+          if (r?.joined) toast(tr("انضممت إلى تحدي صديقك لمدة 7 أيام", "You joined your friend's 7-day challenge"), "ok");
+        }
       } catch {}
       // Coming from "Continue in Pi Browser" with a purchase waiting: stay on the pricing page so it can open.
       const keep = window.location.pathname === "/pricing" && new URLSearchParams(window.location.search).get("buy");
       router.push(keep ? window.location.pathname + window.location.search : "/today"); // value first: challenges work right away; the profile is one tap away on Today
     },
-    [refresh, router],
+    [refresh, router, toast, tr],
   );
 
   const signIn = useCallback(async () => {

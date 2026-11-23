@@ -6,6 +6,7 @@ import { useGet } from "@/lib/useGet";
 import { useApp } from "@/components/AppProvider";
 import { EmptyState, Gate, Notice, PageHeader, PageSkeleton, Spinner, VerifiedBadge } from "@/components/ui";
 import { Icon } from "@/components/Icon";
+import { DuoSection } from "@/components/DuoSection";
 
 type Pub = {
   group: { title_ar: string; title_en: string; week_start: string };
@@ -62,6 +63,7 @@ function Inner() {
         <button className="btn mt-3 w-full !bg-white/20 !text-white" onClick={invite}><Icon name="share" size={18} />{tr("ادعُ أصحابك للتحدي", "Invite friends to the challenge")}</button>
         <p className="mt-2 text-xs font-bold text-sun-100">{tr("كل صديق جديد يكمّل أول تحدٍّ: طلب AI مجاني لك وله (حتى ١٠ دعوات).", "Each new friend who completes a first challenge: a free AI request for you both (up to 10 invites).")}</p>
       </section>
+      <DuoSection />
       {d.hidden && <Notice tone="info" icon="eyeOff">{tr("أنت مخفي من لوحة المتصدرين (من الملف الشخصي).", "You are hidden from the leaderboard (set in your profile).")}</Notice>}
 
       <section className="card !p-3.5">

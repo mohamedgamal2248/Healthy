@@ -151,3 +151,10 @@ test("plan-expiry notice is sent once per expiry date and only inside the 3-day 
   assert.deepEqual(a, ["alice"]);
   assert.equal((await pg.query("select * from hl_claim_expiry_notices(100)")).rows.length, 0);
 });
+
+test("duo table rejects self-invites and duplicate codes", async () => {
+  const pg = await db();
+  await pg.query("insert into hl_duos (code, inviter, start_date) values ('ABCDEF2345', 'alice', current_date)");
+  await assert.rejects(() => pg.query("insert into hl_duos (code, inviter, invitee, start_date) values ('QWERTY2345', 'alice', 'alice', current_date)"));
+  await assert.rejects(() => pg.query("insert into hl_duos (code, inviter, start_date) values ('ABCDEF2345', 'bob', current_date)"));
+});
