@@ -1,0 +1,16 @@
+name: E2E smoke
+# Read-only smoke tests against the live site (daily and on demand). Real Pi sign-in/payments can't be automated.
+on:
+  schedule:
+    - cron: "40 5 * * *"
+  workflow_dispatch:
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test -c e2e --trace off

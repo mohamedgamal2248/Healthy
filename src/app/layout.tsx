@@ -1,11 +1,16 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import { Cairo, Inter } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "@/components/AppProvider";
 import { Shell } from "@/components/Shell";
 import { PwaRegister } from "@/components/PwaRegister";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+
+// Fonts are downloaded at build time and served from our own domain (faster, no third-party requests, better privacy).
+const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], display: "swap", variable: "--font-inter" });
+const cairo = Cairo({ subsets: ["arabic", "latin"], weight: ["400", "600", "700", "800"], display: "swap", variable: "--font-cairo" });
 
 export const metadata: Metadata = {
   title: "Healthy",
@@ -17,11 +22,8 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, them
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" dir="ltr" suppressHydrationWarning>
+    <html lang="en" dir="ltr" suppressHydrationWarning className={`${inter.variable} ${cairo.variable}`}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
       </head>
       <body>
         <Script src="https://sdk.minepi.com/pi-sdk.js" strategy="afterInteractive" />

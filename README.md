@@ -38,12 +38,14 @@ Healthy turns healthy living into a small daily habit: three short challenges a 
 | Area | What it does |
 |---|---|
 | **Daily challenges** | Three short challenges per day, one free swap, instant check-off, streak and reputation badges (7, 30 and 100-day streaks, sugar-free, water, walking, group challenge). |
+| **Food diary** | "My day": log meals from the catalogue, from a photo analysis or manually; calories and protein against the daily goal. Catalogue/AI items are resolved on the server. |
+| **Streak protection** | One missed day is forgiven automatically (a "freeze" that recharges after 7 days). |
 | **Meal catalogue** | 110 meals (breakfast, lunch, dinner), Egyptian and international, with calories, protein, ingredients and steps. Filters by cuisine, type and health tags. |
 | **"I have these ingredients"** | Pick what is in the kitchen and see meals that are ready now, then meals missing one or two items. Free, no credits. |
 | **Healthy AI** | Meal, workout, 7-day challenge and **photo analysis** (calorie and protein estimate with ranges). One credit per request, refunded automatically on failure. |
 | **Diet plan** | Weekly plan from weight, height, age, goal, activity and declared conditions. Weekly adjustment from logged weight. Water and shopping list. |
-| **Progress** | Weight log, habit log, weekly report. |
-| **Community** | Weekly group challenge, weekly and monthly leaderboards, two teams, shared recipes with likes and saves, referrals. Reputation and badges only. |
+| **Progress** | Weight log, habit log, weekly report, and a shareable weekly card drawn on the device (no health data on it). |
+| **Community** | 7-day challenge with a friend (invite link), weekly group challenge, weekly and monthly leaderboards, two teams, shared recipes with likes and saves, referrals. Reputation and badges only. |
 | **Wallet** | Credit balance, plan expiry, purchase history. |
 | **Admin** | Statistics, AI cost per request type, challenge and meal management, audit log. |
 
@@ -157,6 +159,10 @@ Plans and packs:
 | Large pack | 30 AI requests |
 
 The price is quoted in Pi by the server at purchase time and shown in the app before the Pioneer confirms. Definitions live in `src/config/pricing.ts`; `PRICING_MODE=fixed` switches to fixed Pi amounts for Testnet.
+
+## Reminders at your own hour
+
+Each person chooses a reminder hour in their profile (default 17:00 local time). An hourly **database scheduler** (Supabase `pg_cron` + `pg_net`, see [`supabase/scheduler.sql`](./supabase/scheduler.sql)) calls `/api/cron/reminders` with a dedicated `SCHEDULER_SECRET`; Vercel Cron remains as a daily fallback. The SQL function `hl_claim_reminders` atomically claims people whose local hour is now and who have not done a challenge, so overlapping or repeated runs can never send twice. Plans ending within 3 days get one notice per expiry date (`hl_claim_expiry_notices`). Delivery uses the Pi Notification Center and Web Push, both with high priority.
 
 ## Installable app and reminders (PWA)
 
@@ -281,7 +287,17 @@ Server secrets are never exposed to the browser. See [`.env.example`](./.env.exa
 | `AI_LIMIT_PER_HOUR`, `AI_LIMIT_PER_DAY`, `AI_GLOBAL_DAILY_CAP` | AI abuse and cost limits |
 | `NEXT_PUBLIC_PI_CLIENT_ID` | Optional override of the public Pi Sign-In client id |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web Push (daily reminders) |
-| `CRON_SECRET` | Authenticates the daily maintenance and reminder jobs |
+| `CRON_SECRET` | Authenticates the Vercel Cron jobs |
+| `SCHEDULER_SECRET` | Authenticates the hourly database scheduler |
+
+## Testing, monitoring and load
+
+- **Unit and SQL tests** (`npm test`, PGlite) cover logic, credits, reminders, streak freeze, diary rules and the security contract of public routes.
+- **E2E smoke tests** (`npm run e2e`, Playwright): read-only checks of the live site (pages, manifest, public API, anonymous 401s, security headers) on a phone and a desktop viewport. A daily workflow runs them.
+- **Uptime**: `.github/workflows/uptime.yml` probes `/api/health` every 30 minutes; a failed run emails the repository owner.
+- **Load**: `loadtest/k6-public.js` ([k6](https://k6.io)) exercises the public, CDN-cached endpoints (`smoke`, `load`, `spike` profiles). Run it only against a copy you own.
+- **Supply chain**: Dependabot, CodeQL and [`SECURITY.md`](./SECURITY.md).
+- Fonts are self-hosted at build time (`next/font`), so no third-party font requests.
 
 ## Testing and CI
 

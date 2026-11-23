@@ -5,8 +5,8 @@ const isProd = process.env.NODE_ENV === "production";
 const csp = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://sdk.minepi.com",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' https://fonts.gstatic.com data:",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
   "img-src 'self' data: blob: https:",
   "connect-src 'self' https://socialchain.app https://api.minepi.com",
   "frame-src https://sdk.minepi.com https://app-cdn.minepi.com",

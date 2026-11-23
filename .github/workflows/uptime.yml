@@ -1,0 +1,23 @@
+name: Uptime
+# Checks the live site every 30 minutes. A failed run makes GitHub email the repository owner, which is the alert.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Health endpoint (database reachable)
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -s -o /tmp/h.json -w '%{http_code}' --max-time 20 https://healthy-rho-lilac.vercel.app/api/health || true)
+            echo "attempt $i: HTTP $code $(cat /tmp/h.json 2>/dev/null)"
+            [ "$code" = "200" ] && exit 0
+            sleep 15
+          done
+          echo "Healthy is not healthy" && exit 1
+      - name: Home page and public catalogue
+        run: |
+          curl -fsS --max-time 20 -o /dev/null https://healthy-rho-lilac.vercel.app/
+          curl -fsS --max-time 20 https://healthy-rho-lilac.vercel.app/api/public/meals | grep -q '"meals"'
