@@ -20,6 +20,7 @@ function Inner({ id }: { id: string }) {
   if (!m) return <PageSkeleton />;
   const meal = m.meal;
   const toggle = async () => { setM({ ...m, favourite: !m.favourite }); try { await api("/favourites", { body: { type: "meal", id } }); } catch (e) { toast(errMsg(e), "err"); } };
+  const addToDay = async () => { try { await api("/food", { body: { source: "meal", mealId: id } }); toast(tr("تمت الإضافة إلى يومك", "Added to your day"), "ok"); } catch (e) { toast(errMsg(e), "err"); } };
   return (
     <div className="mx-auto max-w-3xl space-y-5 py-5">
       <Link href="/meals" className="inline-flex items-center gap-1 text-sm font-extrabold text-brand-700"><Icon name={lang === "ar" ? "arrowR" : "arrowL"} size={18} />{tr("كل الوجبات", "All meals")}</Link>
@@ -35,6 +36,7 @@ function Inner({ id }: { id: string }) {
             ))}
           </div>
           <p className="rounded-2xl bg-sun-50 p-3 text-sm font-semibold">{lang === "ar" ? meal.why_ar : meal.why_en}</p>
+          <button className="btn-primary w-full" onClick={addToDay}><Icon name="plus" />{tr("أضف إلى يومي", "Add to my day")}</button>
           <TagChips tags={meal.tags} max={6} />
         </div>
       </div>

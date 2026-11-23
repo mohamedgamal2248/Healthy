@@ -41,7 +41,7 @@ export function ChallengeCard({ c, onDone, onSwap, canSwap, busy }: { c: Challen
   );
 }
 
-export function StreakHeader({ current, longest, total, doneToday }: { current: number; longest: number; total: number; doneToday: number }) {
+export function StreakHeader({ current, longest, total, doneToday, frozen = false, freezeReady = false }: { current: number; longest: number; total: number; doneToday: number; frozen?: boolean; freezeReady?: boolean }) {
   const { tr } = useApp();
   const alive = doneToday > 0;
   return (
@@ -59,6 +59,8 @@ export function StreakHeader({ current, longest, total, doneToday }: { current: 
         <div className="rounded-2xl bg-white/12 p-3"><p className="text-xs font-bold text-brand-100">{tr("أطول سلسلة", "Longest streak")}</p><p className="text-xl font-extrabold tabular-nums">{longest}</p></div>
         <div className="rounded-2xl bg-white/12 p-3"><p className="text-xs font-bold text-brand-100">{tr("إجمالي التحديات", "Total completed")}</p><p className="text-xl font-extrabold tabular-nums">{total}</p></div>
       </div>
+          {frozen && <p className="mt-3 rounded-2xl bg-white/15 px-3 py-2 text-sm font-bold">{tr("فاتك أمس، لكن سلسلتك محميّة. أنجز تحديًا اليوم لتكمل.", "You missed yesterday, but your streak is protected. Do a challenge today to keep it.")}</p>}
+      {!frozen && freezeReady && current >= 3 && <p className="mt-3 text-xs font-bold text-brand-100">{tr("حماية السلسلة جاهزة: يومٌ فائت واحد يُغفر تلقائيًا.", "Streak protection is ready: one missed day is forgiven automatically.")}</p>}
     </section>
   );
 }

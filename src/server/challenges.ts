@@ -88,8 +88,8 @@ export async function swapChallenge(a: Auth, userChallengeId: string) {
 }
 
 export async function loadStreak(username: string): Promise<StreakState> {
-  const s = must(await db().from("hl_streaks").select("*").eq("username", username).maybeSingle()) as { current_streak: number; longest_streak: number; last_completed_date: string | null; total_completed: number } | null;
-  return { current: s?.current_streak ?? 0, longest: s?.longest_streak ?? 0, last: s?.last_completed_date ?? null, total: s?.total_completed ?? 0 };
+  const s = must(await db().from("hl_streaks").select("*").eq("username", username).maybeSingle()) as { current_streak: number; longest_streak: number; last_completed_date: string | null; total_completed: number; freeze_used_on: string | null } | null;
+  return { current: s?.current_streak ?? 0, longest: s?.longest_streak ?? 0, last: s?.last_completed_date ?? null, total: s?.total_completed ?? 0, freezeUsed: s?.freeze_used_on ?? null };
 }
 
 async function completedCountOfType(username: string, type: string): Promise<number> {
@@ -128,7 +128,7 @@ export async function completeChallenge(a: Auth, userChallengeId: string) {
 
   const next = applyCompletion(await loadStreak(a.username), a.today);
   must(
-    await db().from("hl_streaks").upsert({ username: a.username, current_streak: next.current, longest_streak: next.longest, last_completed_date: next.last, total_completed: next.total }, { onConflict: "username" }),
+    await db().from("hl_streaks").upsert({ username: a.username, current_streak: next.current, longest_streak: next.longest, last_completed_date: next.last, total_completed: next.total, freeze_used_on: next.freezeUsed ?? null }, { onConflict: "username" }),
   );
   const newBadges = await awardBadges(a.username, next.current);
   // Starter challenge: 7 days in a row earns the AI credits, once (unique ledger index guarantees it).

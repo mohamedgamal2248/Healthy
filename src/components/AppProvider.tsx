@@ -138,7 +138,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch {}
       // Coming from "Continue in Pi Browser" with a purchase waiting: stay on the pricing page so it can open.
       const keep = window.location.pathname === "/pricing" && new URLSearchParams(window.location.search).get("buy");
-      router.push(keep ? window.location.pathname + window.location.search : m && !m.profile.disclaimer_accepted_at ? "/profile" : "/today");
+      router.push(keep ? window.location.pathname + window.location.search : "/today"); // value first: challenges work right away; the profile is one tap away on Today
     },
     [refresh, router],
   );

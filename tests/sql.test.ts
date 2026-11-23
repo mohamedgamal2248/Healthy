@@ -5,7 +5,7 @@ import { PGlite } from "@electric-sql/pglite";
 
 async function db() {
   const pg = new PGlite();
-  for (const f of ["0001_init", "0002_cuisine_and_ai_cache", "0003_hardening_growth", "0006_referral_lock", "0007_scale", "0008_push"]) {
+  for (const f of ["0001_init", "0002_cuisine_and_ai_cache", "0003_hardening_growth", "0006_referral_lock", "0007_scale", "0008_push", "0009_pi_notify", "0010_growth"]) {
     const sql = readFileSync(`supabase/migrations/${f}.sql`, "utf8").replace(/revoke all on [\s\S]*?;/g, "");
     await pg.exec(sql);
   }
@@ -122,4 +122,32 @@ test("SQL fnv hash matches the app's hash; team totals, month board and balances
   const c = (await pg.query<{ members: string; checked: string }>("select * from hl_group_counts($1,'2026-01-05')", [g])).rows[0];
   assert.equal(Number(c.members), 2);
   assert.equal(Number(c.checked), 1);
+});
+
+test("reminders are claimed once per local day, only for people who have not done a challenge", async () => {
+  const pg = await db();
+  const hour = Number((await pg.query<{ h: number }>("select extract(hour from now() at time zone 'UTC')::int h")).rows[0].h);
+  await pg.query("update hl_profiles set pi_uid = 'u-alice', timezone = 'UTC', reminder_hour = $1 where username = 'alice'", [hour]);
+  await pg.query("update hl_profiles set pi_uid = 'u-bob', timezone = 'UTC', reminder_hour = $1 where username = 'bob'", [hour]);
+  await pg.query("insert into hl_streaks (username, current_streak, longest_streak, last_completed_date, total_completed) values ('bob', 3, 3, (now() at time zone 'UTC')::date, 3)");
+  const first = (await pg.query<{ username: string }>("select * from hl_claim_reminders(100)")).rows.map((r) => r.username);
+  assert.deepEqual(first, ["alice"]); // bob already did today's challenge
+  const second = (await pg.query("select * from hl_claim_reminders(100)")).rows;
+  assert.equal(second.length, 0); // claimed: a repeated run never sends twice
+  // a wrong hour is never due
+  await pg.query("update hl_profiles set reminder_hour = ($1 + 5) % 24, last_reminded_on = null where username = 'alice'", [hour]);
+  assert.equal((await pg.query("select * from hl_claim_reminders(100)")).rows.length, 0);
+  // an unknown timezone name falls back instead of breaking the whole query
+  await pg.query("update hl_profiles set timezone = 'Not/AZone' where username = 'alice'");
+  await pg.query("select * from hl_claim_reminders(100)");
+});
+
+test("plan-expiry notice is sent once per expiry date and only inside the 3-day window", async () => {
+  const pg = await db();
+  const hour = Number((await pg.query<{ h: number }>("select extract(hour from now() at time zone 'UTC')::int h")).rows[0].h);
+  await pg.query("update hl_profiles set pi_uid = 'u-' || username, timezone = 'UTC', reminder_hour = $1 where username in ('alice','bob')", [hour]);
+  await pg.query("insert into hl_subscriptions (username, plan_key, started_at, expires_at) values ('alice', 'plan_monthly', now() - interval '28 days', now() + interval '2 days'), ('bob', 'plan_monthly', now(), now() + interval '10 days')");
+  const a = (await pg.query<{ username: string }>("select * from hl_claim_expiry_notices(100)")).rows.map((r) => r.username);
+  assert.deepEqual(a, ["alice"]);
+  assert.equal((await pg.query("select * from hl_claim_expiry_notices(100)")).rows.length, 0);
 });

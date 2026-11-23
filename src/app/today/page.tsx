@@ -13,10 +13,11 @@ import { BADGES } from "@/data/badges";
 import type { MealRow } from "@/server/meals";
 
 type Today = {
-  date: string; challenges: ChallengeItem[]; swapUsed: boolean; streak: { current: number; longest: number; total: number }; completedToday: number;
+  date: string; challenges: ChallengeItem[]; swapUsed: boolean; streak: { current: number; longest: number; total: number; frozen?: boolean; freezeReady?: boolean }; completedToday: number;
   meals: { breakfast: MealRow | null; lunch: MealRow | null; dinner: MealRow | null }; badges: { badge_key: string }[]; favourites: string[];
   reminder: "none" | "morning" | "inactive"; balances: Balances | null; profileReady: boolean;
   starter: { rewarded: boolean; reward: number };
+  food?: { calories: number; target: number | null; entries: number };
   checklist: { profile: boolean; challenge: boolean; coach: boolean };
   community: { title_ar: string; title_en: string; members: number; checkedToday: number; joined: boolean; myDays: number } | null;
 };
@@ -50,6 +51,34 @@ function Checklist({ d }: { d: Today }) {
         ))}
       </ul>
     </section>
+  );
+}
+
+/** One clear next step. The first thing that applies wins, so the screen never feels like a to-do list. */
+function NextStep({ d }: { d: Today }) {
+  const { tr } = useApp();
+  const left = d.challenges.filter((c) => c.status !== "completed").length;
+  const hour = new Date().getHours();
+  let step: { ar: string; en: string; href: string; icon: "user" | "flame" | "utensils" | "trophy" } | null = null;
+  if (!d.profileReady) step = { ar: "أكمل ملفك الصحي (دقيقة واحدة)", en: "Complete your health profile (1 minute)", href: "/profile", icon: "user" };
+  else if (left > 0) step = { ar: left === 1 ? "تحدٍّ واحد باقي اليوم" : `${left} تحديات باقية اليوم`, en: left === 1 ? "One challenge left today" : `${left} challenges left today`, href: "#ch", icon: "flame" };
+  else if ((d.food?.entries ?? 0) === 0 && hour >= 11) step = { ar: "سجّل وجبتك الأولى اليوم", en: "Log your first meal today", href: "/diary", icon: "utensils" };
+  if (!step) return null;
+  const inner = (<><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-600 text-white"><Icon name={step.icon} size={22} /></span><span className="min-w-0 flex-1"><span className="block text-xs font-extrabold text-brand-700">{tr("خطوتك الآن", "Your next step")}</span><span className="block font-extrabold">{tr(step.ar, step.en)}</span></span><Icon name="chevronR" size={20} className="text-brand-600 rtl:rotate-180" /></>);
+  return step.href.startsWith("#") ? <a href={step.href} className="card flex items-center gap-3 !border-brand-200 !p-3.5">{inner}</a> : <Link href={step.href} className="card flex items-center gap-3 !border-brand-200 !p-3.5">{inner}</Link>;
+}
+
+/** Today's calories at a glance; taps through to the diary. */
+function FoodGlance({ d }: { d: Today }) {
+  const { tr } = useApp();
+  if (!d.food) return null;
+  const { calories, target } = d.food;
+  const pct = target ? Math.min(100, Math.round((calories / target) * 100)) : 0;
+  return (
+    <Link href="/diary" className="card block !p-3.5">
+      <div className="flex items-center justify-between gap-3"><p className="font-extrabold">{tr("يومي", "My day")}</p><p className="text-sm font-bold tabular-nums text-ink-soft">{calories}{target ? ` / ${target}` : ""} {tr("سعرة", "kcal")}</p></div>
+      {target ? <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-brand-100"><div className="h-full rounded-full bg-brand-600" style={{ width: `${pct}%` }} /></div> : <p className="muted mt-1">{tr("أكمل ملفك لتظهر سعراتك المستهدفة.", "Complete your profile to see your calorie goal.")}</p>}
+    </Link>
   );
 }
 
@@ -102,7 +131,11 @@ function TodayInner() {
         <Notice tone="info" icon="bell">{tr("وحشتنا! لسه تحديات النهاردة مستنياك، وكل يوم جديد فرصة جديدة. ابدأ بتحدي واحد بس.", "We missed you! Today's challenges are waiting; every day is a fresh start. Begin with just one.")}</Notice>
       )}
 
-      <StreakHeader current={d.streak.current} longest={d.streak.longest} total={d.streak.total} doneToday={d.completedToday} />
+      <StreakHeader current={d.streak.current} longest={d.streak.longest} total={d.streak.total} doneToday={d.completedToday} frozen={d.streak.frozen} freezeReady={d.streak.freezeReady} />
+
+      <NextStep d={d} />
+
+      <FoodGlance d={d} />
 
       <Checklist d={d} />
 

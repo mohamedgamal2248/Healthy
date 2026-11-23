@@ -93,6 +93,7 @@ function ChefInner() {
   };
 
   const toggleFav = async () => { if (!recipe) return; setFav(!fav); try { await api("/favourites", { body: { type: "recipe", id: recipe.id } }); } catch (e) { setFav(fav); toast(errMsg(e), "err"); } };
+  const addToDay = async () => { if (!recipe) return; try { await api("/food", { body: { source: "recipe", recipeId: recipe.id } }); toast(tr("تمت الإضافة إلى يومك", "Added to your day"), "ok"); } catch (e) { toast(errMsg(e), "err"); } };
   const share = async () => {
     if (!recipe) return;
     try {
@@ -117,6 +118,7 @@ function ChefInner() {
             content={recipe.content}
             actions={<>
               <button className="btn-soft btn-sm" onClick={toggleFav} aria-pressed={fav}><Icon name="heart" size={18} filled={fav} className={fav ? "text-rose-600" : ""} />{fav ? tr("في المفضلة", "Saved") : tr("أضف للمفضلة", "Favourite")}</button>
+              {(recipe.content.kind === "scan" || recipe.content.kind === "recipe") && <button className="btn-soft btn-sm" onClick={addToDay}><Icon name="plus" size={18} />{tr("أضف إلى يومي", "Add to my day")}</button>}
               {recipe.content.kind !== "scan" && <button className="btn-soft btn-sm" onClick={share}><Icon name="share" size={18} />{tr("انشر في المجتمع + رابط", "Publish to community + link")}</button>}
             </>}
           />

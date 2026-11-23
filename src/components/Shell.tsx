@@ -11,7 +11,7 @@ import { Sheet, Spinner } from "./ui";
 // Bottom bar: the five things people do every day. Coach sits in the middle as the primary action.
 const MAIN = [
   { href: "/today", icon: "home", ar: "اليوم", en: "Today" },
-  { href: "/meals", icon: "utensils", ar: "الأكل", en: "Eat", also: ["/plan"] },
+  { href: "/meals", icon: "utensils", ar: "الأكل", en: "Eat", also: ["/plan", "/diary"] },
   { href: "/chef", icon: "sparkles", ar: "AI", en: "AI", primary: true },
   { href: "/progress", icon: "chart", ar: "تقدمي", en: "Progress" },
   { href: "/community", icon: "users", ar: "المجتمع", en: "Community" },
