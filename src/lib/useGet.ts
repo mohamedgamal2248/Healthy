@@ -33,5 +33,12 @@ export function useGet<T>(path: string | null, onError?: (e: unknown) => void, o
     reload();
   }, [path, reload]);
 
+  // Quick actions (e.g. "+1 water" from the floating button) ask open pages to refetch.
+  useEffect(() => {
+    const on = () => { reload(); };
+    window.addEventListener("healthy:refresh", on);
+    return () => window.removeEventListener("healthy:refresh", on);
+  }, [reload]);
+
   return { data, setData, reload };
 }

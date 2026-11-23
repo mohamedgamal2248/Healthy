@@ -1,6 +1,7 @@
 "use client";
 import { InstallPrompt } from "./InstallPrompt";
 import { ReminderPrompt } from "./ReminderPrompt";
+import { QuickAdd } from "./QuickAdd";
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -85,7 +86,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </div>
           </aside>
         )}
-        <main className={`min-w-0 flex-1 ${signedIn && !bare ? "pb-28 lg:pb-10" : "pb-10"}`}>
+        <main className={`min-w-0 flex-1 ${signedIn && !bare ? "pb-40 lg:pb-24" : "pb-10"}`}>
           {children}
           <footer className="mt-10 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 border-t border-line pt-4 text-xs font-bold text-ink-soft">
             <Link href="/terms" className="underline-offset-2 hover:underline">{tr("الشروط والأحكام", "Terms")}</Link>
@@ -96,6 +97,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </main>
         <ReminderPrompt />
         <InstallPrompt />
+        {signedIn && !bare && <QuickAdd />}
       </div>
 
       {signedIn && !bare && (

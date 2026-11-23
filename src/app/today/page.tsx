@@ -4,7 +4,9 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { useGet } from "@/lib/useGet";
 import { useApp, type Balances } from "@/components/AppProvider";
-import { Gate, Notice, PageSkeleton } from "@/components/ui";
+import { Gate, Notice, PageSkeleton, Spinner } from "@/components/ui";
+import { CalorieCard, FoodTile, MacroRings, WeekStrip } from "@/components/Rings";
+import { useRouter } from "next/navigation";
 import { ChallengeCard, StreakHeader, type ChallengeItem } from "@/components/Challenge";
 import { MealCard } from "@/components/MealCard";
 import { CreditBalance } from "@/components/Domain";
@@ -12,12 +14,15 @@ import { Icon } from "@/components/Icon";
 import { BADGES } from "@/data/badges";
 import type { MealRow } from "@/server/meals";
 
+type RecentFood = { id: string; name: string; calories: number; protein_g: number; source: "meal" | "scan" | "manual"; estimated: boolean };
+
 type Today = {
   date: string; challenges: ChallengeItem[]; swapUsed: boolean; streak: { current: number; longest: number; total: number; frozen?: boolean; freezeReady?: boolean }; completedToday: number;
   meals: { breakfast: MealRow | null; lunch: MealRow | null; dinner: MealRow | null }; badges: { badge_key: string }[]; favourites: string[];
   reminder: "none" | "morning" | "inactive"; balances: Balances | null; profileReady: boolean;
   starter: { rewarded: boolean; reward: number };
-  food?: { calories: number; target: number | null; entries: number };
+  food?: { calories: number; target: number | null; entries: number; totals: { calories: number; protein_g: number; carbs_g: number; fat_g: number }; targets: { protein: number; carbs: number; fat: number } | null; recent: RecentFood[] };
+  week?: { date: string; challenge: boolean; food: boolean }[];
   checklist: { profile: boolean; challenge: boolean; coach: boolean };
   community: { title_ar: string; title_en: string; members: number; checkedToday: number; joined: boolean; myDays: number } | null;
 };
@@ -58,27 +63,31 @@ function Checklist({ d }: { d: Today }) {
 function NextStep({ d }: { d: Today }) {
   const { tr } = useApp();
   const left = d.challenges.filter((c) => c.status !== "completed").length;
-  const hour = new Date().getHours();
   let step: { ar: string; en: string; href: string; icon: "user" | "flame" | "utensils" | "trophy" } | null = null;
   if (!d.profileReady) step = { ar: "أكمل ملفك الصحي (دقيقة واحدة)", en: "Complete your health profile (1 minute)", href: "/profile", icon: "user" };
   else if (left > 0) step = { ar: left === 1 ? "تحدٍّ واحد باقي اليوم" : `${left} تحديات باقية اليوم`, en: left === 1 ? "One challenge left today" : `${left} challenges left today`, href: "#ch", icon: "flame" };
-  else if ((d.food?.entries ?? 0) === 0 && hour >= 11) step = { ar: "سجّل وجبتك الأولى اليوم", en: "Log your first meal today", href: "/diary", icon: "utensils" };
   if (!step) return null;
   const inner = (<><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-600 text-white"><Icon name={step.icon} size={22} /></span><span className="min-w-0 flex-1"><span className="block text-xs font-extrabold text-brand-700">{tr("خطوتك الآن", "Your next step")}</span><span className="block font-extrabold">{tr(step.ar, step.en)}</span></span><Icon name="chevronR" size={20} className="text-brand-600 rtl:rotate-180" /></>);
   return step.href.startsWith("#") ? <a href={step.href} className="card flex items-center gap-3 !border-brand-200 !p-3.5">{inner}</a> : <Link href={step.href} className="card flex items-center gap-3 !border-brand-200 !p-3.5">{inner}</Link>;
 }
 
-/** Today's calories at a glance; taps through to the diary. */
-function FoodGlance({ d }: { d: Today }) {
+/** Last meals with a one-tap "repeat" (copied on the server from the user's own entry). */
+function RecentMeals({ items, onRepeat, busy }: { items: RecentFood[]; onRepeat: (id: string) => void; busy: string | null }) {
   const { tr } = useApp();
-  if (!d.food) return null;
-  const { calories, target } = d.food;
-  const pct = target ? Math.min(100, Math.round((calories / target) * 100)) : 0;
+  if (!items.length) return null;
   return (
-    <Link href="/diary" className="card block !p-3.5">
-      <div className="flex items-center justify-between gap-3"><p className="font-extrabold">{tr("يومي", "My day")}</p><p className="text-sm font-bold tabular-nums text-ink-soft">{calories}{target ? ` / ${target}` : ""} {tr("سعرة", "kcal")}</p></div>
-      {target ? <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-brand-100"><div className="h-full rounded-full bg-brand-600" style={{ width: `${pct}%` }} /></div> : <p className="muted mt-1">{tr("أكمل ملفك لتظهر سعراتك المستهدفة.", "Complete your profile to see your calorie goal.")}</p>}
-    </Link>
+    <section aria-labelledby="rm">
+      <div className="mb-2.5 flex items-end justify-between"><h2 id="rm" className="h2">{tr("آخر وجباتك", "Recent meals")}</h2><Link href="/diary" className="text-sm font-extrabold text-brand-700">{tr("الكل", "All")}</Link></div>
+      <ul className="space-y-2">
+        {items.slice(0, 2).map((m) => (
+          <li key={m.id} className="card-row !min-h-16">
+            <FoodTile source={m.source} size={44} />
+            <div className="min-w-0 flex-1"><p className="truncate font-extrabold">{m.name}</p><p className="muted tabular-nums">{m.calories} {tr("سعرة", "kcal")} · {Math.round(m.protein_g)}{tr("ج بروتين", "g protein")}</p></div>
+            <button className="btn-soft btn-sm !min-h-9 !px-3" onClick={() => onRepeat(m.id)} disabled={busy !== null} aria-label={tr(`كرر ${m.name}`, `Repeat ${m.name}`)}>{busy === m.id ? <Spinner size={16} /> : <Icon name="refresh" size={16} />}{tr("كرر", "Repeat")}</button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -86,6 +95,8 @@ function TodayInner() {
   const { tr, toast, errMsg, lang, me } = useApp();
   const { data: d, setData: setD, reload: load } = useGet<Today>("/today", (e) => toast(errMsg(e), "err"));
   const [busy, setBusy] = useState(false);
+  const [repeating, setRepeating] = useState<string | null>(null);
+  const router = useRouter();
 
   if (!d) return <PageSkeleton />;
 
@@ -111,6 +122,11 @@ function TodayInner() {
     try { await api("/challenges/swap", { body: { id } }); await load(); toast(tr("تم تبديل التحدي", "Challenge swapped"), "ok"); }
     catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
   };
+  const repeat = async (entryId: string) => {
+    setRepeating(entryId);
+    try { await api("/food", { body: { source: "repeat", entryId } }); toast(tr("تمت إضافتها ليومك", "Added to your day"), "ok"); await load(); }
+    catch (e) { toast(errMsg(e), "err"); } finally { setRepeating(null); }
+  };
   const fav = async (id: string) => {
     const was = d.favourites.includes(id);
     setD({ ...d, favourites: was ? d.favourites.filter((x) => x !== id) : [...d.favourites, id] });
@@ -119,13 +135,6 @@ function TodayInner() {
 
   const allDone = d.challenges.length > 0 && d.completedToday === d.challenges.length;
   const slots: ["breakfast" | "lunch" | "dinner", string][] = [["breakfast", tr("فطار", "Breakfast")], ["lunch", tr("غدا", "Lunch")], ["dinner", tr("عشا", "Dinner")]];
-
-  const tiles = [
-    { href: "/chef", icon: "sparkles", ar: "اسأل AI", en: "Ask AI", tone: "bg-brand-600 text-white" },
-    { href: "/diary", icon: "utensils", ar: "سجّل وجبة", en: "Log a meal", tone: "bg-brand-50 text-brand-700" },
-    { href: "/progress", icon: "drop", ar: "الماء والوزن", en: "Water & weight", tone: "bg-sky-50 text-sky-600" },
-    { href: "/community", icon: "users", ar: "المجتمع", en: "Community", tone: "bg-sun-50 text-sun-600" },
-  ];
 
   return (
     <div className="space-y-5 py-5">
@@ -138,11 +147,20 @@ function TodayInner() {
         <Notice tone="info" icon="bell">{tr("وحشتنا! لسه تحديات النهاردة مستنياك، وكل يوم جديد فرصة جديدة. ابدأ بتحدي واحد بس.", "We missed you! Today's challenges are waiting; every day is a fresh start. Begin with just one.")}</Notice>
       )}
 
-      {/* 1 · Hero: the streak */}
-      <StreakHeader current={d.streak.current} longest={d.streak.longest} total={d.streak.total} doneToday={d.completedToday} frozen={d.streak.frozen} freezeReady={d.streak.freezeReady} />
+      {/* 1 · Week strip + streak (falls back to the big streak card if the server is older) */}
+      {d.week ? <WeekStrip week={d.week} today={d.date} streak={d.streak.current} frozen={d.streak.frozen} freezeReady={d.streak.freezeReady} /> : <StreakHeader current={d.streak.current} longest={d.streak.longest} total={d.streak.total} doneToday={d.completedToday} frozen={d.streak.frozen} freezeReady={d.streak.freezeReady} />}
 
-      {/* 2 · One next step */}
+      {/* One next step (profile, then challenges) */}
       <NextStep d={d} />
+
+      {/* 2 · Calories + macros (macros only once something is logged) */}
+      {d.food && (
+        <div className="space-y-2.5">
+          <CalorieCard totals={d.food.totals} target={d.food.target} entries={d.food.entries} onAdd={() => router.push("/diary?add=meals")} />
+          {d.food.entries > 0 && <MacroRings totals={d.food.totals} targets={d.food.targets} estimated />}
+        </div>
+      )}
+
 
       {!d.starter.rewarded && me?.profile.kyc_verified && (
         <section className="card-row !border-sun-100 !bg-sun-50/60">
@@ -155,7 +173,7 @@ function TodayInner() {
         </section>
       )}
 
-      {/* 3 · Today's challenges as compact rows */}
+      {/* 3 · Today's challenges as compact rows (kept high: they are what makes Healthy different) */}
       <section aria-labelledby="ch">
         <div className="mb-2.5 flex items-end justify-between gap-3">
           <div>
@@ -170,18 +188,8 @@ function TodayInner() {
         <p className="muted mt-2">{d.swapUsed ? tr("استخدمت تبديل اليوم.", "You used today's swap.") : tr("تقدر تبدّل تحديًا واحدًا اليوم.", "You can swap one challenge today.")}</p>
       </section>
 
-      {/* 4 · Four quick actions */}
-      <nav className="grid grid-cols-4 gap-2" aria-label={tr("اختصارات", "Shortcuts")}>
-        {tiles.map((t) => (
-          <Link key={t.href} href={t.href} className="card flex min-h-24 flex-col items-center justify-center gap-1.5 !p-2 text-center transition active:scale-95">
-            <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${t.tone}`}><Icon name={t.icon} size={22} /></span>
-            <span className="text-xs font-extrabold leading-tight">{tr(t.ar, t.en)}</span>
-          </Link>
-        ))}
-      </nav>
-
-      {/* 5 · Calories */}
-      <FoodGlance d={d} />
+      {/* 4 · Recent meals with one-tap repeat */}
+      {d.food && <RecentMeals items={d.food.recent} onRepeat={repeat} busy={repeating} />}
 
       {/* Everything else, one tap away */}
       <details className="card group !p-0">

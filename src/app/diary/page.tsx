@@ -6,14 +6,19 @@ import { useApp } from "@/components/AppProvider";
 import { EmptyState, Field, Gate, PageHeader, PageSkeleton, Sheet, Spinner } from "@/components/ui";
 import { EatTabs } from "@/components/EatTabs";
 import { Icon } from "@/components/Icon";
+import { CalorieCard, FoodTile, MacroRings } from "@/components/Rings";
 import type { MealRow } from "@/server/meals";
 
-type Entry = { id: string; name: string; calories: number; protein_g: number; source: "meal" | "scan" | "manual" };
-type Day = { date: string; entries: Entry[]; totals: { calories: number; protein_g: number }; target: number | null };
+type Entry = { id: string; name: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; source: "meal" | "scan" | "manual"; estimated: boolean };
+type Day = { date: string; entries: Entry[]; totals: { calories: number; protein_g: number; carbs_g: number; fat_g: number }; target: number | null; targets: { protein: number; carbs: number; fat: number } | null; recent?: (Entry & { date: string })[] };
+type Tab = "meals" | "recent" | "manual";
 
-function AddSheet({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: (d: Day) => void }) {
+function AddSheet({ open, initialTab, recent, onClose, onAdded }: { open: boolean; initialTab: Tab; recent: (Entry & { date: string })[]; onClose: () => void; onAdded: (d: Day) => void }) {
   const { tr, lang, toast, errMsg } = useApp();
-  const [tab, setTab] = useState<"meals" | "manual">("meals");
+  const [tab, setTab] = useState<Tab>(initialTab);
+  useEffect(() => { if (open) setTab(initialTab); }, [open, initialTab]);
+  const [carbs, setCarbs] = useState("");
+  const [fat, setFat] = useState("");
   const [q, setQ] = useState("");
   const [qd, setQd] = useState("");
   const [name, setName] = useState("");
@@ -31,8 +36,8 @@ function AddSheet({ open, onClose, onAdded }: { open: boolean; onClose: () => vo
   return (
     <Sheet open={open} onClose={onClose} title={tr("أضف إلى يومك", "Add to your day")}>
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-brand-50 p-1.5">
-          {([["meals", tr("من الكتالوج", "From catalogue")], ["manual", tr("يدويًا", "Manual")]] as const).map(([k, l]) => (
+        <div className="grid grid-cols-3 gap-2 rounded-2xl bg-brand-50 p-1.5">
+          {([["meals", tr("القائمة", "Catalogue")], ["recent", tr("كرر", "Repeat")], ["manual", tr("يدويًا", "Manual")]] as const).map(([k, l]) => (
             <button key={k} className={`min-h-11 rounded-xl text-sm font-extrabold ${tab === k ? "bg-white text-brand-800 shadow-sm" : "text-ink-soft"}`} aria-pressed={tab === k} onClick={() => setTab(k)}>{l}</button>
           ))}
         </div>
@@ -52,6 +57,20 @@ function AddSheet({ open, onClose, onAdded }: { open: boolean; onClose: () => vo
               {data && data.meals.length === 0 && <li className="muted py-4 text-center">{tr("لا نتائج.", "No results.")}</li>}
             </ul>
           </>
+        ) : tab === "recent" ? (
+          recent.length === 0 ? <p className="muted py-6 text-center">{tr("لا توجد وجبات سابقة بعد. سجّل وجبة وستظهر هنا.", "No earlier meals yet. Log one and it will show here.")}</p> : (
+            <ul className="max-h-[50dvh] space-y-2 overflow-y-auto">
+              {recent.map((m) => (
+                <li key={m.id}>
+                  <button className="flex min-h-14 w-full items-center gap-3 rounded-2xl border border-line p-2.5 text-start hover:bg-brand-50" disabled={busy !== null} onClick={() => add(m.id, { source: "repeat", entryId: m.id })}>
+                    <FoodTile source={m.source} size={40} />
+                    <span className="min-w-0 flex-1"><span className="block truncate font-extrabold">{m.name}</span><span className="block text-xs font-bold text-ink-soft tabular-nums">{m.calories} {tr("سعرة", "kcal")} · {Math.round(m.protein_g)}{tr("ج بروتين", "g protein")}</span></span>
+                    {busy === m.id ? <Spinner size={18} /> : <Icon name="refresh" size={18} className="text-brand-600" />}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )
         ) : (
           <div className="space-y-3">
             <Field label={tr("الاسم", "Name")}><input className="field" maxLength={120} value={name} onChange={(e) => setName(e.target.value)} /></Field>
@@ -59,7 +78,11 @@ function AddSheet({ open, onClose, onAdded }: { open: boolean; onClose: () => vo
               <Field label={tr("السعرات", "Calories")}><input className="field" inputMode="numeric" value={kcal} onChange={(e) => setKcal(e.target.value.replace(/\D/g, "").slice(0, 4))} /></Field>
               <Field label={tr("بروتين (جم)", "Protein (g)")}><input className="field" inputMode="decimal" value={protein} onChange={(e) => setProtein(e.target.value.replace(/[^0-9.]/g, "").slice(0, 5))} /></Field>
             </div>
-            <button className="btn-primary w-full" disabled={!manualOk || busy !== null} onClick={() => add("manual", { source: "manual", name: name.trim(), calories: kcalN, ...(protein ? { protein_g: Number(protein) } : {}) })}>{busy === "manual" ? <Spinner /> : <Icon name="plus" />}{tr("أضف", "Add")}</button>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={tr("كربوهيدرات (جم) اختياري", "Carbs (g) optional")}><input className="field" inputMode="decimal" value={carbs} onChange={(e) => setCarbs(e.target.value.replace(/[^0-9.]/g, "").slice(0, 5))} /></Field>
+              <Field label={tr("دهون (جم) اختياري", "Fat (g) optional")}><input className="field" inputMode="decimal" value={fat} onChange={(e) => setFat(e.target.value.replace(/[^0-9.]/g, "").slice(0, 5))} /></Field>
+            </div>
+            <button className="btn-primary w-full" disabled={!manualOk || busy !== null} onClick={() => add("manual", { source: "manual", name: name.trim(), calories: kcalN, ...(protein ? { protein_g: Number(protein) } : {}), ...(carbs ? { carbs_g: Number(carbs) } : {}), ...(fat ? { fat_g: Number(fat) } : {}) })}>{busy === "manual" ? <Spinner /> : <Icon name="plus" />}{tr("أضف", "Add")}</button>
           </div>
         )}
       </div>
@@ -71,11 +94,15 @@ function Inner() {
   const { tr, toast, errMsg } = useApp();
   const { data: d, setData, reload } = useGet<Day>("/food", (e) => toast(errMsg(e), "err"));
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<Tab>("meals");
   const [busy, setBusy] = useState<string | null>(null);
+  // Opened from the floating "+": /diary?add=meals|recent|manual
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("add");
+    if (q === "meals" || q === "recent" || q === "manual") { setTab(q); setOpen(true); history.replaceState(null, "", "/diary"); }
+  }, []);
   if (!d) return <PageSkeleton />;
-  const eaten = d.totals.calories;
-  const pct = d.target ? Math.min(100, Math.round((eaten / d.target) * 100)) : 0;
-  const over = d.target ? eaten > d.target : false;
+  const openAdd = (t: Tab) => { setTab(t); setOpen(true); };
   const remove = async (id: string) => {
     setBusy(id);
     try { setData(await api<Day>("/food", { method: "DELETE", body: { id } })); } catch (e) { toast(errMsg(e), "err"); reload(); } finally { setBusy(null); }
@@ -84,33 +111,31 @@ function Inner() {
     <div className="mx-auto max-w-3xl space-y-5 py-5">
       <EatTabs />
       <PageHeader title={tr("يومي", "My day")} sub={tr("سجّل ما أكلته وشوف قربك من هدفك.", "Log what you ate and see how close you are to your goal.")} />
-      <section className="card space-y-3">
-        <div className="flex items-end justify-between gap-3">
-          <div><p className="text-sm font-bold text-ink-soft">{tr("السعرات اليوم", "Calories today")}</p><p className="text-4xl font-extrabold tabular-nums">{eaten}{d.target ? <span className="text-lg font-bold text-ink-soft"> / {d.target}</span> : null}</p></div>
-          <div className="text-end"><p className="text-sm font-bold text-ink-soft">{tr("بروتين", "Protein")}</p><p className="text-2xl font-extrabold tabular-nums">{d.totals.protein_g}<span className="text-base"> g</span></p></div>
-        </div>
-        {d.target ? (
-          <>
-            <div className="h-3 overflow-hidden rounded-full bg-brand-100" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}><div className={`h-full rounded-full ${over ? "bg-sun-500" : "bg-brand-600"}`} style={{ width: `${pct}%` }} /></div>
-            <p className="muted">{over ? tr(`تجاوزت هدفك بـ ${eaten - d.target} سعرة. لا بأس، ابدأ من جديد غدًا.`, `You are ${eaten - d.target} kcal over today's goal. No problem, start fresh tomorrow.`) : tr(`باقي ${d.target - eaten} سعرة لهدف اليوم.`, `${d.target - eaten} kcal left for today's goal.`)}</p>
-          </>
-        ) : <p className="muted">{tr("أكمل ملفك الصحي لتظهر لك سعراتك اليومية المستهدفة.", "Complete your health profile to see your daily calorie goal.")}</p>}
-        <p className="text-xs font-semibold text-ink-soft">{tr("أرقام تقديرية للإرشاد العام وليست نصيحة طبية.", "Estimates for general guidance, not medical advice.")}</p>
-      </section>
-      <button className="btn-primary w-full" onClick={() => setOpen(true)}><Icon name="plus" />{tr("أضف وجبة", "Add food")}</button>
+      <CalorieCard totals={d.totals} target={d.target} entries={d.entries.length} onAdd={() => openAdd("meals")} />
+      {d.entries.length > 0 && <MacroRings totals={d.totals} targets={d.targets} estimated />}
+      {!d.target && <p className="muted">{tr("أكمل ملفك الصحي لتظهر لك سعراتك اليومية المستهدفة.", "Complete your health profile to see your daily calorie goal.")}</p>}
+      <div className="grid grid-cols-2 gap-2.5">
+        <button className="btn-primary" onClick={() => openAdd("meals")}><Icon name="plus" />{tr("أضف وجبة", "Add food")}</button>
+        <button className="btn-soft" onClick={() => openAdd("recent")}><Icon name="refresh" size={18} />{tr("كرر وجبة", "Repeat a meal")}</button>
+      </div>
       {d.entries.length === 0 ? (
-        <EmptyState icon="utensils" title={tr("لم تسجّل شيئًا اليوم", "Nothing logged today")} body={tr("أضف من الكتالوج، أو من تحليل صورة، أو يدويًا.", "Add from the catalogue, from a photo analysis, or manually.")} />
+        <EmptyState icon="utensils" title={tr("لم تسجّل شيئًا اليوم", "Nothing logged today")} body={tr("أضف من القائمة، أو من تحليل صورة، أو يدويًا.", "Add from the catalogue, from a photo analysis, or manually.")} />
       ) : (
-        <ul className="space-y-2.5">
+        <ul className="space-y-2">
           {d.entries.map((e) => (
-            <li key={e.id} className="card flex items-center gap-3 !p-3.5">
-              <div className="min-w-0 flex-1"><p className="truncate font-extrabold">{e.name}</p><p className="muted">{e.calories} {tr("سعرة", "kcal")} · {e.protein_g} g {tr("بروتين", "protein")}</p></div>
-              <button className="btn-ghost btn-sm !px-2.5" onClick={() => remove(e.id)} disabled={busy === e.id} aria-label={tr("حذف", "Delete")}>{busy === e.id ? <Spinner size={16} /> : <Icon name="trash" size={18} />}</button>
+            <li key={e.id} className="card-row !min-h-16">
+              <FoodTile source={e.source} size={44} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-extrabold">{e.name}</p>
+                <p className="text-xs font-bold text-ink-soft tabular-nums">{e.calories} {tr("سعرة", "kcal")} · {tr("ب", "P")} {Math.round(e.protein_g)} · {tr("ك", "C")} {Math.round(e.carbs_g)} · {tr("د", "F")} {Math.round(e.fat_g)}{e.estimated ? ` · ${tr("تقديري", "est.")}` : ""}</p>
+              </div>
+              <button className="btn-ghost btn-sm !px-2.5" onClick={() => remove(e.id)} disabled={busy === e.id} aria-label={tr(`حذف ${e.name}`, `Delete ${e.name}`)}>{busy === e.id ? <Spinner size={16} /> : <Icon name="trash" size={18} />}</button>
             </li>
           ))}
         </ul>
       )}
-      <AddSheet open={open} onClose={() => setOpen(false)} onAdded={(x) => setData(x)} />
+      <p className="text-xs font-semibold text-ink-soft">{tr("أرقام تقديرية للإرشاد العام وليست نصيحة طبية.", "Estimates for general guidance, not medical advice.")}</p>
+      <AddSheet open={open} initialTab={tab} recent={d.recent ?? []} onClose={() => setOpen(false)} onAdded={(x) => setData(x)} />
     </div>
   );
 }

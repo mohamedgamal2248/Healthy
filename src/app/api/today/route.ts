@@ -7,7 +7,8 @@ import { mealsOfTheDay } from "@/server/meals";
 import { getBalances } from "@/server/credits";
 import { groupSnapshot } from "@/server/community";
 import { TRIAL_CREDITS } from "@/config/pricing";
-import { foodDay } from "@/server/food";
+import { foodDay, recentFoods } from "@/server/food";
+import { addDays } from "@/lib/dates";
 
 export const GET = route(async (req) => {
   const a = await requireUser(req);
@@ -24,6 +25,16 @@ export const GET = route(async (req) => {
     db().from("hl_recipes").select("id", { count: "exact", head: true }).eq("username", a.username),
     foodDay(a),
   ]);
+  // Week strip: the last 7 local days with whether a challenge was done and whether food was logged.
+  const from = addDays(a.today, -6);
+  const [doneDays, foodDays, recent] = await Promise.all([
+    db().from("hl_user_challenges").select("date").eq("username", a.username).eq("status", "completed").gte("date", from).lte("date", a.today),
+    db().from("hl_food_log").select("date").eq("username", a.username).gte("date", from).lte("date", a.today).limit(300),
+    recentFoods(a, 3),
+  ]);
+  const doneSet = new Set((must(doneDays) as { date: string }[]).map((r) => r.date));
+  const foodSet = new Set((must(foodDays) as { date: string }[]).map((r) => r.date));
+  const week = Array.from({ length: 7 }, (_, i) => { const d = addDays(from, i); return { date: d, challenge: doneSet.has(d), food: foodSet.has(d) }; });
   return ok({
     date: a.today,
     challenges: rows,
@@ -38,7 +49,8 @@ export const GET = route(async (req) => {
     community,
     starter: { rewarded: (rewarded.count ?? 0) > 0, reward: TRIAL_CREDITS },
     checklist: { profile: !!a.profile.disclaimer_accepted_at, challenge: streak.total > 0, coach: (coachUsed.count ?? 0) > 0 },
-    food: { calories: food.totals.calories, target: food.target, entries: food.entries.length },
+    food: { totals: food.totals, calories: food.totals.calories, target: food.target, targets: food.targets, entries: food.entries.length, recent },
+    week,
     profileReady: !!a.profile.disclaimer_accepted_at,
   });
 });

@@ -6,6 +6,7 @@ import { api, ApiError } from "@/lib/api";
 import { useApp, type Balances } from "@/components/AppProvider";
 import { Gate, Notice, PageHeader, PageSkeleton, Spinner, Tabs } from "@/components/ui";
 import { LibraryView } from "@/components/Library";
+import { ScanAdjust, ScanQuestions, hintsToNote, type ScanHints } from "@/components/ScanExtras";
 import { DisclaimerBanner, ContentView, type CoachContent } from "@/components/Domain";
 import { Icon } from "@/components/Icon";
 import { CoachThinking } from "@/components/CoachThinking";
@@ -44,7 +45,8 @@ function ChefInner() {
   const openId = sp.get("recipe");
   const [view, setView] = useState<"new" | "mine">(sp.get("tab") === "mine" ? "mine" : "new");
   const [prompt, setPrompt] = useState("");
-  const [kind, setKind] = useState<Kind>("recipe");
+  const [kind, setKind] = useState<Kind>(sp.get("kind") === "scan" ? "scan" : "recipe");
+  const [hints, setHints] = useState<ScanHints>({ cook: null, size: null, extras: [] });
   const [busy, setBusy] = useState(false);
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [fav, setFav] = useState(false);
@@ -80,9 +82,9 @@ function ChefInner() {
     setBusy(true); setRefusal(null);
     try {
       const r = kind === "scan"
-        ? await api<{ recipe: Recipe; balances: Balances }>("/coach/scan", { body: { image: photo, note, lang } })
+        ? await api<{ recipe: Recipe; balances: Balances }>("/coach/scan", { body: { image: photo, note: [hintsToNote(hints), note.trim()].filter(Boolean).join(" ").slice(0, 200), lang } })
         : await api<{ recipe: Recipe; balances: Balances }>("/chef", { body: { prompt, kind, lang } });
-      if (kind === "scan") { setPhoto(null); setNote(""); }
+      if (kind === "scan") { setPhoto(null); setNote(""); setHints({ cook: null, size: null, extras: [] }); }
       setRecipe(r.recipe); setFav(false); setShareUrl(null); setBalances(r.balances);
       refresh();
       toast(tr("تم حفظ النتيجة في مكتبتك", "Result saved to your library"), "ok");
@@ -118,11 +120,20 @@ function ChefInner() {
       {!recipe && !busy && view === "mine" ? <LibraryView /> : recipe ? (
         <>
           <button className="btn-soft btn-sm" onClick={() => setRecipe(null)}><Icon name="plus" size={18} />{tr("طلب جديد", "New request")}</button>
+          {recipe.content.kind === "scan" && recipe.content.scan && (
+            <ScanAdjust
+              recipeId={recipe.id}
+              name={lang === "ar" && recipe.content.scan.dish_name_local ? recipe.content.scan.dish_name_local : recipe.content.scan.dish_name}
+              totals={recipe.content.scan.totals}
+              ingredients={recipe.content.scan.ingredients}
+              onAdded={() => window.dispatchEvent(new Event("healthy:refresh"))}
+            />
+          )}
           <ContentView
             content={recipe.content}
             actions={<>
               <button className="btn-soft btn-sm" onClick={toggleFav} aria-pressed={fav}><Icon name="heart" size={18} filled={fav} className={fav ? "text-rose-600" : ""} />{fav ? tr("في المفضلة", "Saved") : tr("أضف للمفضلة", "Favourite")}</button>
-              {(recipe.content.kind === "scan" || recipe.content.kind === "recipe") && <button className="btn-soft btn-sm" onClick={addToDay}><Icon name="plus" size={18} />{tr("أضف إلى يومي", "Add to my day")}</button>}
+              {recipe.content.kind === "recipe" && <button className="btn-soft btn-sm" onClick={addToDay}><Icon name="plus" size={18} />{tr("أضف إلى يومي", "Add to my day")}</button>}
               {recipe.content.kind !== "scan" && <button className="btn-soft btn-sm" onClick={share}><Icon name="share" size={18} />{tr("انشر في المجتمع + رابط", "Publish to community + link")}</button>}
             </>}
           />
@@ -156,6 +167,7 @@ function ChefInner() {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={photo} alt={tr("صورة وجبتك", "Your meal photo")} className="max-h-72 w-full rounded-2xl border border-line object-cover" />
                     <div className="flex gap-2"><button className="btn-soft btn-sm flex-1" onClick={() => setPhoto(null)}><Icon name="refresh" size={16} />{tr("إعادة التصوير", "Retake")}</button><button className="btn-ghost btn-sm" onClick={() => fileRef.current?.click()}><Icon name="image" size={16} />{tr("صورة أخرى", "Other photo")}</button></div>
+                    <ScanQuestions value={hints} onChange={setHints} />
                     <label className="block"><span className="label">{tr("معلومة إضافية (اختياري)", "Extra detail (optional)")}</span><input className="field" value={note} onChange={(e) => setNote(e.target.value.slice(0, 200))} placeholder={tr("مثال: من مطعم، متقلي بزيت كتير", "e.g. from a restaurant, deep fried")} maxLength={200} /></label>
                   </>
                 ) : (

@@ -596,3 +596,39 @@ test("invite rewards need a real 3-day streak and are capped at 5", async () => 
   assert.match(ch, /firstToday && next\.current >= REFERRAL_MIN_STREAK/);
   assert.doesNotMatch(ch, /next\.total === 1 && a\.profile\.kyc_verified \? await rewardReferralIfAny/);
 });
+
+test("macros: carbs/fat estimate, daily targets, portion and 'fix result' are computed on the server", async () => {
+  const { estimateCarbsFat, macroTargets, adjustScan, validPortion } = await import("../src/server/food");
+  assert.deepEqual(estimateCarbsFat(500, 25), { carbs_g: 55, fat_g: 20 }); // 400 kcal left: 55% carbs, 45% fat
+  assert.deepEqual(estimateCarbsFat(50, 30), { carbs_g: 0, fat_g: 0 }); // never negative
+  assert.deepEqual(macroTargets(2000), { protein: 125, carbs: 250, fat: 56 });
+  assert.equal(macroTargets(null), null);
+  assert.equal(validPortion(1.3), 1.25); assert.equal(validPortion(9), 1); assert.equal(validPortion("2"), 1); assert.equal(validPortion(0.2), 1);
+  const t = { calories: { mid: 600 }, protein_g: { mid: 30 }, carbs_g: 60, fat_g: 20 };
+  const ings = [{ kcal: 400 }, { kcal: 200 }];
+  assert.deepEqual(adjustScan(t, ings, 1, []), { calories: 600, protein_g: 30, carbs_g: 60, fat_g: 20 });
+  assert.deepEqual(adjustScan(t, ings, 2, []), { calories: 1200, protein_g: 60, carbs_g: 120, fat_g: 40 });
+  assert.deepEqual(adjustScan(t, ings, 1, [1]), { calories: 400, protein_g: 20, carbs_g: 40, fat_g: 13.3 }); // removed 1/3 of the kcal
+});
+
+test("scan hints become a short note; quick add shows costs; repeat copies only the user's own recent entries", async () => {
+  const { hintsToNote } = await import("../src/components/ScanExtras");
+  assert.equal(hintsToNote({ cook: "fried", size: "large", extras: ["oil", "sauce"] }), "Cooking: Fried. Portion: Large plate. Hidden extras: Oil, Sauce.");
+  assert.equal(hintsToNote({ cook: null, size: null, extras: [] }), "");
+  const { readFileSync } = await import("node:fs");
+  const food = readFileSync("src/server/food.ts", "utf8");
+  const rep = food.slice(food.indexOf('b.source === "repeat"'));
+  assert.match(rep, /\.eq\("username", a\.username\)/);
+  assert.match(rep, /addDays\(a\.today, -30\)/);
+  const qa = readFileSync("src/components/QuickAdd.tsx", "utf8");
+  assert.match(qa, /costAr: "١ كريدت"/);
+  assert.match(qa, /water_add: 1/);
+});
+
+test("no emoji anywhere in the UI source: icons are SVG in the site's colours", async () => {
+  const { readFileSync, readdirSync, statSync } = await import("node:fs");
+  const walk = (d: string): string[] => readdirSync(d).flatMap((f) => { const p = `${d}/${f}`; return statSync(p).isDirectory() ? walk(p) : /\.(tsx?|css)$/.test(p) ? [p] : []; });
+  const emoji = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F000}-\u{1F2FF}\u{2B50}\u{2B06}\u{2194}-\u{21FF}\u{FE0F}]/u;
+  const hits = walk("src").filter((f) => emoji.test(readFileSync(f, "utf8")));
+  assert.deepEqual(hits, []);
+});
