@@ -226,3 +226,30 @@ test("daily calorie floor, refusal sanitising, image header checks", async () =>
   assert.equal(validImage("data:image/png;base64," + png.toString("base64")), false); // too large a side
   assert.equal(validImage("data:image/jpeg;base64," + Buffer.from("not an image at all, just text").toString("base64")), false);
 });
+
+test("CDN-cached public API: correct cache headers, no auth, no per-user data", async () => {
+  const { cdnJson } = await import("../src/server/cdn");
+  const { readFileSync, readdirSync, statSync } = await import("node:fs");
+  const res = cdnJson({ a: 1 }, 60, 300);
+  assert.equal(res.headers.get("cache-control"), "public, max-age=0, s-maxage=60, stale-while-revalidate=300");
+  assert.equal(res.headers.get("x-robots-tag"), "noindex");
+  assert.equal(res.headers.get("set-cookie"), null);
+
+  const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(`${d}/${f}`).isDirectory() ? walk(`${d}/${f}`) : [`${d}/${f}`]));
+  const files = walk("src/app/api/public").filter((f) => f.endsWith(".ts"));
+  assert.ok(files.length >= 3);
+  for (const f of files) {
+    const src = readFileSync(f, "utf8");
+    // a public route must not know who is asking: no auth helpers, no request headers, no cookies
+    assert.doesNotMatch(src, /requireUser|requireVerified|requireAdmin|auth["']|authorization|cookies\(|headers\(|req\.headers/i, f);
+    assert.match(src, /cdnJson/, f);
+  }
+  // the shared community payload type has no personal fields
+  const comm = readFileSync("src/server/community.ts", "utf8");
+  const typeBlock = comm.slice(comm.indexOf("export type PublicRecipe"), comm.indexOf("export async function publicCommunity"));
+  assert.doesNotMatch(typeBlock, /liked|saved|likedIds|savedIds|joined|myDays|myTeam|hidden|checkedToday: boolean/);
+  // anything user-specific lives in the private endpoint, which is never CDN-cached
+  const mine = readFileSync("src/app/api/community/me/route.ts", "utf8");
+  assert.match(mine, /requireVerified/);
+  assert.doesNotMatch(mine, /cdnJson/);
+});
