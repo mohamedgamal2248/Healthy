@@ -422,3 +422,12 @@ test("background-delivery test: delayed admin send and high-priority reminders",
   assert.match(n, /max\(60\)/); // bounded delay
   assert.match(readFileSync("src/app/api/cron/reminders/route.ts", "utf8"), /urgency: "high"/);
 });
+
+test("pricing handoff effect cannot loop and consumes the purchase once", async () => {
+  const { readFileSync } = await import("node:fs");
+  const s = readFileSync("src/app/pricing/page.tsx", "utf8");
+  assert.match(s, /setHandoff\(null\)/); // consumed, so the effect stops
+  assert.doesNotMatch(s, /setHandoff\(\(h\) =>/); // the old code re-set a fresh object every run (endless render loop)
+  assert.match(s, /signInStarted/); // sign-in is started once, not on every re-render
+  assert.match(readFileSync("src/components/AppProvider.tsx", "utf8"), /pathname === "\/pricing"/); // login returns to the pending purchase
+});
