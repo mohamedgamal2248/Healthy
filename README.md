@@ -65,7 +65,7 @@ flowchart LR
     PI["Pi Platform API (api.minepi.com)"]
     DB[("Supabase Postgres (hl_* tables, RLS locked)")]
     AI["AI provider (Meta Muse Ember by default)"]
-    OKX["OKX ticker (PI-USDT)"]
+    RATE["Live Pi rate feed"]
   end
   UI -->|Bearer session token| API
   UI -->|public GET, no token| CDN --> API
@@ -73,7 +73,7 @@ flowchart LR
   API -->|verify token, approve, complete| PI
   API -->|service role key, server only| DB
   API --> AI
-  API --> OKX
+  API --> RATE
 ```
 
 - **Next.js 16 (App Router), TypeScript, Tailwind CSS v4.** Route handlers are the only backend.
@@ -119,7 +119,7 @@ sequenceDiagram
   participant P as Pi Platform API
   participant D as Postgres
   C->>S: POST /api/purchases { item }
-  S->>S: live quote (OKX PI-USDT), USD price rounded UP to whole Pi
+  S->>S: live quote at the current Pi rate, rounded UP to whole Pi
   S->>D: insert purchase (amount, item, payer) status=pending
   S-->>C: { purchaseId, amountPi, memo }
   C->>P: Pi.createPayment({ amount, memo, metadata:{purchaseId} })
@@ -142,15 +142,15 @@ Verification (`src/server/payment-verify.ts`) checks, against the **purchase row
 
 The grant is a single SQL transaction (`hl_complete_purchase`) that takes a per-purchase lock, so concurrent completions cannot grant twice. Recovery is built in: `reconcileOne` for stuck payments, `/api/payments/incomplete` for payments left open by the SDK, and a daily cron job.
 
-Pricing (target in USD, converted to Pi at the live rate and rounded up):
+Plans and packs:
 
-| Item | Price | Grants |
-|---|---|---|
-| Monthly plan | $2 | 40 AI requests, valid 30 days (renewal locked while active) |
-| Small pack | $0.60 | 10 AI requests |
-| Large pack | $1.50 | 30 AI requests |
+| Item | Grants |
+|---|---|
+| Monthly plan | 40 AI requests, valid 30 days (renewal locked while active) |
+| Small pack | 10 AI requests |
+| Large pack | 30 AI requests |
 
-Prices live in `src/config/pricing.ts`. `PRICING_MODE=fixed` switches to fixed Pi amounts for Testnet.
+The price is quoted in Pi by the server at purchase time and shown in the app before the Pioneer confirms. Definitions live in `src/config/pricing.ts`; `PRICING_MODE=fixed` switches to fixed Pi amounts for Testnet.
 
 ## Healthy AI
 
@@ -166,7 +166,7 @@ How a request flows (`src/server/chef.ts`):
 
 Photo analysis (`src/server/ai/scan.ts`): the user photographs a meal with the in-app camera; the image is compressed on the device, validated on the server (type, size, **header-parsed dimensions**) and sent to the model only to produce the estimate. **The photo is not stored**; only the text result is saved. Text inside images is treated as data, never as instructions.
 
-Cost control: real token and search usage is recorded per request (for every provider) with an estimated USD cost, shown in the admin dashboard per request type. Typical cost is a fraction of a cent per request.
+Cost control: real token and search usage is recorded per request (for every provider) with an estimated cost, shown in the admin dashboard per request type. The cost per request is very low.
 
 ## Data model and credits
 
@@ -263,7 +263,7 @@ Server secrets are never exposed to the browser. See [`.env.example`](./.env.exa
 | `SESSION_SECRET` | 32+ random characters used to sign sessions |
 | `ADMIN_USERNAMES` | Comma-separated Pi usernames allowed into `/admin` |
 | `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`, `AI_BASE_URL`, `AI_REASONING_EFFORT` | AI provider settings |
-| `PRICING_MODE`, `PRICE_*` | Live (OKX) or fixed pricing |
+| `PRICING_MODE`, `PRICE_*` | Live or fixed pricing (see `src/config/pricing.ts`) |
 | `AI_LIMIT_PER_HOUR`, `AI_LIMIT_PER_DAY`, `AI_GLOBAL_DAILY_CAP` | AI abuse and cost limits |
 | `CRON_SECRET` | Authenticates the daily maintenance job |
 
