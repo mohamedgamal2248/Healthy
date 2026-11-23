@@ -1,4 +1,4 @@
-import webpush from "web-push";
+import * as webpush from "web-push";
 import { db, must } from "./supabase";
 
 let ready: boolean | null = null;
