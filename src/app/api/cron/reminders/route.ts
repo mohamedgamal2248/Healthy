@@ -69,7 +69,7 @@ async function webPushPass(out: Out) {
       if (!needsReminder(sk?.last_completed_date ?? null, today)) { out.skipped++; continue; }
       // The streak only counts if it was alive yesterday or today; a stale number would be misleading.
       const alive = sk?.last_completed_date && sk.last_completed_date >= new Date(Date.parse(today) - 86400_000).toISOString().slice(0, 10);
-      const r = await sendPush(s, reminderText({ streak: alive ? sk?.current_streak ?? 0 : 0, lang: p.language === "ar" ? "ar" : "en" }));
+      const r = await sendPush(s, reminderText({ streak: alive ? sk?.current_streak ?? 0 : 0, lang: p.language === "ar" ? "ar" : "en" }), { urgency: "high" }); // high priority so phones deliver it even when the browser is closed
       if (r === "ok") { out.sent++; await db().from("hl_push_subscriptions").update({ last_sent_at: new Date().toISOString(), failures: 0 }).eq("endpoint", s.endpoint); }
       else if (r === "gone") { await dropSubscription(s.endpoint); out.removed++; }
       else out.failed++;

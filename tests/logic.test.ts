@@ -414,3 +414,11 @@ test("push diagnostics: admin reports the push-service status and the card can t
   assert.match(readFileSync("src/app/api/admin/notify/route.ts", "utf8"), /statuses/);
   assert.match(readFileSync("src/components/AppFeatures.tsx", "utf8"), /showNotification/);
 });
+
+test("background-delivery test: delayed admin send and high-priority reminders", async () => {
+  const { readFileSync } = await import("node:fs");
+  const n = readFileSync("src/app/api/admin/notify/route.ts", "utf8");
+  assert.match(n, /delaySec/);
+  assert.match(n, /max\(60\)/); // bounded delay
+  assert.match(readFileSync("src/app/api/cron/reminders/route.ts", "utf8"), /urgency: "high"/);
+});
