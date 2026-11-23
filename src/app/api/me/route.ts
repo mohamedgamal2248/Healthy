@@ -26,6 +26,7 @@ const Patch = z.object({
   timezone: z.string().max(60).optional(),
   leaderboard_visible: z.boolean().optional(),
   notify_pi: z.boolean().optional(),
+  reminder_hour: z.number().int().min(0).max(23).optional(),
   accept_disclaimer: z.boolean().optional(),
 });
 

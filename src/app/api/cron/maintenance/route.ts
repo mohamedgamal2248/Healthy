@@ -1,17 +1,14 @@
 import { db, must } from "@/server/supabase";
-import { ok, route, E } from "@/server/http";
+import { ok, route } from "@/server/http";
 import { refundCredit } from "@/server/credits";
 import { reconcileOne } from "@/server/purchases";
-import { timingSafeEqual } from "node:crypto";
+import { requireCron } from "@/server/cron-auth";
 
 export const maxDuration = 120;
 
 /** Daily housekeeping (Vercel Cron). Secured with CRON_SECRET: Vercel sends it as a Bearer token. */
 export const GET = route(async (req) => {
-  const secret = process.env.CRON_SECRET;
-  const got = Buffer.from(req.headers.get("authorization") ?? "");
-  const want = Buffer.from(`Bearer ${secret ?? ""}`);
-  if (!secret || got.length !== want.length || !timingSafeEqual(got, want)) throw E.notFound();
+  requireCron(req);
   const now = Date.now();
   const out = { reconciled: 0, expiredPurchases: 0, cacheDeleted: 0, limitsDeleted: 0, refundedHung: 0 };
 

@@ -12,6 +12,12 @@ export function AppFeatures() {
   const { tr, toast, errMsg, me, refresh } = useApp();
   const [piBusy, setPiBusy] = useState(false);
   const piOn = me?.profile.notify_pi !== false;
+  const hour = me?.profile.reminder_hour ?? 17;
+  const [hourBusy, setHourBusy] = useState(false);
+  const setHour = async (h: number) => {
+    setHourBusy(true);
+    try { await api("/me", { method: "PATCH", body: { reminder_hour: h } }); await refresh(); } catch (e) { toast(errMsg(e), "err"); } finally { setHourBusy(false); }
+  };
   const togglePi = async () => {
     setPiBusy(true);
     try { await api("/me", { method: "PATCH", body: { notify_pi: !piOn } }); await refresh(); } catch (e) { toast(errMsg(e), "err"); } finally { setPiBusy(false); }
@@ -74,6 +80,12 @@ export function AppFeatures() {
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0"><p className="font-extrabold">{tr("تنبيه داخل تطبيق Pi", "Pi app notification")}</p><p className="muted">{tr("تذكير في مركز إشعارات Pi إذا لم تُكمل تحدي اليوم. يظهر فقط إذا سمحت به داخل Pi.", "A reminder in the Pi Notification Center if you haven't done today's challenge. Shown only if you allowed it inside Pi.")}</p></div>
         <button className={piOn ? "btn-ghost btn-sm" : "btn-primary btn-sm"} disabled={piBusy} onClick={togglePi} aria-pressed={piOn}>{piBusy ? <Spinner size={16} /> : null}{piOn ? tr("إيقاف", "Turn off") : tr("تفعيل", "Turn on")}</button>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0"><p className="font-extrabold">{tr("وقت التذكير", "Reminder time")}</p><p className="muted">{tr("بتوقيتك المحلي. يصلك تذكير واحد في اليوم إن لم تُنجز تحديًا.", "In your local time. One reminder a day if you haven't done a challenge.")}</p></div>
+        <select className="field !w-auto !min-h-11" value={hour} disabled={hourBusy} onChange={(e) => setHour(Number(e.target.value))} aria-label={tr("وقت التذكير", "Reminder time")}>
+          {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
+        </select>
       </div>
       {supported ? (
         <div className="flex items-center justify-between gap-3">
