@@ -327,3 +327,13 @@ test("Pi SDK is only used where it can work (ordinary browsers use Pi Sign-In OA
     g.window = prevWin;
   }
 });
+
+test("admin notification test is admin-only, self-only and rate limited", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync("src/app/api/admin/notify/route.ts", "utf8");
+  assert.match(src, /requireAdmin/);
+  assert.match(src, /rateLimit\("admin-notify"/);
+  assert.match(src, /user_uid: piUid/); // recipient is the admin's own Pi uid, never a client-supplied one
+  assert.doesNotMatch(src, /username\s*[:=]\s*\(?body|parsed\.data\.(username|uid|user)/); // body has no recipient field
+  assert.match(src, /eq\("username", a\.username\)/); // only the admin's own push devices
+});
