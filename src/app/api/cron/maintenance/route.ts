@@ -1,7 +1,7 @@
 import { db, must } from "@/server/supabase";
 import { ok, route } from "@/server/http";
 import { refundCredit } from "@/server/credits";
-import { reconcileOne } from "@/server/purchases";
+import { OPEN_OR_CLIENT_CLOSED, reconcileOne } from "@/server/purchases";
 import { requireCron } from "@/server/cron-auth";
 
 export const maxDuration = 120;
@@ -14,7 +14,7 @@ export const GET = route(async (req) => {
 
   // 1. finish stuck payments
   const stuck = must(
-    await db().from("hl_purchases").select("id,username,pi_payment_id").in("status", ["pending", "approved"]).not("pi_payment_id", "is", null).gte("created_at", new Date(now - 7 * 86400_000).toISOString()).limit(100),
+    await db().from("hl_purchases").select("id,username,pi_payment_id").or(OPEN_OR_CLIENT_CLOSED).not("pi_payment_id", "is", null).gte("created_at", new Date(now - 7 * 86400_000).toISOString()).limit(100),
   ) as { id: string; username: string; pi_payment_id: string }[];
   for (const p of stuck) {
     try {

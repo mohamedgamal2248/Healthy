@@ -158,3 +158,13 @@ test("duo table rejects self-invites and duplicate codes", async () => {
   await assert.rejects(() => pg.query("insert into hl_duos (code, inviter, invitee, start_date) values ('QWERTY2345', 'alice', 'alice', current_date)"));
   await assert.rejects(() => pg.query("insert into hl_duos (code, inviter, start_date) values ('ABCDEF2345', 'bob', current_date)"));
 });
+
+test("a purchase closed by a browser signal can be reopened and granted exactly once when Pi confirms the payment", async () => {
+  const pg = await db();
+  const p = (await pg.query<{ id: string }>("insert into hl_purchases (username,kind,item_key,amount_pi,status,fail_reason,pi_payment_id) values ('alice','pack','pack_small',11,'failed','error','pay-1') returning id")).rows[0].id;
+  await assert.rejects(pg.query("select hl_complete_purchase($1,'tx9',10,0)", [p])); // closed rows are never granted directly
+  await pg.query("update hl_purchases set status='approved', fail_reason=null where id=$1 and status in ('failed','cancelled')", [p]);
+  assert.equal((await pg.query<{ r: string }>("select hl_complete_purchase($1,'tx9',10,0) r", [p])).rows[0].r, "completed");
+  assert.equal((await pg.query<{ r: string }>("select hl_complete_purchase($1,'tx9',10,0) r", [p])).rows[0].r, "already_completed");
+  assert.equal((await bal(pg, "alice")).pack, 10);
+});

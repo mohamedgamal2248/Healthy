@@ -101,7 +101,7 @@ export async function payWithPi(item: "plan_monthly" | "pack_small" | "pack_larg
         onError: (error) => {
           api("/payments/cancel", { body: { purchaseId: purchase.purchaseId, reason: "error" } }).catch(() => {});
           const m = (error?.message ?? "").slice(0, 80);
-          done({ ok: false, reason: "error", ar: `تعذّر إتمام الدفع${m ? ` (${m})` : ""}. لم يتم منح أي شيء.`, en: `Payment could not be completed${m ? ` (${m})` : ""}. Nothing was granted.` });
+          done({ ok: false, reason: "error", ar: `تعذّر إتمام الدفع${m ? ` (${m})` : ""}. لو خُصمت Pi من محفظتك فعلًا، سيُضاف رصيدك تلقائيًا عند فتح صفحة «الكريدت والباقات» مرة أخرى.`, en: `Payment could not be completed${m ? ` (${m})` : ""}. If Pi was actually taken from your wallet, your balance is added automatically next time you open Credits & plans.` });
         },
       },
     );

@@ -3,7 +3,9 @@ import { HttpError, E } from "./http";
 import type { Auth } from "./auth";
 
 export const REFERRAL_CREDITS = 1; // AI requests each, for the inviter and the invited
-export const REFERRAL_CAP = 10;    // rewarded invites per inviter
+export const REFERRAL_CAP = 5;     // rewarded invites per inviter
+/** The invited friend must be active this many days in a row before anyone is rewarded (stops throwaway-account farming). */
+export const REFERRAL_MIN_STREAK = 3;
 const NEW_USER_WINDOW_MS = 3 * 86400_000;
 
 /** Record "who invited me". Only brand-new, KYC-verified accounts can be attached, once, never to themselves. */
@@ -22,7 +24,7 @@ export async function claimReferral(a: Auth, ref: string) {
   return { referrer: inviter.username };
 }
 
-/** Called after the invited user's FIRST completed challenge: atomic, one reward per invited user. */
+/** Called when the invited user reaches REFERRAL_MIN_STREAK active days in a row: atomic, one reward per invited user. */
 export async function rewardReferralIfAny(username: string): Promise<boolean> {
   const r = must(await db().rpc("hl_reward_referral", { p_invited: username, p_credits: REFERRAL_CREDITS, p_cap: REFERRAL_CAP })) as string | null;
   return !!r;

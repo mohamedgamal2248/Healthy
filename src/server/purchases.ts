@@ -8,6 +8,8 @@ import { approvePayment, cancelPayment, completePayment, getPayment, type PiPaym
 import { completedProperly, memoFor, paymentMismatch, type PurchaseRef } from "./payment-verify";
 
 const UUID_RE = /^[0-9a-f-]{36}$/;
+/** Rows worth re-checking with Pi: still open, or closed only on a browser's word (never a server-side verification failure). */
+export const OPEN_OR_CLIENT_CLOSED = "status.in.(pending,approved),and(status.in.(failed,cancelled),fail_reason.in.(error,cancelled))";
 
 type PurchaseRow = PurchaseRef & { status: string };
 
@@ -72,7 +74,7 @@ export async function complete(a: Payer, paymentId: string, txid: string) {
   const payment = await getPayment(paymentId);
   const purchase = await purchaseForPayment(a, payment);
   if (purchase.status === "completed") return { completed: true, already: true };
-  if (purchase.status !== "pending" && purchase.status !== "approved") throw payErr("purchase_not_open");
+  if (!["pending", "approved", "failed", "cancelled"].includes(purchase.status)) throw payErr("purchase_not_open");
   const bad = paymentMismatch(payment, purchase, a.uid);
   if (bad) {
     await failPurchase(purchase.id, bad);
@@ -88,20 +90,40 @@ export async function complete(a: Payer, paymentId: string, txid: string) {
   const done = payment.status.developer_completed ? payment : await completePayment(paymentId, txid);
   if (!completedProperly(done, txid)) throw payErr("not_completed");
 
+  // The user really paid (Pi confirmed the transaction and every check above passed). A row that a browser
+  // signal marked failed/cancelled earlier (SDK error, network drop) is reopened so the payment is honoured.
+  if (purchase.status === "failed" || purchase.status === "cancelled") {
+    console.warn("[payment] reopening", purchase.status, "purchase for a confirmed payment", purchase.id);
+    must(await db().from("hl_purchases").update({ status: "approved", fail_reason: null }).eq("id", purchase.id).in("status", ["failed", "cancelled"]));
+  }
+
   const item = PRICING[purchase.item_key as keyof typeof PRICING];
   const res = must(await db().rpc("hl_complete_purchase", { p_purchase: purchase.id, p_txid: txid, p_credits: item.credits, p_days: item.days })) as string;
   return { completed: true, already: res === "already_completed" };
 }
 
-export async function cancel(a: Auth, purchaseId: string, reason: string) {
-  await db().from("hl_purchases").update({ status: reason === "error" ? "failed" : "cancelled", fail_reason: reason }).eq("id", purchaseId).eq("username", a.username).in("status", ["pending", "approved"]);
+/**
+ * The browser reports a cancel/error. It is trusted only for a purchase that never reached Pi (no payment id yet).
+ * Once Pi has a payment for it, the real state is read from the Pi API instead: a cancelled payment is closed,
+ * a paid one is completed, and one still in progress is left open (never marked failed on the browser's word).
+ */
+export async function cancel(a: Auth, purchaseId: string, reason: "cancelled" | "error") {
+  if (!UUID_RE.test(purchaseId)) throw E.bad();
+  const row = must(await db().from("hl_purchases").select("id,pi_payment_id,status").eq("id", purchaseId).eq("username", a.username).maybeSingle()) as { id: string; pi_payment_id: string | null; status: string } | null;
+  if (!row || (row.status !== "pending" && row.status !== "approved")) return "ignored";
+  if (!row.pi_payment_id) {
+    await db().from("hl_purchases").update({ status: reason === "error" ? "failed" : "cancelled", fail_reason: reason }).eq("id", row.id).is("pi_payment_id", null).in("status", ["pending", "approved"]);
+    return reason;
+  }
+  try { return await reconcileOne({ username: a.username, uid: a.uid }, row.id, row.pi_payment_id); }
+  catch (e) { console.error("[payment] cancel->reconcile", row.id, e instanceof Error ? e.message : e); return "waiting"; }
 }
 
 /** Recover a payment the app never finished (user closed the app, network drop...). Idempotent and fully re-verified. */
 export async function reconcileOne(user: Payer, purchaseId: string, paymentId: string) {
   const payment = await getPayment(paymentId);
   if (payment.status.cancelled || payment.status.user_cancelled) {
-    await db().from("hl_purchases").update({ status: "cancelled", fail_reason: "cancelled_at_pi" }).eq("id", purchaseId).in("status", ["pending", "approved"]);
+    await db().from("hl_purchases").update({ status: "cancelled", fail_reason: "cancelled_at_pi" }).eq("id", purchaseId).or(OPEN_OR_CLIENT_CLOSED);
     return "cancelled";
   }
   if (payment.transaction?.txid) {
@@ -113,7 +135,7 @@ export async function reconcileOne(user: Payer, purchaseId: string, paymentId: s
 
 export async function reconcileMine(a: Auth): Promise<void> {
   const rows = must(
-    await db().from("hl_purchases").select("id,pi_payment_id").eq("username", a.username).in("status", ["pending", "approved"]).not("pi_payment_id", "is", null).gte("created_at", new Date(Date.now() - 7 * 86400_000).toISOString()).limit(5),
+    await db().from("hl_purchases").select("id,pi_payment_id").eq("username", a.username).or(OPEN_OR_CLIENT_CLOSED).not("pi_payment_id", "is", null).gte("created_at", new Date(Date.now() - 7 * 86400_000).toISOString()).limit(10).limit(5),
   ) as { id: string; pi_payment_id: string }[];
   for (const r of rows) {
     try { await reconcileOne({ username: a.username, uid: a.uid }, r.id, r.pi_payment_id); } catch (e) { console.error("[reconcile]", r.id, e instanceof Error ? e.message : e); }

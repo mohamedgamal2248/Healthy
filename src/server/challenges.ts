@@ -1,7 +1,7 @@
 import { db, must } from "./supabase";
 import { ensureSeeded } from "./seed";
 import { grantTrial } from "./credits";
-import { rewardReferralIfAny } from "./referral";
+import { REFERRAL_MIN_STREAK, rewardReferralIfAny } from "./referral";
 import { E } from "./http";
 import type { Auth } from "./auth";
 import { applyCompletion, effectiveStreak, streakBadges, type StreakState } from "@/lib/streak";
@@ -126,7 +126,8 @@ export async function completeChallenge(a: Auth, userChallengeId: string) {
   ) as { id: string }[];
   if (!upd.length) return { newBadges: [] as string[], starterReward: false, referralReward: false };
 
-  const next = applyCompletion(await loadStreak(a.username), a.today);
+  const prev = await loadStreak(a.username);
+  const next = applyCompletion(prev, a.today);
   must(
     await db().from("hl_streaks").upsert({ username: a.username, current_streak: next.current, longest_streak: next.longest, last_completed_date: next.last, total_completed: next.total, freeze_used_on: next.freezeUsed ?? null }, { onConflict: "username" }),
   );
@@ -134,7 +135,9 @@ export async function completeChallenge(a: Auth, userChallengeId: string) {
   // Starter challenge: 7 days in a row earns the AI credits, once (unique ledger index guarantees it).
   let starterReward = false;
   if (next.current >= 7 && a.profile.kyc_verified) starterReward = await grantTrial(a.username);
-  const referralReward = next.total === 1 && a.profile.kyc_verified ? await rewardReferralIfAny(a.username).catch(() => false) : false;
+  // Invite reward: checked once per day (first completion of the day) once the friend has a real streak.
+  const firstToday = prev.last !== a.today;
+  const referralReward = firstToday && next.current >= REFERRAL_MIN_STREAK && a.profile.kyc_verified ? await rewardReferralIfAny(a.username).catch(() => false) : false;
   return { newBadges, starterReward, referralReward };
 }
 

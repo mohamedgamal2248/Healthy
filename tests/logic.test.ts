@@ -265,7 +265,7 @@ test("daily reminder rules and push subscription validation", async () => {
   const { readFileSync } = await import("node:fs");
   const sub = readFileSync("src/app/api/push/subscribe/route.ts", "utf8");
   assert.match(sub, /requireUser/); // only a signed-in user can attach a device
-  assert.match(sub, /https:\\\/\\\//); // push endpoints must be https
+  assert.match(sub, /isPushEndpoint\(endpoint\)/); // push endpoints must be a known https push service
   const cron = readFileSync("src/app/api/cron/reminders/route.ts", "utf8");
   assert.match(cron, /requireCron/); // cron is secret-protected
   assert.match(readFileSync("src/server/cron-auth.ts", "utf8"), /timingSafeEqual/);
@@ -562,4 +562,37 @@ test("weekly card has a fallback when the browser cannot share files; no 'chef' 
   assert.match(card, /AbortError/); // closing the share sheet is not an error
   const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(`${d}/${f}`).isDirectory() ? walk(`${d}/${f}`) : [`${d}/${f}`]));
   for (const f of walk("src").filter((x) => /\.(tsx?|json)$/.test(x))) assert.doesNotMatch(readFileSync(f, "utf8"), /شيف/, f);
+});
+
+test("payments: the browser cannot void a payment Pi knows about; confirmed payments are honoured; cancel is rate limited", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync("src/server/purchases.ts", "utf8");
+  const cancelFn = src.slice(src.indexOf("export async function cancel("), src.indexOf("export async function reconcileOne"));
+  assert.match(cancelFn, /if \(!row\.pi_payment_id\)/); // browser word trusted only before Pi has the payment
+  assert.match(cancelFn, /\.is\("pi_payment_id", null\)/);
+  assert.match(cancelFn, /reconcileOne\(/); // otherwise ask Pi
+  const completeFn = src.slice(src.indexOf("export async function complete("), src.indexOf("export async function cancel("));
+  // verification runs BEFORE a closed row is reopened, and only after Pi confirmed completion
+  assert.ok(completeFn.indexOf("paymentMismatch(") < completeFn.indexOf('status: "approved", fail_reason: null'));
+  assert.ok(completeFn.indexOf("completedProperly(") < completeFn.indexOf('status: "approved", fail_reason: null'));
+  // server-side verification failures are never re-checked as if the browser had closed them
+  assert.match(src, /fail_reason\.in\.\(error,cancelled\)/);
+  assert.match(readFileSync("src/app/api/payments/cancel/route.ts", "utf8"), /rateLimit\("pay-cancel"/);
+  assert.match(readFileSync("src/app/api/cron/maintenance/route.ts", "utf8"), /OPEN_OR_CLIENT_CLOSED/);
+});
+
+test("push endpoints: only real browser push services are accepted", async () => {
+  const { isPushEndpoint } = await import("../src/server/push");
+  for (const ok of ["https://fcm.googleapis.com/fcm/send/abc", "https://updates.push.services.mozilla.com/wpush/v2/x", "https://web.push.apple.com/QA", "https://wns2-par02p.notify.windows.com/w/?token=1"]) assert.equal(isPushEndpoint(ok), true, ok);
+  for (const bad of ["http://fcm.googleapis.com/x", "https://evil.com/fcm.googleapis.com", "https://fcm.googleapis.com.evil.com/x", "https://fcm.googleapis.com:8443/x", "https://169.254.169.254/latest", "https://localhost/x", 42, ""]) assert.equal(isPushEndpoint(bad), false, String(bad));
+});
+
+test("invite rewards need a real 3-day streak and are capped at 5", async () => {
+  const { REFERRAL_CAP, REFERRAL_MIN_STREAK } = await import("../src/server/referral");
+  assert.equal(REFERRAL_CAP, 5);
+  assert.equal(REFERRAL_MIN_STREAK, 3);
+  const { readFileSync } = await import("node:fs");
+  const ch = readFileSync("src/server/challenges.ts", "utf8");
+  assert.match(ch, /firstToday && next\.current >= REFERRAL_MIN_STREAK/);
+  assert.doesNotMatch(ch, /next\.total === 1 && a\.profile\.kyc_verified \? await rewardReferralIfAny/);
 });
