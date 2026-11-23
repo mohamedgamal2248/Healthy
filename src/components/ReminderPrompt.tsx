@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useApp } from "./AppProvider";
 import { Icon } from "./Icon";
 import { Spinner } from "./ui";
-import { enablePush, isSubscribed, markPushAsked, shouldAskPush } from "@/lib/push-client";
+import { describePushError, enablePush, isSubscribed, markPushAsked, shouldAskPush, syncPushIfGranted } from "@/lib/push-client";
 
 /** Right after sign-in, offer the daily reminder with one tap (the browser's permission prompt needs a tap). */
 export function ReminderPrompt() {
@@ -13,7 +13,11 @@ export function ReminderPrompt() {
   useEffect(() => {
     if (!me) return;
     let alive = true;
-    const t = setTimeout(async () => { if (alive && shouldAskPush() && !(await isSubscribed())) setShow(true); }, 2000);
+    const t = setTimeout(async () => {
+      if (!alive) return;
+      await syncPushIfGranted(); // permission was already granted elsewhere (site settings): just register this device
+      if (alive && shouldAskPush() && !(await isSubscribed())) setShow(true);
+    }, 2000);
     return () => { alive = false; clearTimeout(t); };
   }, [me]);
   if (!show) return null;
@@ -24,7 +28,7 @@ export function ReminderPrompt() {
       const r = await enablePush();
       if (r === "ok") toast(tr("تم تفعيل التذكير اليومي", "Daily reminder is on"), "ok");
       else if (r === "not_configured") toast(tr("التنبيهات غير مفعّلة حاليًا.", "Reminders are not enabled yet."), "err");
-    } catch (e) { toast(errMsg(e), "err"); }
+    } catch (e) { toast(`${errMsg(e)} (${describePushError(e)})`, "err"); }
     finally { setBusy(false); markPushAsked(); setShow(false); }
   };
   const later = () => { markPushAsked(); setShow(false); };
