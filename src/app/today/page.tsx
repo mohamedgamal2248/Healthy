@@ -101,7 +101,7 @@ function TodayInner() {
     try {
       const r = await api<{ newBadges: string[]; starterReward?: boolean; referralReward?: boolean }>("/challenges/complete", { body: { id } });
       if (r.referralReward) toast(tr("مكافأة الدعوة: حصلت على طلب AI مجاني", "Invite reward: you earned a free AI request"), "ok");
-      if (r.starterReward) toast(tr(`مبروك! كسبت ${d.starter.reward} كريدت للشيف AI`, `Congrats! You earned ${d.starter.reward} AI requests`), "ok");
+      if (r.starterReward) toast(tr(`مبروك! كسبت ${d.starter.reward} كريدت لـ Healthy AI`, `Congrats! You earned ${d.starter.reward} AI requests`), "ok");
       r.newBadges.forEach((k) => { const b = BADGES.find((x) => x.key === k); if (b) toast(tr(`شارة جديدة: ${b.ar}`, `New badge: ${b.en}`), "ok"); });
       load();
     } catch (e) { toast(errMsg(e), "err"); load(); }
@@ -144,7 +144,7 @@ function TodayInner() {
           <div className="flex items-center gap-3">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sun-500 text-white"><Icon name="bolt" size={26} /></span>
             <div className="min-w-0 flex-1">
-              <p className="font-extrabold">{tr(`تحدي البداية: اكسب ${d.starter.reward} كريدت للشيف AI`, `Starter challenge: earn ${d.starter.reward} free AI requests`)}</p>
+              <p className="font-extrabold">{tr(`تحدي البداية: اكسب ${d.starter.reward} كريدت لـ Healthy AI`, `Starter challenge: earn ${d.starter.reward} free AI requests`)}</p>
               <p className="muted">{tr("أنجز تحديًا واحدًا على الأقل كل يوم لمدة ٧ أيام متتالية.", "Complete at least one challenge every day for 7 days in a row.")}</p>
             </div>
           </div>

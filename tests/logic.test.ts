@@ -554,3 +554,12 @@ test("eligibility: Pi exposes no KYC flag, so every Pi user is eligible; strict 
     if (prev === undefined) delete process.env.PI_KYC_MODE; else process.env.PI_KYC_MODE = prev;
   }
 });
+
+test("weekly card has a fallback when the browser cannot share files; no 'chef' wording in user-facing Arabic text", async () => {
+  const { readFileSync, readdirSync, statSync } = await import("node:fs");
+  const card = readFileSync("src/components/WeeklyCard.tsx", "utf8");
+  assert.match(card, /setPreview/); // image preview (long-press to save) when share/download is unavailable
+  assert.match(card, /AbortError/); // closing the share sheet is not an error
+  const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(`${d}/${f}`).isDirectory() ? walk(`${d}/${f}`) : [`${d}/${f}`]));
+  for (const f of walk("src").filter((x) => /\.(tsx?|json)$/.test(x))) assert.doesNotMatch(readFileSync(f, "utf8"), /شيف/, f);
+});

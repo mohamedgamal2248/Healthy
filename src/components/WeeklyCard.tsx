@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { useApp } from "./AppProvider";
 import { Icon } from "./Icon";
-import { Spinner } from "./ui";
+import { Sheet, Spinner } from "./ui";
 import { addDays } from "@/lib/dates";
 
 /** Draws the weekly share card on a canvas, on the device: nothing is uploaded and it carries no health information. */
@@ -44,19 +44,35 @@ function draw(opts: { days: boolean[]; done: number; streak: number; total: numb
 export function WeeklyCard({ today, weekDays, streak, total, username }: { today: string; weekDays: string[]; streak: number; total: number; username: string }) {
   const { tr, lang, toast } = useApp();
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<{ url: string; blob: Blob } | null>(null);
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => weekDays.includes(addDays(today, i - 6))), [today, weekDays]);
   const done = days.filter(Boolean).length;
-  const make = () => new Promise<Blob>((resolve, reject) => draw({ days, done, streak, total, ar: lang === "ar", user: username }).toBlob((b) => (b ? resolve(b) : reject(new Error("canvas"))), "image/png"));
+  const make = () => new Promise<Blob>((resolve, reject) => {
+    try { draw({ days, done, streak, total, ar: lang === "ar", user: username }).toBlob((b) => (b ? resolve(b) : reject(new Error("canvas"))), "image/png"); } catch (e) { reject(e); }
+  });
+  const closePreview = () => { if (preview) URL.revokeObjectURL(preview.url); setPreview(null); };
   const share = async () => {
     setBusy(true);
     try {
       const blob = await make();
       const file = new File([blob], "healthy-week.png", { type: "image/png" });
-      if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: "Healthy", text: tr("أسبوعي على Healthy", "My week on Healthy") });
-      else { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "healthy-week.png"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
-    } catch (e) {
-      if ((e as Error)?.name !== "AbortError") toast(tr("تعذّر إنشاء الصورة.", "Could not create the image."), "err");
+      // 1) Native share sheet with the image (Chrome/Opera/Safari on phones).
+      if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: "Healthy", text: tr("أسبوعي على Healthy", "My week on Healthy") }); return; }
+        catch (e) { if ((e as Error)?.name === "AbortError") return; /* otherwise fall through to the preview */ }
+      }
+      // 2) Webviews (for example Pi Browser) often can't share files or start downloads: show the image so it can be
+      //    saved with a long-press, plus a download button for desktop browsers.
+      setPreview({ url: URL.createObjectURL(blob), blob });
+    } catch {
+      toast(tr("تعذّر إنشاء الصورة.", "Could not create the image."), "err");
     } finally { setBusy(false); }
+  };
+  const download = () => {
+    if (!preview) return;
+    const a = document.createElement("a");
+    a.href = preview.url; a.download = "healthy-week.png";
+    document.body.appendChild(a); a.click(); a.remove();
   };
   return (
     <section className="card space-y-3">
@@ -66,6 +82,16 @@ export function WeeklyCard({ today, weekDays, streak, total, username }: { today
       </div>
       <p className="muted">{tr(`${done} من 7 أيام التزام هذا الأسبوع.`, `${done} of 7 days with a challenge this week.`)}</p>
       <button className="btn-soft w-full" onClick={share} disabled={busy}>{busy ? <Spinner size={18} /> : <Icon name="share" size={18} />}{tr("شارك بطاقة أسبوعي", "Share my week card")}</button>
+      <Sheet open={!!preview} onClose={closePreview} title={tr("بطاقة أسبوعي", "My week card")}>
+        {preview && (
+          <div className="space-y-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={preview.url} alt={tr("بطاقة أسبوعي", "My week card")} className="mx-auto max-h-[60dvh] w-auto rounded-2xl border border-line" />
+            <p className="muted text-center">{tr("اضغط مطولًا على الصورة لحفظها أو مشاركتها.", "Press and hold the image to save or share it.")}</p>
+            <button className="btn-primary w-full" onClick={download}><Icon name="copy" size={18} />{tr("تنزيل الصورة", "Download image")}</button>
+          </div>
+        )}
+      </Sheet>
     </section>
   );
 }
