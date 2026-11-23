@@ -5,8 +5,8 @@ import { PGlite } from "@electric-sql/pglite";
 
 async function db() {
   const pg = new PGlite();
-  for (const f of ["0001_init", "0002_cuisine_and_ai_cache", "0003_hardening_growth", "0006_referral_lock", "0007_scale"]) {
-    const sql = readFileSync(`supabase/migrations/${f}.sql`, "utf8").replace(/revoke all on function[\s\S]*?;/g, "");
+  for (const f of ["0001_init", "0002_cuisine_and_ai_cache", "0003_hardening_growth", "0006_referral_lock", "0007_scale", "0008_push"]) {
+    const sql = readFileSync(`supabase/migrations/${f}.sql`, "utf8").replace(/revoke all on [\s\S]*?;/g, "");
     await pg.exec(sql);
   }
   await pg.exec("insert into hl_profiles (username) values ('alice'),('bob')");

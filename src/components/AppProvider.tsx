@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { api, ApiError, rememberToken, getToken } from "@/lib/api";
 import { clearGetCache } from "@/lib/useGet";
 import { piSignIn } from "@/lib/pi-client";
+import { startPiOAuth } from "@/lib/pi-oauth";
 
 export type Lang = "ar" | "en";
 export type Balances = { plan: number; pack: number; trial: number; total: number; planExpiresAt: string | null; planActive: boolean };
@@ -29,6 +30,8 @@ type Ctx = {
   signIn: () => Promise<void>;
   devSignIn: (username: string, kyc: boolean) => Promise<void>;
   signOut: () => void;
+  /** Finish a Pi Sign-In (OAuth) started in an ordinary browser. Returns false if the server refused the token. */
+  signInWithToken: (accessToken: string) => Promise<boolean>;
   signingIn: boolean;
   toast: (msg: string, kind?: "ok" | "err") => void;
   errMsg: (e: unknown) => string;
@@ -134,7 +137,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSigningIn(true);
     try {
       if (!(await waitForPi())) {
-        toast(tr("تسجيل الدخول يعمل من داخل Pi Browser فقط. افتح التطبيق من هناك.", "Sign-in works inside Pi Browser only. Open the app there."), "err");
+        // Ordinary browser: use Pi Sign-In (OAuth). Pi asks the user to confirm in Pi Browser, then returns here.
+        startPiOAuth();
         return;
       }
       const accessToken = await piSignIn();
@@ -146,6 +150,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSigningIn(false);
     }
   }, [afterLogin, errMsg, toast, tr]);
+
+  const signInWithToken = useCallback(
+    async (accessToken: string) => {
+      try {
+        const r = await api<{ token: string }>("/auth/pi", { body: { accessToken } });
+        await afterLogin(r.token);
+        return true;
+      } catch (e) {
+        toast(e instanceof ApiError ? errMsg(e) : tr("تعذّر تسجيل الدخول بحساب Pi.", "Pi sign-in failed."), "err");
+        return false;
+      }
+    },
+    [afterLogin, errMsg, toast, tr],
+  );
 
   const devSignIn = useCallback(
     async (username: string, kyc: boolean) => {
@@ -179,8 +197,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<Ctx>(
-    () => ({ lang, dir: lang === "ar" ? "rtl" : "ltr", setLang, tr, me, ready, refresh, signIn, devSignIn, signOut, signingIn, toast, errMsg }),
-    [lang, setLang, tr, me, ready, refresh, signIn, devSignIn, signOut, signingIn, toast, errMsg],
+    () => ({ lang, dir: lang === "ar" ? "rtl" : "ltr", setLang, tr, me, ready, refresh, signIn, devSignIn, signOut, signInWithToken, signingIn, toast, errMsg }),
+    [lang, setLang, tr, me, ready, refresh, signIn, devSignIn, signOut, signInWithToken, signingIn, toast, errMsg],
   );
 
   return (

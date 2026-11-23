@@ -26,7 +26,7 @@ export function LegalPage({ kind }: { kind: "terms" | "privacy" }) {
       ) : (
         <>
           <H>{tr("ما نجمعه", "What we collect")}</H>
-          <P>{tr("اسم مستخدم Pi، وحالة التوثيق. وما تدخله بنفسك: العمر والنوع والوزن والطول والهدف ومستوى النشاط والحالات الصحية التي تختار إعلانها، وسجل الوزن والعادات، والتحديات المنجزة، والوصفات والطلبات من Healthy AI.", "Your Pi username and verification status; and what you enter yourself: age, sex, weight, height, goal, activity level, any health conditions you choose to declare, weight and habit logs, completed challenges, and Healthy AI requests and results.")}</P>
+          <P>{tr("اسم مستخدم Pi، وحالة التوثيق. وما تدخله بنفسك: العمر والنوع والوزن والطول والهدف ومستوى النشاط والحالات الصحية التي تختار إعلانها، وسجل الوزن والعادات، واشتراك التنبيهات على جهازك إن فعّلته، والتحديات المنجزة، والوصفات والطلبات من Healthy AI.", "Your Pi username and verification status; and what you enter yourself: age, sex, weight, height, goal, activity level, any health conditions you choose to declare, weight and habit logs, your device's notification subscription if you turn reminders on, completed challenges, and Healthy AI requests and results.")}</P>
           <H>{tr("كيف نستخدمها", "How we use it")}</H>
           <P>{tr("لتخصيص الأهداف والنظام الغذائي والتحديات، ولتشغيل الدفع والكريدت، ولمنع الاستغلال. لا نبيع بياناتك.", "To personalise goals, plans and challenges, to run payments and credits, and to prevent abuse. We do not sell your data.")}</P>
           <H>{tr("الذكاء الاصطناعي", "AI")}</H>

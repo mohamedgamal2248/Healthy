@@ -7,6 +7,7 @@ import { useApp } from "@/components/AppProvider";
 import { Field, Gate, Notice, PageHeader, Spinner, VerifiedBadge } from "@/components/ui";
 import { DisclaimerBanner } from "@/components/Domain";
 import { Icon } from "@/components/Icon";
+import { AppFeatures } from "@/components/AppFeatures";
 
 type F = { age: string; sex: string; weight: string; height: string; goal: string; activity: string; conditions: string[] };
 
@@ -113,7 +114,8 @@ function Inner() {
       </div>) },
     { title: tr("التنبيه الصحي", "Health disclaimer"), valid: accept, body: (
       <div className="space-y-4">
-        <DisclaimerBanner conditions={f.conditions} />
+        <AppFeatures />
+      <DisclaimerBanner conditions={f.conditions} />
         <label className="flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-brand-200 bg-brand-50 p-4">
           <input type="checkbox" className="mt-1 h-6 w-6 accent-brand-600" checked={accept} onChange={(e) => setAccept(e.target.checked)} />
           <span className="font-bold">{tr("قرأت التنبيه الصحي وأوافق عليه. أفهم أن المحتوى إرشاد عام وليس تشخيصًا أو علاجًا.", "I have read the health disclaimer and agree. I understand this is general guidance, not diagnosis or treatment.")}</span>

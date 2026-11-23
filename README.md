@@ -108,6 +108,12 @@ sequenceDiagram
 - Features that need trust (AI, payments, community) require a **KYC-verified** Pi account. KYC fails closed unless the network is explicitly Testnet.
 - The `payments` scope is requested at sign-in so the Pi SDK can start payments; incomplete payments from earlier sessions are recovered automatically.
 
+### Pi Sign-In outside Pi Browser (OAuth)
+
+On an ordinary browser (for example the installed web app), the sign-in button starts **Pi Sign-In** (OAuth implicit flow): the user is sent to `accounts.pinet.com/oauth/authorize` with the app's public client id and a random `state`; Pi returns an access token in the URL fragment to `/signin/callback`, which checks the `state`, removes the token from the address bar and sends it to `POST /api/auth/pi`. The server verifies it with the Pi API exactly like an in-app token, so nothing is trusted on the client. Payments still require Pi Browser (Pi Wallet).
+
+Register these redirect URIs in Pi Developers: `https://<your-domain>/signin/callback` (and `http://localhost:3000/signin/callback` for local work). The domain must be verified with `validation-key.txt`.
+
 ### Payments with Pi
 
 Healthy uses **user-to-app (U2A) payments only**. There is no escrow, no app-to-user payout, no transfer between users and no auto-renewal.
@@ -151,6 +157,10 @@ Plans and packs:
 | Large pack | 30 AI requests |
 
 The price is quoted in Pi by the server at purchase time and shown in the app before the Pioneer confirms. Definitions live in `src/config/pricing.ts`; `PRICING_MODE=fixed` switches to fixed Pi amounts for Testnet.
+
+## Installable app and reminders (PWA)
+
+Healthy is an installable web app (manifest, icons, service worker). In a regular browser users can add it to the home screen and turn on a **daily reminder** (Web Push, VAPID): a daily cron (`/api/cron/reminders`) sends one notification only to people who have not completed a challenge that day in their own timezone. Subscriptions are stored per device in `hl_push_subscriptions` (deleted with the account); the service worker caches nothing. Pi Browser may not support Web Push; the feature simply stays off there.
 
 ## Healthy AI
 
@@ -265,7 +275,9 @@ Server secrets are never exposed to the browser. See [`.env.example`](./.env.exa
 | `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`, `AI_BASE_URL`, `AI_REASONING_EFFORT` | AI provider settings |
 | `PRICING_MODE`, `PRICE_*` | Live or fixed pricing (see `src/config/pricing.ts`) |
 | `AI_LIMIT_PER_HOUR`, `AI_LIMIT_PER_DAY`, `AI_GLOBAL_DAILY_CAP` | AI abuse and cost limits |
-| `CRON_SECRET` | Authenticates the daily maintenance job |
+| `NEXT_PUBLIC_PI_CLIENT_ID` | Optional override of the public Pi Sign-In client id |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web Push (daily reminders) |
+| `CRON_SECRET` | Authenticates the daily maintenance and reminder jobs |
 
 ## Testing and CI
 
