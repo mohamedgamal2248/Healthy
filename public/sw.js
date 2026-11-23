@@ -3,6 +3,12 @@
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 
+// Some browsers (Opera, older Chrome) only treat a site as installable when the worker has a fetch handler.
+// This one only passes page navigations straight through to the network: nothing is cached or changed.
+self.addEventListener("fetch", (event) => {
+  if (event.request.mode === "navigate") event.respondWith(fetch(event.request));
+});
+
 self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch { /* ignore malformed payloads */ }

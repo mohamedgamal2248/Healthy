@@ -374,3 +374,13 @@ test("Pi Browser handoff: intent URL for Android, plain PiNet link elsewhere, Ch
     void g;
   }
 });
+
+test("install prompt falls back to manual steps; service worker stays cache-free but installable", async () => {
+  const { readFileSync } = await import("node:fs");
+  const sw = readFileSync("public/sw.js", "utf8");
+  assert.match(sw, /addEventListener\("fetch"/); // installable in browsers that require a fetch handler
+  assert.match(sw, /mode === "navigate"/); // only page loads, passed straight to the network
+  assert.doesNotMatch(sw, /caches\./);
+  const p = readFileSync("src/components/InstallPrompt.tsx", "utf8");
+  assert.match(p, /manual/); // instructions when the browser never fires beforeinstallprompt
+});
