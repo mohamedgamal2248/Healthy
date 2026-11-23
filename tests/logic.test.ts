@@ -302,3 +302,28 @@ test("Pi Notification Center: request shape, batch limit and consent scope", asy
   const cron = readFileSync("src/app/api/cron/reminders/route.ts", "utf8");
   assert.match(cron, /notify_pi/); // users can opt out
 });
+
+test("Pi SDK is only used where it can work (ordinary browsers use Pi Sign-In OAuth)", async () => {
+  const g = globalThis as unknown as Record<string, unknown>;
+  const setUA = (ua: string) => Object.defineProperty(globalThis, "navigator", { value: { userAgent: ua }, configurable: true });
+  const prevNav = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const prevWin = g.window;
+  try {
+    const { canUsePiSdk, isPiBrowser } = await import("../src/lib/pi-client");
+    const top = {};
+    g.window = { Pi: {}, self: top, top }; // SDK script loaded (it is in every browser), not framed
+    setUA("Mozilla/5.0 (Linux; Android 14) Chrome/130 Mobile Safari/537.36");
+    assert.equal(isPiBrowser(), false);
+    assert.equal(canUsePiSdk(), false); // Chrome: would hang on Pi.authenticate, so use OAuth instead
+    setUA("Mozilla/5.0 (Linux; Android 14) PiBrowser/1.2 Mobile");
+    assert.equal(canUsePiSdk(), true);
+    setUA("Mozilla/5.0 Chrome/130");
+    g.window = { Pi: {}, self: {}, top: {} }; // framed (Pi Sandbox / Pi-hosted)
+    assert.equal(canUsePiSdk(), true);
+    g.window = { self: top, top }; // SDK not loaded at all
+    assert.equal(canUsePiSdk(), false);
+  } finally {
+    if (prevNav) Object.defineProperty(globalThis, "navigator", prevNav);
+    g.window = prevWin;
+  }
+});
