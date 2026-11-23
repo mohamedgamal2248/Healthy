@@ -1,4 +1,4 @@
-import type { SVGProps } from "react";
+import { useId, type SVGProps } from "react";
 
 // Inline SVG icon set (stroke icons on a 24x24 grid). No emoji anywhere in the UI.
 const P: Record<string, string> = {
@@ -94,10 +94,21 @@ export function Icon({ name, size = 20, className, filled, ...rest }: { name: Ic
   );
 }
 
+/** Brand mark: progress ring (daily habit) with a gold AI spark. Inline SVG so it scales crisply at any size. */
 export function Logo({ size = 36 }: { size?: number }) {
+  const id = useId().replace(/:/g, "");
   return (
-    <span className="inline-flex items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-sm" style={{ width: size, height: size }}>
-      <Icon name="leaf" size={size * 0.6} />
-    </span>
+    <svg width={size} height={size} viewBox="0 0 512 512" role="img" aria-label="Healthy" className="shrink-0">
+      <defs>
+        <linearGradient id={`${id}bg`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#34d399" /><stop offset="1" stopColor="#065f46" /></linearGradient>
+        <linearGradient id={`${id}gold`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#fde68a" /><stop offset="1" stopColor="#f59e0b" /></linearGradient>
+        <linearGradient id={`${id}arc`} gradientUnits="userSpaceOnUse" x1="250" y1="100" x2="385" y2="150"><stop offset="0" stopColor="#fde68a" /><stop offset="1" stopColor="#f59e0b" /></linearGradient>
+      </defs>
+      <rect width="512" height="512" rx="112" fill={`url(#${id}bg)`} />
+      <circle cx="256" cy="256" r="150" fill="none" stroke="#fff" strokeOpacity=".22" strokeWidth="34" />
+      <circle cx="256" cy="256" r="150" fill="none" stroke="#fff" strokeWidth="34" strokeLinecap="round" strokeDasharray="707 943" transform="rotate(-90 256 256)" />
+      <path d="M256 186c6 42 28 64 70 70-42 6-64 28-70 70-6-42-28-64-70-70 42-6 64-28 70-70z" fill={`url(#${id}gold)`} />
+      <path d="M256 106A150 150 0 0 1 337.4 130.0" fill="none" stroke={`url(#${id}arc)`} strokeWidth="34" strokeLinecap="round" />
+    </svg>
   );
 }
