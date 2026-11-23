@@ -5,7 +5,7 @@ select cron.schedule(
   'hl-reminders-hourly',
   '0 * * * *',
   $job$select net.http_get(
-    url := 'https://<your-domain>/api/cron/reminders',
+    url := 'https://healthy-ai-app.vercel.app/api/cron/reminders',
     headers := jsonb_build_object('Authorization', 'Bearer <SCHEDULER_SECRET>'),
     timeout_milliseconds := 60000
   )$job$
