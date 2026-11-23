@@ -91,7 +91,6 @@ export function Shell({ children }: { children: ReactNode }) {
             <Link href="/privacy" className="underline-offset-2 hover:underline">{tr("سياسة الخصوصية", "Privacy")}</Link>
             <Link href="/open-source" className="underline-offset-2 hover:underline">{tr("مفتوح المصدر", "Open source")}</Link>
             <span dir="ltr">Healthy</span>
-            <span className="basis-full text-center font-semibold" dir="ltr">Pi, Pi Network and the Pi logo are trademarks of the Pi Community Company.</span>
           </footer>
         </main>
       </div>
