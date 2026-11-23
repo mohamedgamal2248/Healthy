@@ -22,8 +22,10 @@ declare global {
 /** The Pi SDK script defines window.Pi in EVERY browser, but its wallet/auth only works inside Pi Browser (or the Sandbox). */
 export const isPiBrowser = () => typeof navigator !== "undefined" && /PiBrowser/i.test(navigator.userAgent);
 const inFrame = () => { try { return window.self !== window.top; } catch { return true; } };
-/** True where Pi.authenticate / createPayment can work: Pi Browser, Pi Sandbox, or an iframe hosted by Pi. */
-export const canUsePiSdk = () => typeof window !== "undefined" && !!window.Pi && (isPiBrowser() || process.env.NEXT_PUBLIC_PI_SANDBOX === "true" || inFrame());
+/** Are we somewhere Pi's wallet/auth can work (Pi Browser, Pi Sandbox, an iframe hosted by Pi)? Does not need the SDK script to have loaded yet. */
+export const inPiContext = () => typeof window !== "undefined" && (isPiBrowser() || process.env.NEXT_PUBLIC_PI_SANDBOX === "true" || inFrame());
+/** True where Pi.authenticate / createPayment can actually be called. */
+export const canUsePiSdk = () => typeof window !== "undefined" && !!window.Pi && inPiContext();
 let inited = false;
 function init() {
   if (inited || !window.Pi) return;

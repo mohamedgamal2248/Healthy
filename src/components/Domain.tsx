@@ -1,4 +1,6 @@
 "use client";
+import { inPiContext } from "@/lib/pi-client";
+import { piBrowserUrl } from "@/lib/pi-handoff";
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import Link from "next/link";
@@ -297,9 +299,18 @@ export function PaySheet({ item: itemIn, onClose, onPaid }: { item: PriceItem | 
           {itemBenefits(item, tr).map((b) => (<li key={b} className="flex items-center gap-2"><Icon name="check" size={16} className="text-brand-600" />{b}</li>))}
         </ul>
         {msg && <Notice tone="bad">{msg}</Notice>}
-        <button className="btn-primary w-full" onClick={pay} disabled={busy}>
-          {busy ? <Spinner /> : <Icon name="pi" />} {busy ? tr("جاري الدفع…", "Processing…") : tr(`ادفع ${item.pricePi} Pi`, `Pay ${item.pricePi} Pi`)}
-        </button>
+        {inPiContext() ? (
+          <button className="btn-primary w-full" onClick={pay} disabled={busy}>
+            {busy ? <Spinner /> : <Icon name="pi" />} {busy ? tr("جاري الدفع…", "Processing…") : tr(`ادفع ${item.pricePi} Pi`, `Pay ${item.pricePi} Pi`)}
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <a className="btn-primary w-full" href={piBrowserUrl(`/pricing?buy=${item.key}&handoff=1`)}>
+              <Icon name="pi" /> {tr("أكمل الدفع في Pi Browser", "Continue to pay in Pi Browser")}
+            </a>
+            <p className="muted text-center">{tr("الدفع بـ Pi يتم داخل Pi Browser فقط. بعد الدفع ارجع لهذا المتصفح، وسيظهر رصيدك المحدّث تلقائيًا.", "Paying with Pi works only inside Pi Browser. After paying, come back to this browser and your updated balance appears automatically.")}</p>
+          </div>
+        )}
         <p className="text-center text-xs text-ink-soft"><Link href="/wallet" className="underline">{tr("سجل المدفوعات في المحفظة", "Payment history in Wallet")}</Link></p>
       </div>
     </Sheet>

@@ -1,4 +1,5 @@
 import { db, must } from "@/server/supabase";
+import { PINET_URL } from "@/config/pi";
 import { ok, readJson, route, E } from "@/server/http";
 import { requireUser } from "@/server/auth";
 import { rateLimit } from "@/server/ratelimit";
@@ -15,6 +16,6 @@ export const POST = route<{ id: string }>(async (req, { params }) => {
   if (r.content?.kind && r.content.kind !== "recipe") throw E.bad("هذا النوع لا يمكن نشره.", "This item type cannot be published.");
   const on = shared !== false;
   must(await db().from("hl_recipes").update({ shared: on, shared_at: on ? new Date().toISOString() : null }).eq("id", id));
-  const base = (process.env.NEXT_PUBLIC_PINET_URL || new URL(req.url).origin).replace(/\/$/, "");
+  const base = PINET_URL;
   return ok({ shared: on, url: on ? `${base}/r/${id}` : null });
 });
