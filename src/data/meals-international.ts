@@ -1,4 +1,4 @@
-// International (non-Egyptian) meals: original nutrition content written for Pi Healthy.
+// International (non-Egyptian) meals: original nutrition content written for Healthy.
 // Calories / protein are per one serving and approximate. Ingredient tuple: [Arabic item, quantity, ingredient key].
 import { intl, type MealSeed } from "./meal-types";
 

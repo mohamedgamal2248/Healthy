@@ -1,4 +1,4 @@
-// Seed catalogue: original nutrition content written for Pi Healthy.
+// Seed catalogue: original nutrition content written for Healthy.
 // Calories / protein are per one serving and approximate. Ingredient tuple: [Arabic item, quantity, ingredient key].
 import { meal, type MealSeed } from "./meal-types";
 import { EGYPTIAN_MORE } from "./meals-egyptian-more";

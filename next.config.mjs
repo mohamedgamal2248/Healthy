@@ -23,8 +23,13 @@ const nextConfig = {
     const base = [
       { key: "X-Content-Type-Options", value: "nosniff" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      // Camera only for our own origin (meal photo scan); nothing else is requested.
+      { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=()" },
     ];
-    if (isProd) base.push({ key: "Content-Security-Policy", value: csp });
+    if (isProd) {
+      base.push({ key: "Content-Security-Policy", value: csp });
+      base.push({ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" });
+    }
     return [{ source: "/:path*", headers: base }];
   },
 };

@@ -89,7 +89,9 @@ export function Shell({ children }: { children: ReactNode }) {
           <footer className="mt-10 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 border-t border-line pt-4 text-xs font-bold text-ink-soft">
             <Link href="/terms" className="underline-offset-2 hover:underline">{tr("الشروط والأحكام", "Terms")}</Link>
             <Link href="/privacy" className="underline-offset-2 hover:underline">{tr("سياسة الخصوصية", "Privacy")}</Link>
+            <Link href="/open-source" className="underline-offset-2 hover:underline">{tr("مفتوح المصدر", "Open source")}</Link>
             <span dir="ltr">Healthy</span>
+            <span className="basis-full text-center font-semibold" dir="ltr">Pi, Pi Network and the Pi logo are trademarks of the Pi Community Company.</span>
           </footer>
         </main>
       </div>
@@ -120,7 +122,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
       <Sheet open={more} onClose={() => setMore(false)} title={me ? `@${me.profile.username}` : tr("المزيد", "More")}>
         <div className="grid grid-cols-2 gap-2">
-          {[...MORE, { href: "/terms", icon: "info", ar: "الشروط", en: "Terms" }, { href: "/privacy", icon: "lock", ar: "الخصوصية", en: "Privacy" }, ...(me?.isAdmin ? [{ href: "/admin", icon: "settings", ar: "الإدارة", en: "Admin" }] : [])].map((i) => (
+          {[...MORE, { href: "/terms", icon: "info", ar: "الشروط", en: "Terms" }, { href: "/privacy", icon: "lock", ar: "الخصوصية", en: "Privacy" }, { href: "/open-source", icon: "book", ar: "مفتوح المصدر", en: "Open source" }, ...(me?.isAdmin ? [{ href: "/admin", icon: "settings", ar: "الإدارة", en: "Admin" }] : [])].map((i) => (
             <Link key={i.href} href={i.href} onClick={() => setMore(false)} className="flex min-h-14 items-center gap-2.5 rounded-2xl border border-line bg-brand-50/40 px-3 font-bold text-ink">
               <Icon name={i.icon} size={20} className="text-brand-600" /> {tr(i.ar, i.en)}
             </Link>
