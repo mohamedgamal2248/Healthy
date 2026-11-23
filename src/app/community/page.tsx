@@ -81,7 +81,7 @@ function Inner() {
 
       <section>
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="h2">{tr("المتصدرون من البايونيرز الموثقين", "Verified Pioneers leaderboard")}</h2>
+          <h2 className="h2">{tr("المتصدرون من البايونيرز", "Pioneers leaderboard")}</h2>
           <div className="flex gap-1.5">{([["week", tr("الأسبوع", "Week")], ["month", tr("الشهر", "Month")]] as const).map(([k, l]) => (<button key={k} className="chip" aria-pressed={btab === k} onClick={() => setBtab(k)}>{l}</button>))}</div>
         </div>
         {(btab === "week" ? d.board : d.monthBoard).length === 0 ? <EmptyState icon="trophy" title={tr("كن أول المتصدرين", "Be the first on the board")} body={tr("انضم وسجّل يومك لتظهر هنا.", "Join and check in to appear here.")} /> : (

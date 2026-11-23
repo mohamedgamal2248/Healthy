@@ -21,7 +21,7 @@ export function Landing({ items, trial, meal, challenge, ingredientsEn }: { item
       <section className="relative -mx-4 overflow-hidden bg-gradient-to-b from-brand-100 via-brand-50 to-canvas px-4 pb-10 pt-8 sm:pt-14">
         <div className="mx-auto grid max-w-6xl items-center gap-8 lg:grid-cols-2">
           <div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-sm font-extrabold text-brand-700 shadow-sm"><Icon name="shieldCheck" size={16} />{tr("لبايونيرز Pi الموثّقين", "For verified Pi Pioneers")}</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-sm font-extrabold text-brand-700 shadow-sm"><Icon name="shieldCheck" size={16} />{tr("لبايونيرز Pi", "For Pi Pioneers")}</span>
             <h1 className="mt-4 text-4xl font-extrabold leading-[1.25] text-brand-900 sm:text-5xl">{tr("صحتك تبدأ بتحدي صغير كل يوم", "Your health starts with one small challenge a day")}</h1>
             <p className="mt-4 max-w-xl text-lg font-semibold text-ink-soft">{tr("تحديات يومية، وجبات صحية من مكونات رخيصة، وشيف ذكاء اصطناعي ونظام غذائي شخصي. ادفع بـ Pi فقط لما تحتاج الخدمات المدفوعة.", "Daily challenges, healthy meals from affordable ingredients, Healthy AI for meals, workouts and challenges, and a personal diet plan. Pay with Pi only when you want the paid services.")}</p>
             <div className="mt-6 flex flex-wrap gap-3">

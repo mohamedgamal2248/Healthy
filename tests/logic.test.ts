@@ -539,3 +539,18 @@ test("mainnet-only payments: default is mainnet, testnet payments need an explic
   assert.doesNotMatch(readFileSync("src/lib/pi-oauth.ts", "utf8"), /zQUUOqrs/); // the old testnet client id is gone
   assert.equal(readFileSync("public/validation-key.txt", "utf8").length, 128); // exactly the 128-char key, no newline
 });
+
+test("eligibility: Pi exposes no KYC flag, so every Pi user is eligible; strict mode is opt-in", async () => {
+  const { isKycVerified } = await import("../src/server/pi-backend");
+  const prev = process.env.PI_KYC_MODE;
+  try {
+    delete process.env.PI_KYC_MODE;
+    assert.equal(isKycVerified({ uid: "u", username: "a" }), true); // what Pi's /me really returns: uid + username (+ credentials)
+    assert.equal(isKycVerified({ uid: "u", username: "a", credentials: { scopes: ["username"] } }), true);
+    process.env.PI_KYC_MODE = "strict";
+    assert.equal(isKycVerified({ uid: "u", username: "a" }), false); // strict needs an explicit flag
+    assert.equal(isKycVerified({ uid: "u", username: "a", kyc_verified: true }), true);
+  } finally {
+    if (prev === undefined) delete process.env.PI_KYC_MODE; else process.env.PI_KYC_MODE = prev;
+  }
+});

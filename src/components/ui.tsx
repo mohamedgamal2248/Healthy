@@ -28,7 +28,7 @@ export function VerifiedBadge({ small }: { small?: boolean }) {
   return (
     <span className={`inline-flex items-center gap-1 rounded-full bg-brand-50 font-bold text-brand-700 ${small ? "px-1.5 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs"}`} title={tr("باي بايونير موثّق (KYC)", "KYC-verified Pioneer")}>
       <Icon name="shieldCheck" size={small ? 12 : 14} />
-      {tr("موثّق", "Verified")}
+      {tr("بايونير", "Pioneer")}
     </span>
   );
 }
