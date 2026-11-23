@@ -15,12 +15,14 @@ export const vapidPublicKey = () => process.env.VAPID_PUBLIC_KEY ?? null;
 export type Sub = { endpoint: string; p256dh: string; auth: string };
 
 /** Send one notification. Returns "gone" when the browser says the subscription no longer exists. */
-export async function sendPush(sub: Sub, payload: { title: string; body: string }): Promise<"ok" | "gone" | "error"> {
+export async function sendPush(sub: Sub, payload: { title: string; body: string }, opts: { urgency?: "normal" | "high"; detail?: { status?: number | string } } = {}): Promise<"ok" | "gone" | "error"> {
   try {
-    await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(payload), { TTL: 6 * 3600, urgency: "normal" });
+    const r = await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(payload), { TTL: 6 * 3600, urgency: opts.urgency ?? "normal" });
+    if (opts.detail) opts.detail.status = r.statusCode;
     return "ok";
   } catch (e) {
     const status = (e as { statusCode?: number }).statusCode;
+    if (opts.detail) opts.detail.status = status ?? (e instanceof Error ? e.message.slice(0, 80) : "error");
     if (status === 404 || status === 410) return "gone";
     console.error("[push]", status ?? (e instanceof Error ? e.message : e));
     return "error";

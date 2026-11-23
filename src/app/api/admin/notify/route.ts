@@ -25,12 +25,14 @@ export const POST = route(async (req) => {
     ? await sendPiNotifications([{ user_uid: piUid, title, body, subroute: "/today" }])
     : { requested: 0, delivered: 0, error: "no_pi_uid" };
 
-  const push = { configured: pushConfigured(), devices: 0, sent: 0, removed: 0, failed: 0 };
+  const push = { configured: pushConfigured(), devices: 0, sent: 0, removed: 0, failed: 0, statuses: [] as (number | string)[] };
   if (push.configured) {
     const subs = must(await db().from("hl_push_subscriptions").select("endpoint,p256dh,auth").eq("username", a.username)) as Sub[];
     push.devices = subs.length;
     for (const s of subs) {
-      const r = await sendPush(s, { title, body });
+      const detail: { status?: number | string } = {};
+      const r = await sendPush(s, { title, body }, { urgency: "high", detail });
+      if (detail.status !== undefined) push.statuses.push(detail.status);
       if (r === "ok") push.sent++;
       else if (r === "gone") { await dropSubscription(s.endpoint); push.removed++; }
       else push.failed++;

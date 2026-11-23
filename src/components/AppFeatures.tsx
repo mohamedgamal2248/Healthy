@@ -51,6 +51,14 @@ export function AppFeatures() {
     try { await disablePush(); setOn(false); } finally { setBusy(false); }
   };
 
+  // Shows a notification locally (no push involved): tells apart "the phone blocks notifications" from "the push did not arrive".
+  const localTest = async () => {
+    try {
+      const reg = (await navigator.serviceWorker.getRegistration("/sw.js")) ?? (await navigator.serviceWorker.ready);
+      await reg.showNotification("Healthy", { body: tr("إشعار تجريبي على هذا الجهاز", "Test notification on this device"), icon: "/icons/icon-192.png", tag: "healthy-local-test" });
+    } catch (e) { setErr(describePushError(e)); }
+  };
+
   const doInstall = async () => { await promptInstall(); };
 
   return (
@@ -75,6 +83,7 @@ export function AppFeatures() {
       ) : (
         <p className="muted">{tr("هذا المتصفح لا يدعم التنبيهات. جرّب Chrome، أو ثبّت التطبيق على الشاشة الرئيسية.", "This browser doesn't support notifications. Try Chrome, or install the app to your home screen.")}</p>
       )}
+      {supported && on && <button className="btn-ghost btn-sm" onClick={localTest}><Icon name="bell" size={16} />{tr("جرّب إشعارًا على هذا الجهاز", "Test a notification on this device")}</button>}
       {err && <p className="muted break-words text-xs" dir="ltr">{tr("تفاصيل الخطأ", "Error details")}: {err}</p>}
     </section>
   );

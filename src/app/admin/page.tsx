@@ -198,7 +198,7 @@ function GroupAdmin({ chs, onSave, busy }: { chs: Ch[]; onSave: (b: unknown) => 
 
 export default function AdminPage() { return <Gate><Inner /></Gate>; }
 
-type NotifyResult = { pi: { requested: number; delivered: number; error?: string }; push: { configured: boolean; devices: number; sent: number; removed: number; failed: number } };
+type NotifyResult = { pi: { requested: number; delivered: number; error?: string }; push: { configured: boolean; devices: number; sent: number; removed: number; failed: number; statuses?: (number | string)[] } };
 
 /** Test panel: sends a notification to the admin's own account and shows what each channel did. */
 function NotifyAdmin() {
@@ -222,7 +222,7 @@ function NotifyAdmin() {
       {res && (
         <div className="space-y-2 text-sm font-bold" role="status">
           <p><span className="text-ink-soft">Pi: </span>{piLine}</p>
-          <p><span className="text-ink-soft">Web Push: </span>{!res.push.configured ? tr("غير مفعّل على الخادم.", "Not configured on the server.") : res.push.devices === 0 ? tr("لا توجد أجهزة مفعّلة. فعّل «التذكير اليومي» من ملفك الشخصي في متصفح عادي.", "No devices subscribed. Turn on Daily reminder in your profile from a regular browser.") : tr(`أُرسل لـ ${res.push.sent} من ${res.push.devices} جهاز.`, `Sent to ${res.push.sent} of ${res.push.devices} device(s).`)}</p>
+          <p><span className="text-ink-soft">Web Push: </span>{!res.push.configured ? tr("غير مفعّل على الخادم.", "Not configured on the server.") : res.push.devices === 0 ? tr("لا توجد أجهزة مفعّلة. فعّل «التذكير اليومي» من ملفك الشخصي في متصفح عادي.", "No devices subscribed. Turn on Daily reminder in your profile from a regular browser.") : tr(`أُرسل لـ ${res.push.sent} من ${res.push.devices} جهاز.`, `Sent to ${res.push.sent} of ${res.push.devices} device(s).`)}{res.push.statuses?.length ? ` (push service: ${res.push.statuses.join(", ")})` : ""}</p>
         </div>
       )}
     </section>
