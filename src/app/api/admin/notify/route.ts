@@ -16,7 +16,7 @@ const Body = z.object({ title: z.string().trim().min(1).max(60), body: z.string(
  */
 export const POST = route(async (req) => {
   const a = await requireAdmin(req);
-  await rateLimit("admin-notify", a.username, 10, 3600);
+  await rateLimit("admin-notify", a.username, 30, 3600);
   const parsed = Body.safeParse(await readJson(req));
   if (!parsed.success) throw E.bad("اكتب عنوانًا ونصًا قصيرين.", "Enter a short title and message.");
   const { title, body, delaySec = 0 } = parsed.data;
