@@ -44,16 +44,14 @@ export async function verifyAccessToken(accessToken: string): Promise<PiMe> {
 }
 
 /**
- * KYC policy. The Pi Platform API does not always expose KYC in /me.
- *  - strict: require an explicit KYC flag in /me (fails closed when absent). Use on Mainnet.
- *  - testnet (default when NEXT_PUBLIC_PI_NETWORK != mainnet): Testnet accounts cannot be KYC-checked,
- *    so every Pi-authenticated user is treated as verified for end-to-end testing.
+ * Eligibility policy. Pi's Platform API does NOT expose a KYC / verification status: `/me` returns only the app-specific
+ * uid, the username and the granted scopes (see the Pi docs), so a "KYC required" gate can never pass on Mainnet.
+ * Every Pi-authenticated user is therefore treated as eligible. Abuse is limited by other means: free credits need a real
+ * 7-day streak, referral rewards are capped and need real activity, AI has per-user and global caps, and paid features
+ * need a real Pi payment. If Pi ever exposes a flag, set PI_KYC_MODE=strict to require it again.
  */
 export function isKycVerified(me: PiMe): boolean {
-  // Fails CLOSED: only an explicit NEXT_PUBLIC_PI_NETWORK=testnet (or PI_KYC_MODE=testnet) relaxes the KYC check.
-  const network = process.env.NEXT_PUBLIC_PI_NETWORK ?? "mainnet";
-  const mode = process.env.PI_KYC_MODE ?? (network === "testnet" ? "testnet" : "strict");
-  if (mode === "testnet") return true;
+  if ((process.env.PI_KYC_MODE ?? "off") !== "strict") return true;
   const flag = (me as Record<string, unknown>).kyc_verified ?? (me as Record<string, unknown>).kycVerified ?? (me as { credentials?: Record<string, unknown> }).credentials?.kyc_verified;
   return flag === true;
 }

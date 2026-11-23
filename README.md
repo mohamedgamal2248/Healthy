@@ -107,7 +107,7 @@ sequenceDiagram
 - The Pi access token is verified **server-side** against `https://api.minepi.com/v2/me`; the client's claimed username is never trusted.
 - The server issues its own HMAC-SHA256 session token bound to the Pi `uid`. Sessions are **revocable** (`token_version`), and signing out invalidates the token on the server.
 - A recycled username with a different `uid` is refused.
-- Features that need trust (AI, payments, community) require a **KYC-verified** Pi account. KYC fails closed unless the network is explicitly Testnet.
+- Pi's Platform API exposes **no KYC status** (`/me` returns only the app-specific uid, username and scopes), so Healthy does not gate on KYC. Every Pi-authenticated user is eligible; abuse is limited by real-streak requirements for free credits, capped referral rewards, per-user and global AI caps, and real Pi payments. `PI_KYC_MODE=strict` re-enables a flag check if Pi ever provides one.
 - The `payments` scope is requested at sign-in so the Pi SDK can start payments; incomplete payments from earlier sessions are recovered automatically.
 
 ### Pi Sign-In outside Pi Browser (OAuth)
@@ -178,7 +178,7 @@ The AI layer is a provider abstraction (`src/server/ai/provider.ts`). Provider, 
 
 How a request flows (`src/server/chef.ts`):
 
-1. **Guards before any cost:** authentication, KYC, health disclaimer accepted, prompt length, safety screening of the request (no diagnosis, treatment, medication, children's diet plans), rate limits (per hour, per day, global circuit breaker) and a single in-flight request per user.
+1. **Guards before any cost:** authentication, health disclaimer accepted, prompt length, safety screening of the request (no diagnosis, treatment, medication, children's diet plans), rate limits (per hour, per day, global circuit breaker) and a single in-flight request per user.
 2. **Spend one credit atomically** (`hl_spend_credit`, per-user lock, order: plan, then trial, then pack).
 3. **Generate** with strict JSON schemas (zod), a time budget that actually cancels the provider call, web search for unfamiliar dishes and a 30-day cache of identical requests.
 4. **Validate the output:** schema, forbidden-content filter (supplements, doses, fasting, cure claims), a **1,200 kcal/day floor**, and consistency checks (calories vs ingredients vs macros) for photo analysis.
@@ -213,7 +213,7 @@ Reviewed end to end (payments, AI, privacy, API, database). Highlights:
 - **Database perimeter:** RLS on every table with no policies, anonymous privileges revoked, service-role key server-only. Verified: anonymous reads/writes and RPC calls are denied.
 - **Auth:** server-verified Pi tokens, revocable HMAC sessions, `uid` binding, constant-time secret comparisons, dev login disabled in production.
 - **Payments:** server-side quote, amount/payer/memo/direction verification, unique payment id, atomic idempotent grant, quote age enforced only when opening a payment so a paid payment is always recoverable.
-- **Privacy:** health notices (diabetes, hypertension, pregnancy cautions) are stripped from anything shown to other users; public leaderboards show only verified, opted-in Pioneers; account deletion removes personal data while keeping the financial ledger and a minimal tombstone.
+- **Privacy:** health notices (diabetes, hypertension, pregnancy cautions) are stripped from anything shown to other users; public leaderboards show only opted-in Pioneers; account deletion removes personal data while keeping the financial ledger and a minimal tombstone.
 - **Abuse and cost controls:** per-endpoint rate limits (Postgres, shared across instances), AI hourly/daily/global caps, in-flight guard, input caps, safe refusal text, image header validation.
 - **Web hardening:** CSP, HSTS, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` (camera on the same origin only), `noindex` on shared pages and the API.
 - **Supply chain:** `npm audit` clean, no secrets in the repository, CI runs typecheck, tests and build on every push.
@@ -275,7 +275,7 @@ Server secrets are never exposed to the browser. See [`.env.example`](./.env.exa
 
 | Variable | Purpose |
 |---|---|
-| `NEXT_PUBLIC_PI_NETWORK` | `testnet` or `mainnet` (KYC policy depends on it) |
+| `NEXT_PUBLIC_PI_NETWORK` | `mainnet` (default). `testnet` disables payments unless `ALLOW_TESTNET_PAYMENTS=true` on a staging copy |
 | `NEXT_PUBLIC_PI_SANDBOX` | `true` for Sandbox on localhost |
 | `PI_API_KEY` | Pi Platform API key (server only) |
 | `NEXT_PUBLIC_PINET_URL` | Public PiNet URL used for shared links |
