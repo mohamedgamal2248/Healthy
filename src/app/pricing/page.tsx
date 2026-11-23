@@ -1,18 +1,35 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { inPiContext } from "@/lib/pi-client";
 import { useApp } from "@/components/AppProvider";
 import { PricingGrid, type PriceItem } from "@/components/Pricing";
 import { CreditBalance, PaySheet } from "@/components/Domain";
 import { Notice, PageHeader } from "@/components/ui";
 
 export default function PricingPage() {
-  const { tr, me, refresh, signIn, signingIn } = useApp();
+  const { tr, me, ready, refresh, signIn, signingIn } = useApp();
   const [data, setData] = useState<{ items: PriceItem[]; trialCredits: number; network: string; rate?: { usdPerPi: number; source: string; mode: string } } | null>(null);
   const [buy, setBuy] = useState<PriceItem | null>(null);
   const [expires, setExpires] = useState<string | null>(null);
   useEffect(() => { api<typeof data>("/pricing").then(setData).catch(() => {}); }, []);
   useEffect(() => { if (me) api<{ subscription: { expires_at: string } | null }>("/wallet").then((w) => setExpires(w.subscription?.expires_at ?? null)).catch(() => {}); }, [me]);
+  // Arrived from another browser via "Continue in Pi Browser": sign in if needed, then open the chosen purchase.
+  const [handoff, setHandoff] = useState<{ item: string; fromOther: boolean } | null>(null);
+  const [paid, setPaid] = useState(false);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const item = q.get("buy");
+    if (item) setHandoff({ item, fromOther: q.get("handoff") === "1" });
+  }, []);
+  useEffect(() => {
+    if (!handoff || !ready || !data) return;
+    if (!me) { if (inPiContext()) signIn(); return; }
+    const it = data.items.find((i) => i.key === handoff.item);
+    if (it && !(it.kind === "plan" && me.balances?.planActive)) setBuy(it);
+    setHandoff((h) => (h ? { ...h, item: "" } : h)); // open it once
+    history.replaceState(null, "", handoff.fromOther ? "/pricing?handoff=1" : "/pricing");
+  }, [handoff, ready, data, me, signIn]);
   const verified = !!me?.profile.kyc_verified;
   const planActive = !!me?.balances?.planActive;
 
@@ -44,7 +61,8 @@ export default function PricingPage() {
           buyLabel={(i) => (!me ? tr("سجّل الدخول للشراء", "Sign in to buy") : i.kind === "plan" ? (planActive ? tr("الخطة فعّالة", "Plan active") : expires ? tr("تجديد الخطة", "Renew plan") : tr("اشترك الآن", "Subscribe")) : tr("اشترِ الباقة", "Buy pack"))}
         />
       )}
-      <PaySheet item={buy} onClose={() => setBuy(null)} onPaid={() => { refresh(); api<{ subscription: { expires_at: string } | null }>("/wallet").then((w) => setExpires(w.subscription?.expires_at ?? null)).catch(() => {}); }} />
+      {paid && new URLSearchParams(typeof window === "undefined" ? "" : window.location.search).get("handoff") === "1" && <div className="mt-4"><Notice tone="ok">{tr("تم الدفع. ارجع إلى المتصفح الذي كنت فيه وسيظهر رصيدك المحدّث تلقائيًا.", "Payment complete. Go back to the browser you came from and your updated balance will appear automatically.")}</Notice></div>}
+      <PaySheet item={buy} onClose={() => setBuy(null)} onPaid={() => { setPaid(true); refresh(); api<{ subscription: { expires_at: string } | null }>("/wallet").then((w) => setExpires(w.subscription?.expires_at ?? null)).catch(() => {}); }} />
     </div>
   );
 }

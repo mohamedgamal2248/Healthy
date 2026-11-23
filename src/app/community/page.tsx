@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { PINET_URL } from "@/config/pi";
 import { useGet } from "@/lib/useGet";
 import { useApp } from "@/components/AppProvider";
 import { EmptyState, Gate, Notice, PageHeader, PageSkeleton, Spinner, VerifiedBadge } from "@/components/ui";
@@ -33,7 +34,7 @@ function Inner() {
   const like = async (id: string) => { try { const r = await api<{ liked: boolean; likes: number }>(`/recipes/${id}/like`, { body: {} }); setOv((o) => ({ ...o, [id]: { ...o[id], liked: r.liked, likes: r.likes } })); } catch (e) { toast(errMsg(e), "err"); } };
   const save = async (id: string) => { try { const r = await api<{ favourite: boolean }>("/favourites", { body: { type: "recipe", id } }); const base = [...d.topRecipes, ...d.latestRecipes].find((x) => x.id === id); setOv((o) => ({ ...o, [id]: { ...o[id], saved: r.favourite, saves: Math.max(0, (base?.saves ?? 0) + (r.favourite === !!base?.saved ? 0 : r.favourite ? 1 : -1)) } })); } catch (e) { toast(errMsg(e), "err"); } };
   const invite = async () => {
-    const url = `${(process.env.NEXT_PUBLIC_PINET_URL || window.location.origin).replace(/\/$/, "")}/?ref=${encodeURIComponent(me?.profile.username ?? "")}`;
+    const url = `${PINET_URL}/?ref=${encodeURIComponent(me?.profile.username ?? "")}`;
     const text = tr(`انضم لتحدي الأسبوع معايا على Healthy: ${lang === "ar" ? d.group.title_ar : d.group.title_en}`, `Join this week's challenge with me on Healthy: ${d.group.title_en}`);
     try {
       if (navigator.share) await navigator.share({ title: "Healthy", text, url });

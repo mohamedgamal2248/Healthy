@@ -351,3 +351,26 @@ test("sign-in hop page and install prompt rules", async () => {
   const shell = readFileSync("src/components/Shell.tsx", "utf8");
   assert.match(shell, /<InstallPrompt \/>/);
 });
+
+test("Pi Browser handoff: intent URL for Android, plain PiNet link elsewhere, Chrome detection", async () => {
+  const g = globalThis as unknown as Record<string, unknown>;
+  const prev = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const setUA = (u: string) => Object.defineProperty(globalThis, "navigator", { value: { userAgent: u }, configurable: true });
+  try {
+    const { piBrowserUrl, isAndroidChrome, PINET_URL } = await import("../src/lib/pi-handoff");
+    const chrome = "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36";
+    setUA(chrome);
+    assert.equal(isAndroidChrome(), true);
+    const u = piBrowserUrl("/pricing?buy=pack_small&handoff=1");
+    assert.ok(u.startsWith(`intent://${PINET_URL.replace("https://", "")}/pricing?buy=pack_small&handoff=1#Intent;scheme=https;package=pi.browser;`));
+    assert.match(u, /S\.browser_fallback_url=https%3A%2F%2Fplay\.google\.com/); // falls back to the Play Store if Pi Browser is missing
+    setUA(chrome + " OPR/80.0");
+    assert.equal(isAndroidChrome(), false); // Opera works with Pi's OAuth page, so it keeps that flow
+    setUA("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Safari/604.1");
+    assert.equal(piBrowserUrl("/pricing"), `${PINET_URL}/pricing`);
+    assert.equal(piBrowserUrl("/"), PINET_URL);
+  } finally {
+    if (prev) Object.defineProperty(globalThis, "navigator", prev);
+    void g;
+  }
+});

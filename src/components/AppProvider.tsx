@@ -3,7 +3,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useRouter } from "next/navigation";
 import { api, ApiError, rememberToken, getToken } from "@/lib/api";
 import { clearGetCache } from "@/lib/useGet";
-import { canUsePiSdk, piSignIn } from "@/lib/pi-client";
+import { canUsePiSdk, inPiContext, piSignIn } from "@/lib/pi-client";
+import { isAndroidChrome, piBrowserUrl } from "@/lib/pi-handoff";
 import { startPiOAuth } from "@/lib/pi-oauth";
 
 export type Lang = "ar" | "en";
@@ -116,6 +117,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refresh();
   }, [refresh]);
 
+  // Coming back from Pi Browser (after a payment there) the credits changed on the server: refresh when the tab is visible again.
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible" && getToken()) { clearGetCache(); refresh(); } };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refresh]);
+
   const afterLogin = useCallback(
     async (token: string) => {
       clearGetCache();
@@ -134,6 +142,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const signIn = useCallback(async () => {
+    // Plain Chrome on Android hands Pi's OAuth page straight to the Pi Browser app, which cannot load it ("Something
+    // went wrong"). So continue directly in Pi Browser, where the Pi SDK signs the user in. Must run inside the tap.
+    if (!inPiContext() && isAndroidChrome()) {
+      window.location.href = piBrowserUrl(window.location.pathname === "/" ? "/" : window.location.pathname + window.location.search);
+      return;
+    }
     setSigningIn(true);
     try {
       if (!(await waitForPi())) {
