@@ -207,9 +207,10 @@ function NotifyAdmin() {
   const [body, setBody] = useState("If you can read this, notifications work.");
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<NotifyResult | null>(null);
-  const send = async () => {
+  const send = async (delaySec = 0) => {
     setBusy(true);
-    try { setRes(await api<NotifyResult>("/admin/notify", { body: { title, body } })); } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
+    if (delaySec) toast(tr(`سيصل الإشعار بعد ${delaySec} ثانية. أغلق التطبيق الآن.`, `It will arrive in ${delaySec} seconds. Close the app now.`), "ok");
+    try { setRes(await api<NotifyResult>("/admin/notify", { body: { title, body, delaySec } })); } catch (e) { if (!delaySec) toast(errMsg(e), "err"); } finally { setBusy(false); }
   };
   const piLine = !res ? "" : res.pi.error ? tr(`فشل الإرسال (${res.pi.error}).`, `Send failed (${res.pi.error}).`) : res.pi.delivered > 0 ? tr("تم التسليم لمركز إشعارات Pi. افتح الإشعارات في تطبيق Pi.", "Delivered to the Pi Notification Center. Open Notifications in the Pi app.") : tr("Pi لم تسلّم الإشعار: غالبًا لم تمنح صلاحية الإشعارات بعد. سجّل خروجًا ثم دخولًا من Pi Browser ووافق عليها، أو الإشعارات مقفولة في تطبيق Pi.", "Pi did not deliver it: most likely the notifications permission has not been granted yet. Sign out and in again from Pi Browser and accept it, or notifications are off in the Pi app.");
   return (
@@ -218,7 +219,10 @@ function NotifyAdmin() {
       <p className="muted">{tr("يُرسل إلى حسابك أنت فقط (مركز إشعارات Pi وأجهزتك المفعّلة للتذكير).", "Sent to your own account only (the Pi Notification Center and your devices that enabled reminders).")}</p>
       <Field label={tr("العنوان", "Title")}><input className="field" maxLength={60} value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
       <Field label={tr("الرسالة", "Message")}><textarea className="field" rows={2} maxLength={160} value={body} onChange={(e) => setBody(e.target.value)} /></Field>
-      <button className="btn-primary" onClick={send} disabled={busy || !title.trim() || !body.trim()}>{busy ? <Spinner size={18} /> : <Icon name="bell" />}{tr("أرسل إشعارًا تجريبيًا لي", "Send me a test notification")}</button>
+      <div className="flex flex-wrap gap-2">
+        <button className="btn-primary" onClick={() => send(0)} disabled={busy || !title.trim() || !body.trim()}>{busy ? <Spinner size={18} /> : <Icon name="bell" />}{tr("أرسل إشعارًا تجريبيًا لي", "Send me a test notification")}</button>
+        <button className="btn-ghost" onClick={() => send(30)} disabled={busy || !title.trim() || !body.trim()}>{tr("أرسل بعد 30 ثانية (أغلق التطبيق أولًا)", "Send in 30 s (close the app first)")}</button>
+      </div>
       {res && (
         <div className="space-y-2 text-sm font-bold" role="status">
           <p><span className="text-ink-soft">Pi: </span>{piLine}</p>

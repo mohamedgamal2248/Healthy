@@ -7,7 +7,8 @@ import { audit } from "@/server/audit";
 import { sendPiNotifications } from "@/server/pi-notify";
 import { dropSubscription, pushConfigured, sendPush, type Sub } from "@/server/push";
 
-const Body = z.object({ title: z.string().trim().min(1).max(60), body: z.string().trim().min(1).max(160) });
+export const maxDuration = 90;
+const Body = z.object({ title: z.string().trim().min(1).max(60), body: z.string().trim().min(1).max(160), delaySec: z.number().int().min(0).max(60).optional() });
 
 /**
  * Admin test: sends a notification to the ADMIN'S OWN account only (Pi Notification Center + Web Push on their devices),
@@ -18,7 +19,9 @@ export const POST = route(async (req) => {
   await rateLimit("admin-notify", a.username, 10, 3600);
   const parsed = Body.safeParse(await readJson(req));
   if (!parsed.success) throw E.bad("اكتب عنوانًا ونصًا قصيرين.", "Enter a short title and message.");
-  const { title, body } = parsed.data;
+  const { title, body, delaySec = 0 } = parsed.data;
+  // Optional delay so the admin can close the app first and see whether the notification still arrives (background delivery test).
+  if (delaySec > 0) await new Promise((r) => setTimeout(r, delaySec * 1000));
 
   const piUid = a.profile.pi_uid;
   const pi = piUid
