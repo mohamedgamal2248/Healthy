@@ -137,3 +137,14 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
     </div>
   );
 }
+
+/** Segmented tabs used across pages (same look everywhere). Controlled; pass the active key and a setter. */
+export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs: readonly (readonly [T, string])[]; value: T; onChange: (k: T) => void; label: string }) {
+  return (
+    <div className="mb-4 grid gap-1.5 rounded-2xl bg-brand-50 p-1.5" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }} role="tablist" aria-label={label}>
+      {tabs.map(([k, l]) => (
+        <button key={k} role="tab" aria-selected={value === k} onClick={() => onChange(k)} className={`min-h-11 rounded-xl px-1 text-sm font-extrabold transition ${value === k ? "bg-white text-brand-800 shadow-sm" : "text-ink-soft"}`}>{l}</button>
+      ))}
+    </div>
+  );
+}

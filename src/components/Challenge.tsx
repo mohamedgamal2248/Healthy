@@ -15,8 +15,8 @@ export function ChallengeCard({ c, onDone, onSwap, canSwap, busy }: { c: Challen
   const { tr, lang } = useApp();
   const done = c.status === "completed";
   return (
-    <div className={`card flex items-center gap-3 !p-3.5 transition ${done ? "!border-brand-200 !bg-brand-50/70" : ""}`}>
-      <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${done ? "bg-brand-100 text-brand-700" : TYPE_TONE[c.type] ?? "bg-sun-50 text-sun-600"}`}>
+    <div className={`card-row !min-h-16 ${done ? "!border-brand-200 !bg-brand-50/70" : ""}`}>
+      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${done ? "bg-brand-100 text-brand-700" : TYPE_TONE[c.type] ?? "bg-sun-50 text-sun-600"}`}>
         <Icon name={TYPE_ICON[c.type] ?? "star"} size={24} />
       </span>
       <div className="min-w-0 flex-1">

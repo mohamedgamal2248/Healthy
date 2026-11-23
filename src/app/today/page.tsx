@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { useGet } from "@/lib/useGet";
 import { useApp, type Balances } from "@/components/AppProvider";
 import { Gate, Notice, PageSkeleton } from "@/components/ui";
-import { BadgeGrid, ChallengeCard, StreakHeader, type ChallengeItem } from "@/components/Challenge";
+import { ChallengeCard, StreakHeader, type ChallengeItem } from "@/components/Challenge";
 import { MealCard } from "@/components/MealCard";
 import { CreditBalance } from "@/components/Domain";
 import { Icon } from "@/components/Icon";
@@ -120,8 +120,15 @@ function TodayInner() {
   const allDone = d.challenges.length > 0 && d.completedToday === d.challenges.length;
   const slots: ["breakfast" | "lunch" | "dinner", string][] = [["breakfast", tr("فطار", "Breakfast")], ["lunch", tr("غدا", "Lunch")], ["dinner", tr("عشا", "Dinner")]];
 
+  const tiles = [
+    { href: "/chef", icon: "sparkles", ar: "اسأل AI", en: "Ask AI", tone: "bg-brand-600 text-white" },
+    { href: "/diary", icon: "utensils", ar: "سجّل وجبة", en: "Log a meal", tone: "bg-brand-50 text-brand-700" },
+    { href: "/progress", icon: "drop", ar: "الماء والوزن", en: "Water & weight", tone: "bg-sky-50 text-sky-600" },
+    { href: "/community", icon: "users", ar: "المجتمع", en: "Community", tone: "bg-sun-50 text-sun-600" },
+  ];
+
   return (
-    <div className="space-y-6 py-5">
+    <div className="space-y-5 py-5">
       {!d.profileReady && (
         <Notice tone="warn" icon="user">
           <div className="flex flex-wrap items-center gap-3"><span>{tr("أكمل ملفك الصحي وأكّد التنبيه الصحي لتفعيل Healthy AI والنظام الغذائي.", "Complete your health profile and accept the disclaimer to unlock Healthy AI and diet plan.")}</span><Link href="/profile" className="btn-primary btn-sm">{tr("أكمل الملف", "Complete profile")}</Link></div>
@@ -131,73 +138,84 @@ function TodayInner() {
         <Notice tone="info" icon="bell">{tr("وحشتنا! لسه تحديات النهاردة مستنياك، وكل يوم جديد فرصة جديدة. ابدأ بتحدي واحد بس.", "We missed you! Today's challenges are waiting; every day is a fresh start. Begin with just one.")}</Notice>
       )}
 
+      {/* 1 · Hero: the streak */}
       <StreakHeader current={d.streak.current} longest={d.streak.longest} total={d.streak.total} doneToday={d.completedToday} frozen={d.streak.frozen} freezeReady={d.streak.freezeReady} />
 
+      {/* 2 · One next step */}
       <NextStep d={d} />
 
-      <FoodGlance d={d} />
-
-      <Checklist d={d} />
-
       {!d.starter.rewarded && me?.profile.kyc_verified && (
-        <section className="card !border-sun-100 bg-gradient-to-br from-sun-50 to-white">
-          <div className="flex items-center gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sun-500 text-white"><Icon name="bolt" size={26} /></span>
-            <div className="min-w-0 flex-1">
-              <p className="font-extrabold">{tr(`تحدي البداية: اكسب ${d.starter.reward} كريدت لـ Healthy AI`, `Starter challenge: earn ${d.starter.reward} free AI requests`)}</p>
-              <p className="muted">{tr("أنجز تحديًا واحدًا على الأقل كل يوم لمدة ٧ أيام متتالية.", "Complete at least one challenge every day for 7 days in a row.")}</p>
-            </div>
+        <section className="card-row !border-sun-100 !bg-sun-50/60">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sun-500 text-white"><Icon name="bolt" size={22} /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-extrabold leading-snug">{tr(`تحدي البداية: ${d.starter.reward} كريدت مجانًا`, `Starter challenge: ${d.starter.reward} free AI requests`)}</p>
+            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-sun-100"><div className="h-full rounded-full bg-sun-500 transition-all" style={{ width: `${Math.min(100, (d.streak.current / 7) * 100)}%` }} /></div>
           </div>
-          <div className="mt-3 flex items-center gap-3"><div className="h-3 flex-1 overflow-hidden rounded-full bg-sun-100"><div className="h-full rounded-full bg-sun-500 transition-all" style={{ width: `${Math.min(100, (d.streak.current / 7) * 100)}%` }} /></div><span className="text-sm font-extrabold tabular-nums">{Math.min(d.streak.current, 7)}/7</span></div>
+          <span className="text-sm font-extrabold tabular-nums">{Math.min(d.streak.current, 7)}/7</span>
         </section>
       )}
 
+      {/* 3 · Today's challenges as compact rows */}
       <section aria-labelledby="ch">
-        <div className="mb-3 flex items-end justify-between">
+        <div className="mb-2.5 flex items-end justify-between gap-3">
           <div>
             <h2 id="ch" className="h2">{tr("تحدي اليوم", "Today's challenges")}</h2>
             <p className="muted">{d.reminder === "morning" && !allDone ? tr("تحدي النهاردة مستنيك", "Today's challenge is waiting for you") : allDone ? tr("أنجزت كل تحديات اليوم. شاطر!", "All of today's challenges are done. Great job!") : tr("نفّذ تحديًا واحدًا على الأقل للحفاظ على سلسلتك", "Complete at least one to keep your streak")}</p>
           </div>
           <span className="rounded-full bg-brand-100 px-3 py-1 text-sm font-extrabold text-brand-800 tabular-nums">{d.completedToday}/{d.challenges.length}</span>
         </div>
-        <div className="space-y-2.5">
+        <div className="space-y-2">
           {d.challenges.map((c) => (<ChallengeCard key={c.id} c={c} onDone={done} onSwap={swap} canSwap={!d.swapUsed} busy={busy} />))}
         </div>
         <p className="muted mt-2">{d.swapUsed ? tr("استخدمت تبديل اليوم.", "You used today's swap.") : tr("تقدر تبدّل تحديًا واحدًا اليوم.", "You can swap one challenge today.")}</p>
       </section>
 
-      <section aria-labelledby="ml">
-        <div className="mb-3 flex items-end justify-between"><h2 id="ml" className="h2">{tr("وجبات اليوم", "Meals of the day")}</h2><Link href="/meals" className="text-sm font-extrabold text-brand-700">{tr("كل الوجبات", "All meals")}</Link></div>
-        <div className="grid gap-4 md:grid-cols-3">
-          {slots.map(([k, label]) => d.meals[k] ? <MealCard key={k} meal={d.meals[k]!} label={label} fav={d.favourites.includes(d.meals[k]!.id)} onFav={fav} /> : null)}
+      {/* 4 · Four quick actions */}
+      <nav className="grid grid-cols-4 gap-2" aria-label={tr("اختصارات", "Shortcuts")}>
+        {tiles.map((t) => (
+          <Link key={t.href} href={t.href} className="card flex min-h-24 flex-col items-center justify-center gap-1.5 !p-2 text-center transition active:scale-95">
+            <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${t.tone}`}><Icon name={t.icon} size={22} /></span>
+            <span className="text-xs font-extrabold leading-tight">{tr(t.ar, t.en)}</span>
+          </Link>
+        ))}
+      </nav>
+
+      {/* 5 · Calories */}
+      <FoodGlance d={d} />
+
+      {/* Everything else, one tap away */}
+      <details className="card group !p-0">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between px-4 font-extrabold [&::-webkit-details-marker]:hidden">
+          <span>{tr("المزيد", "More")}</span>
+          <Icon name="chevronD" size={20} className="text-ink-soft transition group-open:rotate-180" />
+        </summary>
+        <div className="space-y-5 border-t border-line p-4">
+          <Checklist d={d} />
+
+          <section aria-labelledby="ml">
+            <div className="mb-3 flex items-end justify-between"><h2 id="ml" className="h2">{tr("وجبات اليوم", "Meals of the day")}</h2><Link href="/meals" className="text-sm font-extrabold text-brand-700">{tr("كل الوجبات", "All meals")}</Link></div>
+            <div className="grid gap-4 md:grid-cols-3">
+              {slots.map(([k, label]) => d.meals[k] ? <MealCard key={k} meal={d.meals[k]!} label={label} fav={d.favourites.includes(d.meals[k]!.id)} onFav={fav} /> : null)}
+            </div>
+          </section>
+
+          {d.community && (
+            <Link href="/community" className="card-row !min-h-16 !border-sun-100 !bg-sun-50/60">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sun-500 text-white"><Icon name="users" size={22} /></span>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-extrabold text-sun-600">{tr("تحدي الأسبوع الجماعي", "Weekly group challenge")}</p>
+                <p className="truncate font-extrabold">{lang === "ar" ? d.community.title_ar : d.community.title_en}</p>
+                <p className="muted truncate">{d.community.joined ? tr(`أنت في اليوم ${d.community.myDays} من ٧`, `You're at day ${d.community.myDays} of 7`) : tr("انضم بضغطة واحدة", "Join with one tap")} · {tr(`${d.community.members} بايونير`, `${d.community.members} pioneers`)}</p>
+              </div>
+              <Icon name={lang === "ar" ? "chevronL" : "chevronR"} size={20} className="text-sun-600" />
+            </Link>
+          )}
+
+          {me?.profile.kyc_verified && d.balances && <CreditBalance b={d.balances} />}
+
+          <Link href="/progress" className="card-row"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sun-50 text-sun-600"><Icon name="trophy" size={22} /></span><span className="flex-1 font-extrabold">{tr(`شاراتك (${d.badges.length}/${BADGES.length})`, `Your badges (${d.badges.length}/${BADGES.length})`)}</span><Icon name={lang === "ar" ? "chevronL" : "chevronR"} size={20} className="text-ink-soft" /></Link>
         </div>
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-2">
-        <Link href="/chef" className="card flex items-center gap-4 !border-brand-200 bg-gradient-to-br from-brand-50 to-white transition hover:shadow-md">
-          <span className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-full border-4 border-white bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-lg"><Icon name="sparkles" size={26} /></span>
-          <div className="flex-1">
-            <p className="h2">{tr("Healthy AI", "Healthy AI")}</p>
-            <p className="muted">{tr("وجبات وتمارين وتحديات على مقاسك", "Meals, workouts and challenges made for you")}</p>
-          </div>
-          <Icon name={lang === "ar" ? "chevronL" : "chevronR"} size={22} className="text-brand-600" />
-        </Link>
-        {me?.profile.kyc_verified && d.balances && <CreditBalance b={d.balances} />}
-      </section>
-
-      {d.community && (
-        <Link href="/community" className="card flex items-center gap-4 !border-sun-100 bg-gradient-to-br from-sun-50 to-white transition hover:shadow-md">
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-sun-500 text-white"><Icon name="users" size={28} /></span>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-extrabold text-sun-600">{tr("تحدي الأسبوع الجماعي", "Weekly group challenge")}</p>
-            <p className="truncate font-extrabold">{lang === "ar" ? d.community.title_ar : d.community.title_en}</p>
-            <p className="muted">{d.community.joined ? tr(`أنت في اليوم ${d.community.myDays} من ٧`, `You're at day ${d.community.myDays} of 7`) : tr("انضم بضغطة واحدة", "Join with one tap")} · {tr(`${d.community.members} بايونير، ${d.community.checkedToday} سجّلوا اليوم`, `${d.community.members} pioneers, ${d.community.checkedToday} checked in today`)}</p>
-          </div>
-          <Icon name={lang === "ar" ? "chevronL" : "chevronR"} size={22} className="text-sun-600" />
-        </Link>
-      )}
-
-      <section><h2 className="h2 mb-3">{tr("شاراتك", "Your badges")}</h2><BadgeGrid earned={d.badges} /></section>
+      </details>
     </div>
   );
 }

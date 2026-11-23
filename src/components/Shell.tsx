@@ -19,9 +19,8 @@ const MAIN = [
 // Account menu (top bar) and desktop sidebar extras.
 const MORE = [
   { href: "/plan", icon: "plan", ar: "نظامي الغذائي", en: "My diet plan" },
-  { href: "/library", icon: "book", ar: "مكتبتي", en: "Library" },
-  { href: "/pricing", icon: "coin", ar: "الأسعار والباقات", en: "Pricing" },
-  { href: "/wallet", icon: "wallet", ar: "المحفظة", en: "Wallet" },
+  { href: "/chef?tab=mine", icon: "book", ar: "نتائجي من AI", en: "My AI results" },
+  { href: "/pricing", icon: "wallet", ar: "الكريدت والباقات", en: "Credits & plans" },
   { href: "/profile", icon: "user", ar: "ملفي الصحي", en: "Health profile" },
 ];
 

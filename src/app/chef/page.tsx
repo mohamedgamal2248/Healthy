@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { useApp, type Balances } from "@/components/AppProvider";
-import { Gate, Notice, PageHeader, PageSkeleton, Spinner } from "@/components/ui";
+import { Gate, Notice, PageHeader, PageSkeleton, Spinner, Tabs } from "@/components/ui";
+import { LibraryView } from "@/components/Library";
 import { DisclaimerBanner, ContentView, type CoachContent } from "@/components/Domain";
 import { Icon } from "@/components/Icon";
 import { CoachThinking } from "@/components/CoachThinking";
@@ -30,17 +31,18 @@ const EXAMPLES: Record<Kind, { ar: string; en: string }[]> = {
     { ar: "تحدي أسبوع لتقليل السكر المضاف", en: "A one-week challenge to cut added sugar" },
   ],
 };
-const KINDS: { k: Kind; ar: string; en: string; icon: string }[] = [
-  { k: "recipe", ar: "وجبة", en: "Meal", icon: "utensils" },
-  { k: "workout", ar: "تمرين", en: "Workout", icon: "bolt" },
-  { k: "challenge", ar: "تحدٍّ", en: "Challenge", icon: "flame" },
-  { k: "scan", ar: "صوّر", en: "Scan", icon: "camera" },
+const KINDS: { k: Kind; ar: string; en: string; icon: string; subAr: string; subEn: string }[] = [
+  { k: "recipe", ar: "وجبة من اللي عندك", en: "Meal from what you have", icon: "utensils", subAr: "اكتب مكوناتك", subEn: "List your ingredients" },
+  { k: "scan", ar: "صوّر طبقك", en: "Scan your plate", icon: "camera", subAr: "سعرات تقديرية", subEn: "Estimated calories" },
+  { k: "workout", ar: "تمرين منزلي", en: "Home workout", icon: "bolt", subAr: "حسب وقتك", subEn: "Fits your time" },
+  { k: "challenge", ar: "تحدي ٧ أيام", en: "7-day challenge", icon: "flame", subAr: "عادة جديدة", subEn: "Build a habit" },
 ];
 
 function ChefInner() {
   const { tr, lang, me, toast, errMsg, refresh } = useApp();
   const sp = useSearchParams();
   const openId = sp.get("recipe");
+  const [view, setView] = useState<"new" | "mine">(sp.get("tab") === "mine" ? "mine" : "new");
   const [prompt, setPrompt] = useState("");
   const [kind, setKind] = useState<Kind>("recipe");
   const [busy, setBusy] = useState(false);
@@ -108,10 +110,12 @@ function ChefInner() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 py-5">
-      <PageHeader title={tr("Healthy AI", "Healthy AI")} sub={tr("وجبات وتمارين وتحديات على مقاسك", "Meals, workouts and challenges made for you")} />
+      <PageHeader title={tr("Healthy AI", "Healthy AI")} sub={tr("وجبات وتمارين وتحديات على مقاسك", "Meals, workouts and challenges made for you")} action={me?.balances ? <Link href="/pricing" className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 text-sm font-extrabold tabular-nums ${total === 0 ? "border-rose-200 bg-rose-50 text-rose-700" : total <= 2 ? "border-sun-200 bg-sun-50 text-sun-600" : "border-sun-100 bg-sun-50/60 text-ink"}`} aria-label={tr("رصيد الكريدت", "Credit balance")}><Icon name="bolt" size={16} filled />{total} {tr("كريدت", "credits")}</Link> : undefined} />
       {!accepted && <Notice tone="warn" icon="user"><div className="flex flex-wrap items-center gap-3"><span>{tr("وافق على التنبيه الصحي في ملفك أولًا.", "Accept the health disclaimer in your profile first.")}</span><Link href="/profile" className="btn-primary btn-sm">{tr("افتح الملف", "Open profile")}</Link></div></Notice>}
 
-      {recipe ? (
+      {!recipe && !busy && <Tabs label={tr("القسم", "Section")} value={view} onChange={setView} tabs={[["new", tr("طلب جديد", "New")], ["mine", tr("نتائجي", "My results")]] as const} />}
+
+      {!recipe && !busy && view === "mine" ? <LibraryView /> : recipe ? (
         <>
           <button className="btn-soft btn-sm" onClick={() => setRecipe(null)}><Icon name="plus" size={18} />{tr("طلب جديد", "New request")}</button>
           <ContentView
@@ -130,8 +134,18 @@ function ChefInner() {
         ) : (
         <>
           <section className="card space-y-4">
-            <div className="grid grid-cols-4 gap-1.5 rounded-2xl bg-brand-50 p-1.5" role="tablist" aria-label={tr("نوع الطلب", "Request type")}>
-              {KINDS.map((x) => (<button key={x.k} role="tab" aria-selected={kind === x.k} onClick={() => { setKind(x.k); setPrompt(""); }} className={`flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[11px] font-extrabold transition sm:flex-row sm:gap-1.5 sm:text-sm ${kind === x.k ? "bg-white text-brand-800 shadow-sm" : "text-ink-soft"}`}><Icon name={x.icon} size={16} />{tr(x.ar, x.en)}</button>))}
+            <div className="grid grid-cols-2 gap-2.5" role="radiogroup" aria-label={tr("نوع الطلب", "Request type")}>
+              {KINDS.map((x) => {
+                const on = kind === x.k;
+                return (
+                  <button key={x.k} role="radio" aria-checked={on} onClick={() => { setKind(x.k); setPrompt(""); }} className={`flex min-h-28 flex-col items-center justify-center gap-0.5 rounded-2xl border-2 p-2 text-center transition active:scale-95 ${on ? "border-brand-600 bg-brand-50" : "border-line bg-white"}`}>
+                    <span className={`mb-1 flex h-10 w-10 items-center justify-center rounded-xl ${on ? "bg-brand-600 text-white" : "bg-brand-50 text-brand-600"}`}><Icon name={x.icon} size={22} /></span>
+                    <span className="text-sm font-extrabold leading-tight">{tr(x.ar, x.en)}</span>
+                    <span className="text-[11px] font-semibold text-ink-soft">{tr(x.subAr, x.subEn)}</span>
+                    <span className="text-[11px] font-extrabold text-brand-700">{tr("١ كريدت", "1 credit")}</span>
+                  </button>
+                );
+              })}
             </div>
             {kind === "scan" ? (
               <div className="space-y-3">

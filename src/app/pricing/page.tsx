@@ -5,7 +5,8 @@ import { inPiContext } from "@/lib/pi-client";
 import { useApp } from "@/components/AppProvider";
 import { PricingGrid, type PriceItem } from "@/components/Pricing";
 import { CreditBalance, PaySheet } from "@/components/Domain";
-import { Notice, PageHeader } from "@/components/ui";
+import { Notice, PageHeader, Tabs } from "@/components/ui";
+import { WalletHistory } from "@/components/WalletHistory";
 
 export default function PricingPage() {
   const { tr, me, ready, refresh, signIn, signingIn } = useApp();
@@ -17,6 +18,8 @@ export default function PricingPage() {
   // Arrived from another browser via "Continue in Pi Browser": sign in if needed, then open the chosen purchase ONCE.
   const [handoff, setHandoff] = useState<{ item: string; fromOther: boolean } | null>(null);
   const [paid, setPaid] = useState(false);
+  const [tab, setTab] = useState<"packs" | "history">("packs");
+  useEffect(() => { if (new URLSearchParams(window.location.search).get("tab") === "history") setTab("history"); }, []);
   const signInStarted = useRef(false);
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -39,7 +42,7 @@ export default function PricingPage() {
 
   return (
     <div className="mx-auto max-w-6xl py-6">
-      <PageHeader title={tr("الأسعار والباقات", "Pricing and packs")} sub={tr("ادفع بـ Pi مرة واحدة، وتتفعّل الخدمة فور التحقق من الدفع على الخادم.", "Pay once with Pi; the service activates as soon as the server verifies the payment.")} />
+      <PageHeader title={tr("الكريدت والباقات", "Credits & plans")} sub={tr("ادفع بـ Pi مرة واحدة، وتتفعّل الخدمة فور التحقق من الدفع على الخادم.", "Pay once with Pi; the service activates as soon as the server verifies the payment.")} />
       {data?.network !== "mainnet" && <div className="mb-4"><Notice tone="info">{tr("التطبيق الآن على شبكة Pi التجريبية (Testnet): المدفوعات بعملة Pi التجريبية.", "The app is on the Pi Testnet: payments use Test Pi.")}</Notice></div>}
       {me && (
         <div className="mb-6 grid gap-3 md:grid-cols-2">
@@ -53,6 +56,9 @@ export default function PricingPage() {
           </div>
         </div>
       )}
+      {me && <Tabs label={tr("القسم", "Section")} value={tab} onChange={setTab} tabs={[["packs", tr("الباقات", "Plans & packs")], ["history", tr("سجل المدفوعات", "Payment history")]] as const} />}
+      {(tab === "packs" || !me) && (
+        <>
       {me && !verified && <div className="mb-4"><Notice tone="warn" icon="shieldCheck">{tr("الشراء متاح لحسابات Pi الموثقة (KYC) فقط. أكمل التوثيق في تطبيق Pi ثم سجّل الدخول مرة أخرى.", "Purchases are for KYC-verified Pi accounts only. Complete KYC in the Pi app, then sign in again.")}</Notice></div>}
       {data && (
         <PricingGrid
@@ -66,6 +72,9 @@ export default function PricingPage() {
         />
       )}
       {paid && new URLSearchParams(typeof window === "undefined" ? "" : window.location.search).get("handoff") === "1" && <div className="mt-4"><Notice tone="ok">{tr("تم الدفع. ارجع إلى المتصفح الذي كنت فيه وسيظهر رصيدك المحدّث تلقائيًا.", "Payment complete. Go back to the browser you came from and your updated balance will appear automatically.")}</Notice></div>}
+        </>
+      )}
+      {tab === "history" && me && <WalletHistory />}
       <PaySheet item={buy} onClose={() => setBuy(null)} onPaid={() => { setPaid(true); refresh(); api<{ subscription: { expires_at: string } | null }>("/wallet").then((w) => setExpires(w.subscription?.expires_at ?? null)).catch(() => {}); }} />
     </div>
   );

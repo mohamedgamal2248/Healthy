@@ -311,7 +311,7 @@ export function PaySheet({ item: itemIn, onClose, onPaid }: { item: PriceItem | 
             <p className="muted text-center">{tr("الدفع بـ Pi يتم داخل Pi Browser فقط. بعد الدفع ارجع لهذا المتصفح، وسيظهر رصيدك المحدّث تلقائيًا.", "Paying with Pi works only inside Pi Browser. After paying, come back to this browser and your updated balance appears automatically.")}</p>
           </div>
         )}
-        <p className="text-center text-xs text-ink-soft"><Link href="/wallet" className="underline">{tr("سجل المدفوعات في المحفظة", "Payment history in Wallet")}</Link></p>
+        <p className="text-center text-xs text-ink-soft"><Link href="/pricing?tab=history" className="underline">{tr("سجل المدفوعات", "Payment history")}</Link></p>
       </div>
     </Sheet>
   );
