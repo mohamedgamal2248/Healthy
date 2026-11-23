@@ -8,7 +8,7 @@ export default defineConfig({
   retries: 1,
   reporter: "list",
   use: {
-    baseURL: process.env.E2E_BASE_URL || "https://healthy-rho-lilac.vercel.app",
+    baseURL: process.env.E2E_BASE_URL || "https://healthy-ai-app.vercel.app",
     trace: "off",
     launchOptions: process.env.E2E_CHROMIUM ? { executablePath: process.env.E2E_CHROMIUM, args: ["--no-sandbox"] } : { args: ["--no-sandbox"] },
   },

@@ -517,3 +517,25 @@ test("operations tooling exists: health probe, uptime/e2e/codeql workflows, load
   const cfg = readFileSync("next.config.mjs", "utf8");
   assert.doesNotMatch(cfg, /fonts\.g(oogleapis|static)\.com/); // CSP no longer allows third-party fonts
 });
+
+test("mainnet-only payments: default is mainnet, testnet payments need an explicit staging flag, client id is not hard-coded", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { paymentsAllowed } = await import("../src/config/network");
+  const prev = { n: process.env.NEXT_PUBLIC_PI_NETWORK, a: process.env.ALLOW_TESTNET_PAYMENTS };
+  try {
+    delete process.env.ALLOW_TESTNET_PAYMENTS;
+    for (const [net, expect] of [[undefined, true], ["mainnet", true], ["testnet", false], ["garbage", true]] as const) {
+      if (net === undefined) delete process.env.NEXT_PUBLIC_PI_NETWORK; else process.env.NEXT_PUBLIC_PI_NETWORK = net;
+      assert.equal(paymentsAllowed(), expect, String(net));
+    }
+    process.env.NEXT_PUBLIC_PI_NETWORK = "testnet"; process.env.ALLOW_TESTNET_PAYMENTS = "true";
+    assert.equal(paymentsAllowed(), true); // explicit staging flag
+  } finally {
+    if (prev.n === undefined) delete process.env.NEXT_PUBLIC_PI_NETWORK; else process.env.NEXT_PUBLIC_PI_NETWORK = prev.n;
+    if (prev.a === undefined) delete process.env.ALLOW_TESTNET_PAYMENTS; else process.env.ALLOW_TESTNET_PAYMENTS = prev.a;
+  }
+  assert.match(readFileSync("src/app/api/purchases/route.ts", "utf8"), /paymentsAllowed\(\)/); // creating a purchase is refused off-mainnet
+  assert.match(readFileSync("src/app/api/payments/approve/route.ts", "utf8"), /paymentsAllowed\(\)/); // and so is approving a payment
+  assert.doesNotMatch(readFileSync("src/lib/pi-oauth.ts", "utf8"), /zQUUOqrs/); // the old testnet client id is gone
+  assert.equal(readFileSync("public/validation-key.txt", "utf8").length, 128); // exactly the 128-char key, no newline
+});

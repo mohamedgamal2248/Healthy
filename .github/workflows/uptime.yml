@@ -12,7 +12,7 @@ jobs:
         run: |
           # Vercel may answer automated clients with a bot "checkpoint" (HTTP 403) now and then: retry before alerting.
           for i in 1 2 3 4 5; do
-            code=$(curl -s -o /tmp/h.json -w '%{http_code}' --max-time 20 https://healthy-rho-lilac.vercel.app/api/health || true)
+            code=$(curl -s -o /tmp/h.json -w '%{http_code}' --max-time 20 https://healthy-ai-app.vercel.app/api/health || true)
             echo "attempt $i: HTTP $code $(cat /tmp/h.json 2>/dev/null)"
             [ "$code" = "200" ] && exit 0
             sleep 20
@@ -20,5 +20,5 @@ jobs:
           echo "Healthy is not healthy" && exit 1
       - name: Home page and public catalogue
         run: |
-          curl -fsS --max-time 20 -o /dev/null https://healthy-rho-lilac.vercel.app/
-          curl -fsS --max-time 20 https://healthy-rho-lilac.vercel.app/api/public/meals | grep -q '"meals"'
+          curl -fsS --max-time 20 -o /dev/null https://healthy-ai-app.vercel.app/
+          curl -fsS --max-time 20 https://healthy-ai-app.vercel.app/api/public/meals | grep -q '"meals"'
