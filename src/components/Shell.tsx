@@ -1,4 +1,5 @@
 "use client";
+import { InstallPrompt } from "./InstallPrompt";
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -93,6 +94,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <span dir="ltr">Healthy</span>
           </footer>
         </main>
+        <InstallPrompt />
       </div>
 
       {signedIn && !bare && (

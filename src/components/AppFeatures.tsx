@@ -2,10 +2,9 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useApp } from "./AppProvider";
+import { promptInstall, useInstall } from "@/lib/pwa-install";
 import { Icon } from "./Icon";
 import { Spinner } from "./ui";
-
-type BIPEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
 const b64ToBytes = (s: string) => {
   const pad = "=".repeat((4 - (s.length % 4)) % 4);
@@ -22,26 +21,19 @@ export function AppFeatures() {
     setPiBusy(true);
     try { await api("/me", { method: "PATCH", body: { notify_pi: !piOn } }); await refresh(); } catch (e) { toast(errMsg(e), "err"); } finally { setPiBusy(false); }
   };
-  const [install, setInstall] = useState<BIPEvent | null>(null);
-  const [standalone, setStandalone] = useState(false);
+  const { canPrompt, standalone, ios } = useInstall();
   const [supported, setSupported] = useState(false);
   const [on, setOn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [denied, setDenied] = useState(false);
-  const [ios, setIos] = useState(false);
 
   useEffect(() => {
-    setStandalone(window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone === true);
-    setIos(/iphone|ipad|ipod/i.test(navigator.userAgent));
-    const onPrompt = (e: Event) => { e.preventDefault(); setInstall(e as BIPEvent); };
-    window.addEventListener("beforeinstallprompt", onPrompt);
     const ok = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
     setSupported(ok);
     if (ok) {
       setDenied(Notification.permission === "denied");
       navigator.serviceWorker.getRegistration("/sw.js").then((r) => r?.pushManager.getSubscription()).then((s) => setOn(!!s && Notification.permission === "granted")).catch(() => {});
     }
-    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
   }, []);
 
   const enable = async () => {
@@ -72,13 +64,13 @@ export function AppFeatures() {
     } finally { setBusy(false); }
   };
 
-  const doInstall = async () => { if (!install) return; await install.prompt(); await install.userChoice.catch(() => null); setInstall(null); };
+  const doInstall = async () => { await promptInstall(); };
 
   return (
     <section className="card space-y-4">
       <h2 className="h2">{tr("التطبيق والتذكيرات", "App and reminders")}</h2>
       {!standalone && (
-        install ? (
+        canPrompt ? (
           <button className="btn-primary w-full" onClick={doInstall}><Icon name="plus" />{tr("ثبّت التطبيق على هاتفك", "Install the app on your phone")}</button>
         ) : (
           <p className="muted">{ios ? tr("على iPhone: اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية» لتثبيت التطبيق وتفعيل التذكيرات.", "On iPhone: tap Share, then Add to Home Screen to install the app and enable reminders.") : tr("افتح الموقع من متصفح عادي (مثل Chrome) لتثبيته كتطبيق.", "Open the site in a regular browser (such as Chrome) to install it as an app.")}</p>
