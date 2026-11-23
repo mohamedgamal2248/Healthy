@@ -253,3 +253,23 @@ test("CDN-cached public API: correct cache headers, no auth, no per-user data", 
   assert.match(mine, /requireVerified/);
   assert.doesNotMatch(mine, /cdnJson/);
 });
+
+test("daily reminder rules and push subscription validation", async () => {
+  const { needsReminder, reminderText } = await import("../src/lib/reminder");
+  assert.equal(needsReminder("2026-11-22", "2026-11-23"), true);
+  assert.equal(needsReminder(null, "2026-11-23"), true);
+  assert.equal(needsReminder("2026-11-23", "2026-11-23"), false); // already done today: no nag
+  assert.match(reminderText({ streak: 5, lang: "en" }).title, /5-day streak/);
+  assert.match(reminderText({ streak: 0, lang: "ar" }).title, /تحدي/);
+  const { readFileSync } = await import("node:fs");
+  const sub = readFileSync("src/app/api/push/subscribe/route.ts", "utf8");
+  assert.match(sub, /requireUser/); // only a signed-in user can attach a device
+  assert.match(sub, /https:\\\/\\\//); // push endpoints must be https
+  const cron = readFileSync("src/app/api/cron/reminders/route.ts", "utf8");
+  assert.match(cron, /timingSafeEqual/); // cron is secret-protected
+  const sw = readFileSync("public/sw.js", "utf8");
+  assert.doesNotMatch(sw, /caches\./); // the service worker never caches pages or data
+  const oauth = readFileSync("src/lib/pi-oauth.ts", "utf8");
+  assert.match(oauth, /state_mismatch/); // OAuth callback checks the state
+  assert.doesNotMatch(oauth, /client_secret/);
+});

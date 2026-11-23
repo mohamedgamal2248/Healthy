@@ -60,7 +60,7 @@ export const DELETE = route(async (req) => {
   if ((confirm ?? "").toLowerCase() !== a.username.toLowerCase()) throw E.bad("اكتب اسم المستخدم للتأكيد.", "Type your username to confirm.");
   const u = a.username;
   const del = async (t: string, col = "username") => must(await db().from(t).delete().eq(col, u));
-  for (const t of ["hl_weight_logs", "hl_habit_logs", "hl_diet_plans", "hl_weekly_reports", "hl_user_challenges", "hl_streaks", "hl_badges", "hl_favourites", "hl_recipe_likes", "hl_recipe_messages", "hl_group_challenge_members", "hl_ai_requests"]) {
+  for (const t of ["hl_weight_logs", "hl_habit_logs", "hl_diet_plans", "hl_weekly_reports", "hl_user_challenges", "hl_streaks", "hl_badges", "hl_favourites", "hl_recipe_likes", "hl_recipe_messages", "hl_group_challenge_members", "hl_push_subscriptions", "hl_ai_requests"]) {
     if (t === "hl_ai_requests") continue; // recipes reference requests: delete recipes first
     await del(t);
   }
