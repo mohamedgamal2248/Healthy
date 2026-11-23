@@ -408,3 +408,9 @@ test("push registration repairs itself when permission was granted outside the a
   assert.match(readFileSync("src/components/ReminderPrompt.tsx", "utf8"), /syncPushIfGranted/);
   assert.match(readFileSync("src/components/AppFeatures.tsx", "utf8"), /describePushError/); // error details visible
 });
+
+test("push diagnostics: admin reports the push-service status and the card can test the device locally", async () => {
+  const { readFileSync } = await import("node:fs");
+  assert.match(readFileSync("src/app/api/admin/notify/route.ts", "utf8"), /statuses/);
+  assert.match(readFileSync("src/components/AppFeatures.tsx", "utf8"), /showNotification/);
+});
