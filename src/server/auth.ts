@@ -19,6 +19,7 @@ export type Profile = {
   timezone: string;
   leaderboard_visible: boolean;
   notify_pi: boolean;
+  reminder_hour: number;
   token_version: number;
   deleted_at: string | null;
   created_at: string;

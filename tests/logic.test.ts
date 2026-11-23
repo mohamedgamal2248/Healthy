@@ -267,7 +267,8 @@ test("daily reminder rules and push subscription validation", async () => {
   assert.match(sub, /requireUser/); // only a signed-in user can attach a device
   assert.match(sub, /https:\\\/\\\//); // push endpoints must be https
   const cron = readFileSync("src/app/api/cron/reminders/route.ts", "utf8");
-  assert.match(cron, /timingSafeEqual/); // cron is secret-protected
+  assert.match(cron, /requireCron/); // cron is secret-protected
+  assert.match(readFileSync("src/server/cron-auth.ts", "utf8"), /timingSafeEqual/);
   const sw = readFileSync("public/sw.js", "utf8");
   assert.doesNotMatch(sw, /caches\./); // the service worker never caches pages or data
   const oauth = readFileSync("src/lib/pi-oauth.ts", "utf8");
@@ -464,4 +465,28 @@ test("food diary: catalogue/AI items are resolved on the server, manual entries 
   assert.match(f, /eq\("username", a\.username\)\.maybeSingle\(\)/); // AI items must belong to the user
   const m = readFileSync("src/app/api/me/route.ts", "utf8");
   assert.match(m, /hl_food_log/); // erased with the account
+});
+
+test("hourly reminders: both cron secrets accepted, others refused; plan-expiry text", async () => {
+  const { requireCron } = await import("../src/server/cron-auth");
+  const { expiryText } = await import("../src/lib/reminder");
+  const prev = { c: process.env.CRON_SECRET, s: process.env.SCHEDULER_SECRET };
+  process.env.CRON_SECRET = "cron-secret-aaaa"; process.env.SCHEDULER_SECRET = "sched-secret-bbbb";
+  const req = (a?: string) => new Request("https://x.test", { headers: a ? { authorization: a } : {} });
+  try {
+    requireCron(req("Bearer cron-secret-aaaa"));
+    requireCron(req("Bearer sched-secret-bbbb"));
+    assert.throws(() => requireCron(req("Bearer wrong-secret-xxxx")));
+    assert.throws(() => requireCron(req()));
+    delete process.env.CRON_SECRET; delete process.env.SCHEDULER_SECRET;
+    assert.throws(() => requireCron(req("Bearer undefined"))); // unset secrets never match
+  } finally {
+    if (prev.c === undefined) delete process.env.CRON_SECRET; else process.env.CRON_SECRET = prev.c;
+    if (prev.s === undefined) delete process.env.SCHEDULER_SECRET; else process.env.SCHEDULER_SECRET = prev.s;
+  }
+  assert.match(expiryText({ daysLeft: 2, lang: "en" }).title, /2 days/);
+  assert.match(expiryText({ daysLeft: 1, lang: "en" }).title, /tomorrow/);
+  const { readFileSync } = await import("node:fs");
+  const route = readFileSync("src/app/api/cron/reminders/route.ts", "utf8");
+  assert.match(route, /hl_claim_reminders/); assert.match(route, /hl_claim_expiry_notices/); // SQL claims = no double sends
 });

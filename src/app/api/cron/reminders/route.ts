@@ -1,79 +1,70 @@
-import { timingSafeEqual } from "node:crypto";
 import { db, must } from "@/server/supabase";
-import { ok, route, E } from "@/server/http";
+import { ok, route } from "@/server/http";
+import { requireCron } from "@/server/cron-auth";
 import { dropSubscription, pushConfigured, sendPush, type Sub } from "@/server/push";
 import { NOTIFY_BATCH, sendPiNotifications, type PiNotification } from "@/server/pi-notify";
-import { needsReminder, reminderText } from "@/lib/reminder";
-import { DEFAULT_TZ, localDate, validTz } from "@/lib/dates";
+import { expiryText, reminderText } from "@/lib/reminder";
+import { addDays } from "@/lib/dates";
 
 export const maxDuration = 120;
-const PAGE = 500;
+const BATCH = 500;
+const MAX_ROUNDS = 20; // up to 10,000 people per run; later runs pick up the rest
 
-/** Daily reminder (Vercel Cron). Only people who have not done a challenge today (in THEIR timezone) get one. */
+type Claimed = { username: string; pi_uid: string | null; language: string | null; notify_pi: boolean; title: string; body: string };
+type Out = { due: number; pi: { requested: number; delivered: number; errors: number }; push: { devices: number; sent: number; removed: number; failed: number }; expiry: number };
+
+/** Send one notification to a person on every channel they allow (Pi Notification Center + their registered browsers). */
+async function deliver(items: Claimed[], out: Out) {
+  const pi: PiNotification[] = items.filter((i) => i.notify_pi && i.pi_uid).map((i) => ({ user_uid: i.pi_uid!, title: i.title, body: i.body, subroute: "/today" }));
+  for (let k = 0; k < pi.length; k += NOTIFY_BATCH) {
+    const r = await sendPiNotifications(pi.slice(k, k + NOTIFY_BATCH));
+    out.pi.requested += r.requested; out.pi.delivered += r.delivered; if (r.error) out.pi.errors++;
+  }
+  if (!pushConfigured()) return;
+  const byUser = new Map(items.map((i) => [i.username, i]));
+  const names = [...byUser.keys()];
+  for (let k = 0; k < names.length; k += 200) {
+    const subs = must(await db().from("hl_push_subscriptions").select("endpoint,p256dh,auth,username").in("username", names.slice(k, k + 200))) as (Sub & { username: string })[];
+    out.push.devices += subs.length;
+    for (const s of subs) {
+      const it = byUser.get(s.username)!;
+      const r = await sendPush(s, { title: it.title, body: it.body }, { urgency: "high" }); // high priority so phones deliver it with the browser closed
+      if (r === "ok") out.push.sent++;
+      else if (r === "gone") { await dropSubscription(s.endpoint); out.push.removed++; }
+      else out.push.failed++;
+    }
+  }
+}
+
+/**
+ * Hourly job (database scheduler; Vercel Cron is the daily fallback). Each person is reminded at THEIR chosen local hour,
+ * once per local day, and only if they have not done a challenge yet. Claiming happens in SQL, so overlapping runs never double-send.
+ */
 export const GET = route(async (req) => {
-  const secret = process.env.CRON_SECRET;
-  const got = Buffer.from(req.headers.get("authorization") ?? "");
-  const want = Buffer.from(`Bearer ${secret ?? ""}`);
-  if (!secret || got.length !== want.length || !timingSafeEqual(got, want)) throw E.notFound();
-  const out = { subscriptions: 0, sent: 0, skipped: 0, removed: 0, failed: 0, pi: { candidates: 0, requested: 0, delivered: 0, errors: 0 } };
-  if (pushConfigured()) await webPushPass(out);
-  await piPass(out);
+  requireCron(req);
+  const out: Out = { due: 0, pi: { requested: 0, delivered: 0, errors: 0 }, push: { devices: 0, sent: 0, removed: 0, failed: 0 }, expiry: 0 };
+
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    const rows = must(await db().rpc("hl_claim_reminders", { p_limit: BATCH })) as { username: string; pi_uid: string | null; language: string | null; current_streak: number; last_completed_date: string | null; local_date: string; notify_pi: boolean }[];
+    if (!rows.length) break;
+    out.due += rows.length;
+    await deliver(rows.map((r) => {
+      const alive = !!r.last_completed_date && r.last_completed_date >= addDays(r.local_date, -1); // a stale streak number would mislead
+      const t = reminderText({ streak: alive ? r.current_streak : 0, lang: r.language === "ar" ? "ar" : "en" });
+      return { username: r.username, pi_uid: r.pi_uid, language: r.language, notify_pi: r.notify_pi, ...t };
+    }), out);
+    if (rows.length < BATCH) break;
+  }
+
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    const rows = must(await db().rpc("hl_claim_expiry_notices", { p_limit: BATCH })) as { username: string; pi_uid: string | null; language: string | null; expires_at: string; notify_pi: boolean }[];
+    if (!rows.length) break;
+    out.expiry += rows.length;
+    await deliver(rows.map((r) => {
+      const daysLeft = Math.ceil((Date.parse(r.expires_at) - Date.now()) / 86400_000);
+      return { username: r.username, pi_uid: r.pi_uid, language: r.language, notify_pi: r.notify_pi, ...expiryText({ daysLeft, lang: r.language === "ar" ? "ar" : "en" }) };
+    }), out);
+    if (rows.length < BATCH) break;
+  }
   return ok(out);
 });
-
-type Out = { subscriptions: number; sent: number; skipped: number; removed: number; failed: number; pi: { candidates: number; requested: number; delivered: number; errors: number } };
-
-/** Pi Notification Center: people active in the last 30 days who have not done a challenge today. */
-async function piPass(out: Out) {
-  const active = new Date(Date.now() - 30 * 86400_000).toISOString();
-  for (let from = 0; ; from += PAGE) {
-    const profs = must(await db().from("hl_profiles").select("username,pi_uid,timezone,language").not("pi_uid", "is", null).eq("notify_pi", true).is("deleted_at", null).gte("updated_at", active).order("username").range(from, from + PAGE - 1)) as { username: string; pi_uid: string; timezone: string | null; language: string | null }[];
-    if (!profs.length) break;
-    const streaks = must(await db().from("hl_streaks").select("username,current_streak,last_completed_date").in("username", profs.map((p) => p.username))) as { username: string; current_streak: number; last_completed_date: string | null }[];
-    const st = new Map(streaks.map((x) => [x.username, x]));
-    const items: PiNotification[] = [];
-    for (const p of profs) {
-      out.pi.candidates++;
-      const today = localDate(validTz(p.timezone || DEFAULT_TZ));
-      const sk = st.get(p.username);
-      if (!needsReminder(sk?.last_completed_date ?? null, today)) continue;
-      const alive = sk?.last_completed_date && sk.last_completed_date >= new Date(Date.parse(today) - 86400_000).toISOString().slice(0, 10);
-      const t = reminderText({ streak: alive ? sk?.current_streak ?? 0 : 0, lang: p.language === "ar" ? "ar" : "en" });
-      items.push({ user_uid: p.pi_uid, title: t.title, body: t.body, subroute: "/today" });
-    }
-    for (let i = 0; i < items.length; i += NOTIFY_BATCH) {
-      const r = await sendPiNotifications(items.slice(i, i + NOTIFY_BATCH));
-      out.pi.requested += r.requested; out.pi.delivered += r.delivered; if (r.error) out.pi.errors++;
-    }
-    if (profs.length < PAGE) break;
-  }
-}
-
-async function webPushPass(out: Out) {
-  for (let from = 0; ; from += PAGE) {
-    const subs = must(await db().from("hl_push_subscriptions").select("endpoint,p256dh,auth,username").order("endpoint").range(from, from + PAGE - 1)) as (Sub & { username: string })[];
-    if (!subs.length) break;
-    out.subscriptions += subs.length;
-    const names = [...new Set(subs.map((s) => s.username))];
-    const [profiles, streaks] = await Promise.all([
-      db().from("hl_profiles").select("username,timezone,language,deleted_at").in("username", names),
-      db().from("hl_streaks").select("username,current_streak,last_completed_date").in("username", names),
-    ]);
-    const prof = new Map((must(profiles) as { username: string; timezone: string | null; language: string | null; deleted_at: string | null }[]).map((p) => [p.username, p]));
-    const st = new Map((must(streaks) as { username: string; current_streak: number; last_completed_date: string | null }[]).map((s) => [s.username, s]));
-    for (const s of subs) {
-      const p = prof.get(s.username);
-      if (!p || p.deleted_at) { await dropSubscription(s.endpoint); out.removed++; continue; }
-      const today = localDate(validTz(p.timezone || DEFAULT_TZ));
-      const sk = st.get(s.username);
-      if (!needsReminder(sk?.last_completed_date ?? null, today)) { out.skipped++; continue; }
-      // The streak only counts if it was alive yesterday or today; a stale number would be misleading.
-      const alive = sk?.last_completed_date && sk.last_completed_date >= new Date(Date.parse(today) - 86400_000).toISOString().slice(0, 10);
-      const r = await sendPush(s, reminderText({ streak: alive ? sk?.current_streak ?? 0 : 0, lang: p.language === "ar" ? "ar" : "en" }), { urgency: "high" }); // high priority so phones deliver it even when the browser is closed
-      if (r === "ok") { out.sent++; await db().from("hl_push_subscriptions").update({ last_sent_at: new Date().toISOString(), failures: 0 }).eq("endpoint", s.endpoint); }
-      else if (r === "gone") { await dropSubscription(s.endpoint); out.removed++; }
-      else out.failed++;
-    }
-    if (subs.length < PAGE) break;
-  }
-}

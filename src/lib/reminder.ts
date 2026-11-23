@@ -14,3 +14,10 @@ export function reminderText({ streak, lang }: Pick<ReminderInput, "streak" | "l
     ? { title: `Your ${streak}-day streak`, body: "One quick challenge keeps it going. Do it now." }
     : { title: "Today's challenge is waiting", body: "Start with one small challenge. A minute is enough." };
 }
+
+/** Notice for a monthly plan that ends soon. */
+export function expiryText({ daysLeft, lang }: { daysLeft: number; lang: "ar" | "en" }): { title: string; body: string } {
+  const d = Math.max(0, daysLeft);
+  if (lang === "ar") return { title: d <= 1 ? "خطتك تنتهي غدًا" : `خطتك تنتهي بعد ${d} أيام`, body: "جدّد من صفحة الباقات للحفاظ على طلبات Healthy AI ونظامك الأسبوعي." };
+  return { title: d <= 1 ? "Your plan ends tomorrow" : `Your plan ends in ${d} days`, body: "Renew from the Pricing page to keep your Healthy AI requests and weekly plan." };
+}
