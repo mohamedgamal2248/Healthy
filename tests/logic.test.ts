@@ -384,3 +384,17 @@ test("install prompt falls back to manual steps; service worker stays cache-free
   const p = readFileSync("src/components/InstallPrompt.tsx", "utf8");
   assert.match(p, /manual/); // instructions when the browser never fires beforeinstallprompt
 });
+
+test("reminder is offered after sign-in with one tap, and lives on the main profile page", async () => {
+  const { readFileSync } = await import("node:fs");
+  const profile = readFileSync("src/app/profile/page.tsx", "utf8");
+  const firstStep = profile.slice(profile.indexOf("const steps"), profile.indexOf("if (wizard)"));
+  assert.doesNotMatch(firstStep, /<AppFeatures/); // not buried inside the first-run wizard
+  assert.match(profile.slice(profile.indexOf("if (wizard)")), /<AppFeatures \/>/); // visible on the normal profile page
+  const rp = readFileSync("src/components/ReminderPrompt.tsx", "utf8");
+  assert.match(rp, /onClick=\{on\}/); // permission is requested from a tap, never silently
+  const shell = readFileSync("src/components/Shell.tsx", "utf8");
+  assert.match(shell, /<ReminderPrompt \/>/);
+  const pc = readFileSync("src/lib/push-client.ts", "utf8");
+  assert.match(pc, /Notification\.permission !== "default"/); // never nags after a decision
+});

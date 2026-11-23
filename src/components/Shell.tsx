@@ -1,5 +1,6 @@
 "use client";
 import { InstallPrompt } from "./InstallPrompt";
+import { ReminderPrompt } from "./ReminderPrompt";
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -94,6 +95,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <span dir="ltr">Healthy</span>
           </footer>
         </main>
+        <ReminderPrompt />
         <InstallPrompt />
       </div>
 
