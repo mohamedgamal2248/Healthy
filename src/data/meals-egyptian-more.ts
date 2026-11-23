@@ -1,4 +1,4 @@
-// Additional Egyptian meals: original nutrition content written for Pi Healthy.
+// Additional Egyptian meals: original nutrition content written for Healthy.
 // Calories / protein are per one serving and approximate. Ingredient tuple: [Arabic item, quantity, ingredient key].
 import { meal, type MealSeed } from "./meal-types";
 
