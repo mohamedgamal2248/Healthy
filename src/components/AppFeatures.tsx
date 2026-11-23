@@ -3,14 +3,9 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useApp } from "./AppProvider";
 import { promptInstall, useInstall } from "@/lib/pwa-install";
+import { disablePush, enablePush, isSubscribed, pushSupported } from "@/lib/push-client";
 import { Icon } from "./Icon";
 import { Spinner } from "./ui";
-
-const b64ToBytes = (s: string) => {
-  const pad = "=".repeat((4 - (s.length % 4)) % 4);
-  const raw = atob((s + pad).replace(/-/g, "+").replace(/_/g, "/"));
-  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
-};
 
 /** "Install the app" + daily reminders. Works in an ordinary browser (Chrome, Safari home-screen app); Pi Browser may not support push. */
 export function AppFeatures() {
@@ -28,27 +23,21 @@ export function AppFeatures() {
   const [denied, setDenied] = useState(false);
 
   useEffect(() => {
-    const ok = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+    const ok = pushSupported();
     setSupported(ok);
     if (ok) {
       setDenied(Notification.permission === "denied");
-      navigator.serviceWorker.getRegistration("/sw.js").then((r) => r?.pushManager.getSubscription()).then((s) => setOn(!!s && Notification.permission === "granted")).catch(() => {});
+      isSubscribed().then(setOn);
     }
   }, []);
 
   const enable = async () => {
     setBusy(true);
     try {
-      const k = await api<{ enabled: boolean; key: string | null }>("/push/key", { anon: true });
-      if (!k.enabled || !k.key) { toast(tr("التنبيهات غير مفعّلة حاليًا.", "Reminders are not enabled yet."), "err"); return; }
-      const perm = await Notification.requestPermission();
-      if (perm !== "granted") { setDenied(perm === "denied"); return; }
-      const reg = (await navigator.serviceWorker.getRegistration("/sw.js")) ?? (await navigator.serviceWorker.register("/sw.js", { scope: "/" }));
-      await navigator.serviceWorker.ready;
-      const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(k.key) }));
-      await api("/push/subscribe", { body: sub.toJSON() });
-      setOn(true);
-      toast(tr("تم تفعيل التذكير اليومي", "Daily reminder is on"), "ok");
+      const r = await enablePush();
+      if (r === "ok") { setOn(true); toast(tr("تم تفعيل التذكير اليومي", "Daily reminder is on"), "ok"); }
+      else if (r === "denied") setDenied(Notification.permission === "denied");
+      else toast(tr("التنبيهات غير مفعّلة حاليًا.", "Reminders are not enabled yet."), "err");
     } catch (e) {
       toast(errMsg(e), "err");
     } finally { setBusy(false); }
@@ -56,12 +45,7 @@ export function AppFeatures() {
 
   const disable = async () => {
     setBusy(true);
-    try {
-      const reg = await navigator.serviceWorker.getRegistration("/sw.js");
-      const sub = await reg?.pushManager.getSubscription();
-      if (sub) { await api("/push/subscribe", { method: "DELETE", body: { endpoint: sub.endpoint } }).catch(() => {}); await sub.unsubscribe(); }
-      setOn(false);
-    } finally { setBusy(false); }
+    try { await disablePush(); setOn(false); } finally { setBusy(false); }
   };
 
   const doInstall = async () => { await promptInstall(); };

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useApp } from "./AppProvider";
 import { Icon } from "./Icon";
+import { shouldAskPush } from "@/lib/push-client";
 import { dismissedRecently, promptInstall, rememberDismiss, useInstall } from "@/lib/pwa-install";
 
 /**
@@ -21,8 +22,11 @@ export function InstallPrompt() {
     return () => { clearTimeout(t); clearTimeout(w); };
   }, []);
 
+  const [, bump] = useState(0);
+  useEffect(() => { const f = () => bump((n) => n + 1); window.addEventListener("healthy:push-asked", f); return () => window.removeEventListener("healthy:push-asked", f); }, []);
   const mobile = typeof navigator !== "undefined" && /android|mobile/i.test(navigator.userAgent);
   const manual = !canPrompt && !ios && waited && mobile;
+  if (shouldAskPush()) return null; // the reminder question comes first, one prompt at a time
   if (!me || !late || gone || standalone || inPiBrowser || (!canPrompt && !ios && !manual)) return null;
 
   const install = async () => {

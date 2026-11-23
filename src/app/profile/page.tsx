@@ -114,8 +114,7 @@ function Inner() {
       </div>) },
     { title: tr("التنبيه الصحي", "Health disclaimer"), valid: accept, body: (
       <div className="space-y-4">
-        <AppFeatures />
-      <DisclaimerBanner conditions={f.conditions} />
+        <DisclaimerBanner conditions={f.conditions} />
         <label className="flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-brand-200 bg-brand-50 p-4">
           <input type="checkbox" className="mt-1 h-6 w-6 accent-brand-600" checked={accept} onChange={(e) => setAccept(e.target.checked)} />
           <span className="font-bold">{tr("قرأت التنبيه الصحي وأوافق عليه. أفهم أن المحتوى إرشاد عام وليس تشخيصًا أو علاجًا.", "I have read the health disclaimer and agree. I understand this is general guidance, not diagnosis or treatment.")}</span>
@@ -164,6 +163,7 @@ function Inner() {
         <label className="flex cursor-pointer items-center gap-3"><input type="checkbox" className="h-6 w-6 accent-brand-600" checked={leader} onChange={(e) => setLeader(e.target.checked)} /><span className="font-bold">{tr("أظهر اسمي في لوحة المتصدرين", "Show me on the leaderboard")}</span></label>
         <p className="muted">{tr("لن يظهر وزنك أو حالتك الصحية أو نظامك الغذائي في أي مكان عام.", "Your weight, conditions and diet plan are never shown anywhere public.")}</p>
       </section>
+      <AppFeatures />
       <DisclaimerBanner conditions={f.conditions} />
       <DataControls username={p.username} onDeleted={() => { clearGetCache(); signOut(); }} />
       <button className="btn-primary w-full" disabled={saving || !ageOk || !f.goal} onClick={() => save(false)}>{saving ? <Spinner /> : <Icon name="check" />}{tr("حفظ التغييرات", "Save changes")}</button>
