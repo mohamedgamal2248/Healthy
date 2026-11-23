@@ -1,4 +1,5 @@
 import { db, must } from "./supabase";
+import { memo } from "./memo";
 import type { Auth } from "./auth";
 import { GROUP_DEFAULTS } from "@/data/challenges";
 import { addDays, dayNumber, hash, weekStart } from "@/lib/dates";
@@ -8,6 +9,9 @@ export type Group = { id: string; week_start: string; challenge_id: string | nul
 /** This week's shared challenge: admin-created, otherwise a default rotated by week. */
 export async function currentGroup(today: string): Promise<Group> {
   const week = weekStart(today);
+  return memo(`group:${week}`, 60_000, () => loadGroup(week));
+}
+async function loadGroup(week: string): Promise<Group> {
   const ex = must(await db().from("hl_group_challenges").select("*").eq("week_start", week).maybeSingle()) as Group | null;
   if (ex) return ex;
   const d = GROUP_DEFAULTS[Math.floor(dayNumber(week) / 7) % GROUP_DEFAULTS.length];
@@ -18,6 +22,9 @@ export async function currentGroup(today: string): Promise<Group> {
 
 /** Reputation-only leaderboard: verified Pioneers who have not hidden themselves. No health data. */
 export async function leaderboard(groupId: string) {
+  return memo(`lb:${groupId}`, 60_000, () => loadLeaderboard(groupId));
+}
+async function loadLeaderboard(groupId: string) {
   const members = must(await db().from("hl_group_challenge_members").select("username,days_completed").eq("group_id", groupId).order("days_completed", { ascending: false }).limit(200)) as { username: string; days_completed: number }[];
   if (!members.length) return [];
   const names = members.map((m) => m.username);
@@ -79,34 +86,28 @@ export const teamOf = (username: string) => TEAMS[hash(username) % 2].key;
 
 /** Two teams (assigned by a stable hash): weekly total of check-in days. Reputation only. */
 export async function teamBoard(groupId: string, me: string) {
-  const members = must(await db().from("hl_group_challenge_members").select("username,days_completed").eq("group_id", groupId).limit(2000)) as { username: string; days_completed: number }[];
+  const rows = await memo(`teams:${groupId}`, 60_000, async () => must(await db().rpc("hl_team_totals", { p_group: groupId })) as { team: string; members: number; days: number }[]);
   const totals = { olive: { members: 0, days: 0 }, gold: { members: 0, days: 0 } };
-  for (const m of members) { const t = teamOf(m.username); totals[t].members++; totals[t].days += m.days_completed; }
+  for (const r of rows) if (r.team === "olive" || r.team === "gold") totals[r.team] = { members: Number(r.members), days: Number(r.days) };
   return { teams: TEAMS.map((t) => ({ ...t, ...totals[t.key] })), myTeam: teamOf(me) };
 }
 
 /** Month ranking: check-in days in the current calendar month (verified + visible users only). */
 export async function monthlyBoard(today: string) {
   const from = `${today.slice(0, 7)}-01`;
-  const checks = must(await db().from("hl_group_challenge_checks").select("username").gte("date", from).lte("date", today).limit(20000)) as { username: string }[];
-  const count = new Map<string, number>();
-  checks.forEach((c) => count.set(c.username, (count.get(c.username) ?? 0) + 1));
-  const names = [...count.keys()];
-  if (!names.length) return [];
-  const profs = must(await db().from("hl_profiles").select("username,kyc_verified,leaderboard_visible").in("username", names)) as { username: string; kyc_verified: boolean; leaderboard_visible: boolean }[];
-  const ok = new Set(profs.filter((p) => p.kyc_verified && p.leaderboard_visible).map((p) => p.username));
-  return names.filter((n) => ok.has(n)).sort((a, b) => (count.get(b) ?? 0) - (count.get(a) ?? 0)).slice(0, 50).map((n, i) => ({ rank: i + 1, username: n, verified: true, days: count.get(n) ?? 0, streak: 0 }));
+  const rows = await memo(`month:${from}:${today}`, 60_000, async () => must(await db().rpc("hl_month_board", { p_from: from, p_to: today, p_limit: 50 })) as { username: string; days: number }[]);
+  return rows.map((r, i) => ({ rank: i + 1, username: r.username, verified: true, days: Number(r.days), streak: 0 }));
 }
 
 /** Light counters for the engagement cards (no personal data). */
 export async function groupSnapshot(username: string, today: string) {
   const g = await currentGroup(today);
-  const [members, checks, me] = await Promise.all([
-    db().from("hl_group_challenge_members").select("username", { count: "exact", head: true }).eq("group_id", g.id),
-    db().from("hl_group_challenge_checks").select("username", { count: "exact", head: true }).eq("group_id", g.id).eq("date", today),
+  // Group-wide counters are shared by everyone and cached; only "my days" is per user.
+  const [counts, me] = await Promise.all([
+    memo(`gc:${g.id}:${today}`, 30_000, async () => (must(await db().rpc("hl_group_counts", { p_group: g.id, p_date: today })) as { members: number; checked: number }[])[0] ?? { members: 0, checked: 0 }),
     db().from("hl_group_challenge_members").select("days_completed").eq("group_id", g.id).eq("username", username).maybeSingle(),
   ]);
-  return { title_ar: g.title_ar, title_en: g.title_en, members: members.count ?? 0, checkedToday: checks.count ?? 0, joined: !!me.data, myDays: (me.data as { days_completed: number } | null)?.days_completed ?? 0 };
+  return { title_ar: g.title_ar, title_en: g.title_en, members: Number(counts.members), checkedToday: Number(counts.checked), joined: !!me.data, myDays: (me.data as { days_completed: number } | null)?.days_completed ?? 0 };
 }
 
 /** Newest shared recipes (so fresh content shows up even before it collects likes). */

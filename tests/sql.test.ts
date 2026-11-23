@@ -5,7 +5,7 @@ import { PGlite } from "@electric-sql/pglite";
 
 async function db() {
   const pg = new PGlite();
-  for (const f of ["0001_init", "0002_cuisine_and_ai_cache", "0003_hardening_growth", "0006_referral_lock"]) {
+  for (const f of ["0001_init", "0002_cuisine_and_ai_cache", "0003_hardening_growth", "0006_referral_lock", "0007_scale"]) {
     const sql = readFileSync(`supabase/migrations/${f}.sql`, "utf8").replace(/revoke all on function[\s\S]*?;/g, "");
     await pg.exec(sql);
   }
@@ -101,4 +101,25 @@ test("referral reward: once per invited user, both sides credited, capped per in
   assert.equal((await bal(pg, "alice")).trial, 2);
   assert.equal((await bal(pg, "bob")).trial, 1);
   assert.equal((await bal(pg, "dave")).trial, 0);
+});
+
+test("SQL fnv hash matches the app's hash; team totals, month board and balances read-only path", async () => {
+  const { hash } = await import("../src/lib/dates");
+  const pg = await db();
+  for (const n of ["alice", "bob", "medomohamed22", "user_9", "Zed.Q"]) {
+    const r = (await pg.query<{ h: string }>("select hl_fnv($1)::text h", [n])).rows[0].h;
+    assert.equal(Number(r), hash(n), n);
+  }
+  const g = (await pg.query<{ id: string }>("insert into hl_group_challenges (week_start,title_ar,title_en) values ('2026-01-05','x','x') returning id")).rows[0].id;
+  await pg.query("insert into hl_group_challenge_members (group_id,username,days_completed) values ($1,'alice',3),($1,'bob',2)", [g]);
+  const t = (await pg.query<{ team: string; members: string; days: string }>("select * from hl_team_totals($1)", [g])).rows;
+  assert.equal(t.reduce((n, r) => n + Number(r.members), 0), 2);
+  assert.equal(t.reduce((n, r) => n + Number(r.days), 0), 5);
+  await pg.query("update hl_profiles set kyc_verified = true where username = 'alice'");
+  await pg.query("insert into hl_group_challenge_checks (group_id,username,date) values ($1,'alice','2026-01-05'),($1,'alice','2026-01-06')", [g]);
+  const m = (await pg.query<{ username: string; days: string }>("select * from hl_month_board('2026-01-01','2026-01-31',50)")).rows;
+  assert.deepEqual(m.map((r) => [r.username, Number(r.days)]), [["alice", 2]]);
+  const c = (await pg.query<{ members: string; checked: string }>("select * from hl_group_counts($1,'2026-01-05')", [g])).rows[0];
+  assert.equal(Number(c.members), 2);
+  assert.equal(Number(c.checked), 1);
 });
