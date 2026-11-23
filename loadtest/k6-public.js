@@ -1,14 +1,14 @@
 // k6 load test for the PUBLIC (CDN-cached) endpoints and the home page.
 // Authenticated endpoints need a Pi session, so test those against a staging copy with ALLOW_DEV_LOGIN (see README).
 //
-//   k6 run -e BASE_URL=https://healthy-rho-lilac.vercel.app loadtest/k6-public.js
+//   k6 run -e BASE_URL=https://healthy-ai-app.vercel.app loadtest/k6-public.js
 //   k6 run -e BASE_URL=... -e PROFILE=spike loadtest/k6-public.js
 //
 // Always run against a copy you own. Do not point it at someone else's site.
 import http from "k6/http";
 import { check, sleep } from "k6";
 
-const BASE = __ENV.BASE_URL || "https://healthy-rho-lilac.vercel.app";
+const BASE = __ENV.BASE_URL || "https://healthy-ai-app.vercel.app";
 const PROFILES = {
   smoke: { vus: 2, duration: "30s" },
   load: { stages: [{ duration: "1m", target: 50 }, { duration: "3m", target: 50 }, { duration: "30s", target: 0 }] },

@@ -4,7 +4,7 @@
 
 Healthy turns healthy living into a small daily habit: three short challenges a day, a streak, a catalogue of 110 affordable meals (Egyptian and international), a weekly diet plan that adapts to the user's weight, and **Healthy AI**, which creates a meal, a workout, a 7-day challenge, or analyses a meal photo on demand. Pioneers sign in with their Pi account and pay for AI requests in Pi (user-to-app payments only).
 
-- Live app (Pi Testnet): <https://healthy-rho-lilac.vercel.app>
+- Live app (Pi Mainnet): <https://healthy-ai-app.vercel.app>
 - Languages: English (default) and Arabic with full RTL support
 - License: [PiOS](./LICENSE) (Pi Open Source)
 

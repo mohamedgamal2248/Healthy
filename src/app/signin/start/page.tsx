@@ -8,12 +8,15 @@ import { Spinner } from "@/components/ui";
 export default function SignInStart() {
   const { tr } = useApp();
   const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState(false);
   useEffect(() => {
-    const u = goToPiAuthorize();
+    let u: string;
+    try { u = goToPiAuthorize(); } catch { setError(true); return; }
     setUrl(u);
     const t = setTimeout(() => window.location.replace(u), 700);
     return () => clearTimeout(t);
   }, []);
+  if (error) return <div className="mx-auto max-w-md py-16 text-center"><div className="card space-y-3"><h1 className="h2">{tr("تسجيل الدخول من المتصفح غير متاح الآن", "Browser sign-in isn't available right now")}</h1><p className="muted">{tr("افتح Healthy من داخل Pi Browser لتسجيل الدخول.", "Open Healthy inside Pi Browser to sign in.")}</p></div></div>;
   return (
     <div className="mx-auto max-w-md py-16 text-center">
       <div className="card space-y-4">

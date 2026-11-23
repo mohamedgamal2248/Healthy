@@ -2,8 +2,8 @@
 // Pi Sign-In (OAuth implicit flow) for people using an ordinary browser instead of Pi Browser.
 // The access token comes back in the URL fragment; it is verified by OUR server against the Pi API, never trusted here.
 
-/** Public identifier from the Pi Developer Portal (no secret exists for the implicit flow). */
-export const PI_CLIENT_ID = process.env.NEXT_PUBLIC_PI_CLIENT_ID || "zQUUOqrs-cb0TNBrR7pHVeQC_sVIj_iTIPbCPXwXjKc";
+/** Public identifier of the MAINNET app from Pi Developers (Pi Sign-In page). No secret exists for the implicit flow. */
+export const PI_CLIENT_ID = process.env.NEXT_PUBLIC_PI_CLIENT_ID || "";
 const AUTHORIZE = "https://accounts.pinet.com/oauth/authorize";
 const STATE_KEY = "healthy.oauth.state";
 
@@ -27,6 +27,7 @@ export function startPiOAuth() {
 
 /** Build the authorize URL (with a fresh random `state` against forged callbacks) and go there. */
 export function goToPiAuthorize(): string {
+  if (!PI_CLIENT_ID) throw new Error("pi_client_id_missing");
   const state = randomState();
   try { sessionStorage.setItem(STATE_KEY, state); } catch { /* storage blocked: the callback will refuse, which is safe */ }
   const u = new URL(AUTHORIZE);
