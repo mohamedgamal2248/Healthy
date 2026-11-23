@@ -504,3 +504,16 @@ test("duo challenge: verified-only, rate limited, single-use invites, no health 
   assert.doesNotMatch(card, /fetch\(|api\(/); // nothing is uploaded
   assert.doesNotMatch(card, /weight|kg|condition/i); // no health data on the shared image
 });
+
+test("operations tooling exists: health probe, uptime/e2e/codeql workflows, load test, security policy, self-hosted fonts", async () => {
+  const { readFileSync, existsSync } = await import("node:fs");
+  assert.match(readFileSync("src/app/api/health/route.ts", "utf8"), /503/); // fails loudly when the DB is unreachable
+  assert.doesNotMatch(readFileSync("src/app/api/health/route.ts", "utf8"), /error\.message|e\.message/); // no internals leak
+  for (const f of [".github/workflows/uptime.yml", ".github/workflows/e2e.yml", ".github/workflows/codeql.yml", ".github/dependabot.yml", "SECURITY.md", "loadtest/k6-public.js", "e2e/smoke.spec.ts", "supabase/scheduler.sql"]) assert.ok(existsSync(f), f);
+  assert.doesNotMatch(readFileSync("supabase/scheduler.sql", "utf8"), /[0-9a-f]{64}/); // no real secret committed
+  const layout = readFileSync("src/app/layout.tsx", "utf8");
+  assert.match(layout, /next\/font\/google/);
+  assert.doesNotMatch(layout, /fonts\.googleapis\.com/);
+  const cfg = readFileSync("next.config.mjs", "utf8");
+  assert.doesNotMatch(cfg, /fonts\.g(oogleapis|static)\.com/); // CSP no longer allows third-party fonts
+});
