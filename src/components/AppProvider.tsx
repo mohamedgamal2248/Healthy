@@ -136,7 +136,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           await api("/referral", { body: { ref } }).catch(() => {});
         }
       } catch {}
-      router.push(m && !m.profile.disclaimer_accepted_at ? "/profile" : "/today");
+      // Coming from "Continue in Pi Browser" with a purchase waiting: stay on the pricing page so it can open.
+      const keep = window.location.pathname === "/pricing" && new URLSearchParams(window.location.search).get("buy");
+      router.push(keep ? window.location.pathname + window.location.search : m && !m.profile.disclaimer_accepted_at ? "/profile" : "/today");
     },
     [refresh, router],
   );

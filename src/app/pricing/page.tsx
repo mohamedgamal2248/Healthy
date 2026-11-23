@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { inPiContext } from "@/lib/pi-client";
 import { useApp } from "@/components/AppProvider";
@@ -14,9 +14,10 @@ export default function PricingPage() {
   const [expires, setExpires] = useState<string | null>(null);
   useEffect(() => { api<typeof data>("/pricing").then(setData).catch(() => {}); }, []);
   useEffect(() => { if (me) api<{ subscription: { expires_at: string } | null }>("/wallet").then((w) => setExpires(w.subscription?.expires_at ?? null)).catch(() => {}); }, [me]);
-  // Arrived from another browser via "Continue in Pi Browser": sign in if needed, then open the chosen purchase.
+  // Arrived from another browser via "Continue in Pi Browser": sign in if needed, then open the chosen purchase ONCE.
   const [handoff, setHandoff] = useState<{ item: string; fromOther: boolean } | null>(null);
   const [paid, setPaid] = useState(false);
+  const signInStarted = useRef(false);
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const item = q.get("buy");
@@ -24,11 +25,14 @@ export default function PricingPage() {
   }, []);
   useEffect(() => {
     if (!handoff || !ready || !data) return;
-    if (!me) { if (inPiContext()) signIn(); return; }
+    if (!me) {
+      if (inPiContext() && !signInStarted.current) { signInStarted.current = true; signIn(); }
+      return;
+    }
     const it = data.items.find((i) => i.key === handoff.item);
     if (it && !(it.kind === "plan" && me.balances?.planActive)) setBuy(it);
-    setHandoff((h) => (h ? { ...h, item: "" } : h)); // open it once
     history.replaceState(null, "", handoff.fromOther ? "/pricing?handoff=1" : "/pricing");
+    setHandoff(null); // consumed: this effect must never run again for it (a re-set here caused an endless loop)
   }, [handoff, ready, data, me, signIn]);
   const verified = !!me?.profile.kyc_verified;
   const planActive = !!me?.balances?.planActive;
