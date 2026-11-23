@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { PINET_URL } from "@/config/pi";
 import { useGet } from "@/lib/useGet";
 import { useApp } from "@/components/AppProvider";
-import { EmptyState, Gate, Notice, PageHeader, PageSkeleton, Spinner, VerifiedBadge } from "@/components/ui";
+import { EmptyState, Gate, Notice, PageHeader, PageSkeleton, Spinner, Tabs, VerifiedBadge } from "@/components/ui";
 import { Icon } from "@/components/Icon";
 import { DuoSection } from "@/components/DuoSection";
 
@@ -28,6 +28,7 @@ function Inner() {
   const [busy, setBusy] = useState(false);
   const [btab, setBtab] = useState<"week" | "month">("week");
   const [rtab, setRtab] = useState<"top" | "new">("top");
+  const [ctab, setCtab] = useState<"challenge" | "board" | "recipes">("challenge");
   if (!pub || !mine) return <PageSkeleton />;
   const withMine = (r: PR): R => ({ ...r, liked: mine.likedIds.includes(r.id), saved: mine.savedIds.includes(r.id), ...ov[r.id] });
   const d = { ...pub, ...mine, topRecipes: pub.topRecipes.map(withMine), latestRecipes: pub.latestRecipes.map(withMine) };
@@ -48,6 +49,8 @@ function Inner() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 py-5">
       <PageHeader title={tr("المجتمع", "Community")} sub={tr("ترتيب وشارات فقط. لا رسوم ولا جوائز بعملة Pi.", "Ranking and badges only. No fees and no Pi prizes.")} />
+      <Tabs label={tr("القسم", "Section")} value={ctab} onChange={setCtab} tabs={[["challenge", tr("التحدي", "Challenge")], ["board", tr("المتصدرون", "Leaderboard")], ["recipes", tr("الوصفات", "Recipes")]] as const} />
+      {ctab === "challenge" && <>
       <section className="overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-sun-500 to-sun-600 p-5 text-white shadow-(--shadow-card)">
         <p className="flex items-center gap-2 text-sm font-extrabold text-sun-100"><Icon name="users" size={18} />{tr("تحدي الأسبوع الجماعي", "This week's group challenge")}</p>
         <h2 className="mt-1 text-2xl font-extrabold leading-snug">{lang === "ar" ? d.group.title_ar : d.group.title_en}</h2>
@@ -79,6 +82,9 @@ function Inner() {
         </div>
       </section>
 
+      </>}
+
+      {ctab === "board" && (
       <section>
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="h2">{tr("المتصدرون من البايونيرز", "Pioneers leaderboard")}</h2>
@@ -94,6 +100,9 @@ function Inner() {
         )}
       </section>
 
+      )}
+
+      {ctab === "recipes" && (
       <section>
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="h2">{tr("وصفات المجتمع", "Community recipes")}</h2>
@@ -108,6 +117,7 @@ function Inner() {
             </li>))}</ul>
         )}
       </section>
+      )}
     </div>
   );
 }
