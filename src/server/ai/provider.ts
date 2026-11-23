@@ -88,7 +88,7 @@ export async function callModel(opts: { system: string; messages: AiMessage[]; m
       const effort = process.env.AI_REASONING_EFFORT || "low";
       const headers = { "content-type": "application/json", authorization: `Bearer ${key}` };
       // Prompt caching is automatic on stable prefixes; the key routes our identical system prompts together.
-      const cache = { prompt_cache_key: "healthy-chef", prompt_cache_retention: "24h" };
+      const cache = { prompt_cache_key: "healthy-ai", prompt_cache_retention: "24h" };
       if (opts.webSearch) {
         // Responses API with the built-in web search tool (the model decides whether to search; billed per query).
         try {
