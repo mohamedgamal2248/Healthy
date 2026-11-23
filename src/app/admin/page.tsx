@@ -13,7 +13,7 @@ type Stats = { aiByKind: KindCost[]; aiCostUsd: number; avgCostUsd: number; aiCa
 
 function Inner() {
   const { me, tr, toast, errMsg } = useApp();
-  const [tab, setTab] = useState<"stats" | "challenges" | "meals" | "rotation" | "group">("stats");
+  const [tab, setTab] = useState<"stats" | "challenges" | "meals" | "rotation" | "group" | "notify">("stats");
   const [stats, setStats] = useState<Stats | null>(null);
   const [chs, setChs] = useState<Ch[]>([]);
   const [meals, setMeals] = useState<Meal[]>([]);
@@ -33,7 +33,7 @@ function Inner() {
   return (
     <div className="mx-auto max-w-4xl space-y-5 py-5">
       <PageHeader title={tr("لوحة الإدارة", "Admin")} sub={tr("أدوات المحتوى والإجماليات فقط. لا تُعرض ملفات صحية فردية.", "Content tools and totals only. No individual health profiles are shown.")} />
-      <div className="flex flex-wrap gap-2">{([["stats", tr("الإجماليات", "Totals")], ["challenges", tr("التحديات", "Challenges")], ["meals", tr("الوجبات", "Meals")], ["rotation", tr("وجبات اليوم", "Daily rotation")], ["group", tr("تحدي الأسبوع", "Weekly challenge")]] as const).map(([k, l]) => (<button key={k} className="chip" aria-pressed={tab === k} onClick={() => setTab(k)}>{l}</button>))}</div>
+      <div className="flex flex-wrap gap-2">{([["stats", tr("الإجماليات", "Totals")], ["challenges", tr("التحديات", "Challenges")], ["meals", tr("الوجبات", "Meals")], ["rotation", tr("وجبات اليوم", "Daily rotation")], ["group", tr("تحدي الأسبوع", "Weekly challenge")], ["notify", tr("الإشعارات", "Notifications")]] as const).map(([k, l]) => (<button key={k} className="chip" aria-pressed={tab === k} onClick={() => setTab(k)}>{l}</button>))}</div>
 
       {tab === "stats" && (
         <>
@@ -80,6 +80,7 @@ function Inner() {
       {tab === "challenges" && <ChallengeAdmin items={chs} onSave={(c) => post("/admin/challenges", c)} busy={busy} />}
       {tab === "meals" && <MealAdmin items={meals} onSave={(m) => post("/admin/meals", m)} busy={busy} />}
       {tab === "rotation" && <Rotation meals={meals} onSave={(b) => post("/admin/rotation", b)} busy={busy} />}
+      {tab === "notify" && <NotifyAdmin />}
       {tab === "group" && <GroupAdmin chs={chs} onSave={(b) => post("/admin/group", b)} busy={busy} />}
     </div>
   );
@@ -196,3 +197,34 @@ function GroupAdmin({ chs, onSave, busy }: { chs: Ch[]; onSave: (b: unknown) => 
 }
 
 export default function AdminPage() { return <Gate><Inner /></Gate>; }
+
+type NotifyResult = { pi: { requested: number; delivered: number; error?: string }; push: { configured: boolean; devices: number; sent: number; removed: number; failed: number } };
+
+/** Test panel: sends a notification to the admin's own account and shows what each channel did. */
+function NotifyAdmin() {
+  const { tr, toast, errMsg } = useApp();
+  const [title, setTitle] = useState("Healthy test");
+  const [body, setBody] = useState("If you can read this, notifications work.");
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState<NotifyResult | null>(null);
+  const send = async () => {
+    setBusy(true);
+    try { setRes(await api<NotifyResult>("/admin/notify", { body: { title, body } })); } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
+  };
+  const piLine = !res ? "" : res.pi.error ? tr(`فشل الإرسال (${res.pi.error}).`, `Send failed (${res.pi.error}).`) : res.pi.delivered > 0 ? tr("تم التسليم لمركز إشعارات Pi. افتح الإشعارات في تطبيق Pi.", "Delivered to the Pi Notification Center. Open Notifications in the Pi app.") : tr("Pi لم تسلّم الإشعار: غالبًا لم تمنح صلاحية الإشعارات بعد. سجّل خروجًا ثم دخولًا من Pi Browser ووافق عليها، أو الإشعارات مقفولة في تطبيق Pi.", "Pi did not deliver it: most likely the notifications permission has not been granted yet. Sign out and in again from Pi Browser and accept it, or notifications are off in the Pi app.");
+  return (
+    <section className="card space-y-4">
+      <h2 className="h2">{tr("اختبار الإشعارات", "Test notifications")}</h2>
+      <p className="muted">{tr("يُرسل إلى حسابك أنت فقط (مركز إشعارات Pi وأجهزتك المفعّلة للتذكير).", "Sent to your own account only (the Pi Notification Center and your devices that enabled reminders).")}</p>
+      <Field label={tr("العنوان", "Title")}><input className="field" maxLength={60} value={title} onChange={(e) => setTitle(e.target.value)} /></Field>
+      <Field label={tr("الرسالة", "Message")}><textarea className="field" rows={2} maxLength={160} value={body} onChange={(e) => setBody(e.target.value)} /></Field>
+      <button className="btn-primary" onClick={send} disabled={busy || !title.trim() || !body.trim()}>{busy ? <Spinner size={18} /> : <Icon name="bell" />}{tr("أرسل إشعارًا تجريبيًا لي", "Send me a test notification")}</button>
+      {res && (
+        <div className="space-y-2 text-sm font-bold" role="status">
+          <p><span className="text-ink-soft">Pi: </span>{piLine}</p>
+          <p><span className="text-ink-soft">Web Push: </span>{!res.push.configured ? tr("غير مفعّل على الخادم.", "Not configured on the server.") : res.push.devices === 0 ? tr("لا توجد أجهزة مفعّلة. فعّل «التذكير اليومي» من ملفك الشخصي في متصفح عادي.", "No devices subscribed. Turn on Daily reminder in your profile from a regular browser.") : tr(`أُرسل لـ ${res.push.sent} من ${res.push.devices} جهاز.`, `Sent to ${res.push.sent} of ${res.push.devices} device(s).`)}</p>
+        </div>
+      )}
+    </section>
+  );
+}
