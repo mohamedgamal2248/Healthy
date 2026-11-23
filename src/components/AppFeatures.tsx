@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useApp } from "./AppProvider";
 import { promptInstall, useInstall } from "@/lib/pwa-install";
-import { disablePush, enablePush, isSubscribed, pushSupported } from "@/lib/push-client";
+import { describePushError, disablePush, enablePush, pushSupported, syncPushIfGranted } from "@/lib/push-client";
 import { Icon } from "./Icon";
 import { Spinner } from "./ui";
 
@@ -21,13 +21,15 @@ export function AppFeatures() {
   const [on, setOn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [denied, setDenied] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     const ok = pushSupported();
     setSupported(ok);
     if (ok) {
       setDenied(Notification.permission === "denied");
-      isSubscribed().then(setOn);
+      // Already allowed in the browser's settings but not registered yet? Register silently and show any error.
+      syncPushIfGranted().then((r) => { setOn(r.registered); if (r.error) setErr(r.error); });
     }
   }, []);
 
@@ -39,6 +41,7 @@ export function AppFeatures() {
       else if (r === "denied") setDenied(Notification.permission === "denied");
       else toast(tr("التنبيهات غير مفعّلة حاليًا.", "Reminders are not enabled yet."), "err");
     } catch (e) {
+      setErr(describePushError(e));
       toast(errMsg(e), "err");
     } finally { setBusy(false); }
   };
@@ -72,6 +75,7 @@ export function AppFeatures() {
       ) : (
         <p className="muted">{tr("هذا المتصفح لا يدعم التنبيهات. جرّب Chrome، أو ثبّت التطبيق على الشاشة الرئيسية.", "This browser doesn't support notifications. Try Chrome, or install the app to your home screen.")}</p>
       )}
+      {err && <p className="muted break-words text-xs" dir="ltr">{tr("تفاصيل الخطأ", "Error details")}: {err}</p>}
     </section>
   );
 }

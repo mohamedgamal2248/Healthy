@@ -43,6 +43,26 @@ export async function disablePush() {
   if (sub) { await api("/push/subscribe", { method: "DELETE", body: { endpoint: sub.endpoint } }).catch(() => {}); await sub.unsubscribe(); }
 }
 
+/** Short, readable reason for a failed subscription (shown in the app so problems are diagnosable). */
+export function describePushError(e: unknown): string {
+  const x = e as { name?: string; message?: string };
+  return `${x?.name ?? "Error"}: ${(x?.message ?? "unknown").slice(0, 120)}`;
+}
+
+/**
+ * If the browser permission is ALREADY granted (for example allowed from the browser's site settings) but this device was never
+ * registered, register it now. Needs no tap because no permission prompt is involved. Returns an error text if it failed.
+ */
+export async function syncPushIfGranted(): Promise<{ registered: boolean; error?: string }> {
+  try {
+    if (!pushSupported() || Notification.permission !== "granted") return { registered: false };
+    if (await isSubscribed()) return { registered: true };
+    return { registered: (await enablePush()) === "ok" };
+  } catch (e) {
+    return { registered: false, error: describePushError(e) };
+  }
+}
+
 /** Should we offer the reminder right after sign-in? Only if the browser can, nobody decided yet, and we have not asked lately. */
 export function shouldAskPush(): boolean {
   if (!pushSupported() || Notification.permission !== "default") return false;

@@ -398,3 +398,13 @@ test("reminder is offered after sign-in with one tap, and lives on the main prof
   const pc = readFileSync("src/lib/push-client.ts", "utf8");
   assert.match(pc, /Notification\.permission !== "default"/); // never nags after a decision
 });
+
+test("push registration repairs itself when permission was granted outside the app, and shows errors", async () => {
+  const { readFileSync } = await import("node:fs");
+  const pc = readFileSync("src/lib/push-client.ts", "utf8");
+  assert.match(pc, /syncPushIfGranted/);
+  assert.match(pc, /Notification\.permission !== "granted"\) return \{ registered: false \}/); // never prompts, only repairs
+  assert.match(readFileSync("src/components/AppFeatures.tsx", "utf8"), /syncPushIfGranted/);
+  assert.match(readFileSync("src/components/ReminderPrompt.tsx", "utf8"), /syncPushIfGranted/);
+  assert.match(readFileSync("src/components/AppFeatures.tsx", "utf8"), /describePushError/); // error details visible
+});
