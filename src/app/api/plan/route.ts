@@ -1,6 +1,6 @@
 import { ok, readJson, route } from "@/server/http";
 import { requireDisclaimer, requireUser, requireVerified } from "@/server/auth";
-import { createPlan, planForWeek, planSafety } from "@/server/plan";
+import { createPlan, planForWeek, planSafety, repairPlansIfNeeded } from "@/server/plan";
 import { hasActivePlan, getBalances } from "@/server/credits";
 import { rateLimit } from "@/server/ratelimit";
 import { addDays, weekStart } from "@/lib/dates";
@@ -14,6 +14,7 @@ export const GET = route(async (req) => {
   const subscribed = await hasActivePlan(a.username);
   if (!subscribed) return ok({ subscribed: false });
   const week = weekStart(a.today);
+  if (a.profile.disclaimer_accepted_at) await repairPlansIfNeeded(a); // old plans that miss the daily target are rebuilt free of charge
   const [current, next, balances] = await Promise.all([planForWeek(a.username, week), planForWeek(a.username, addDays(week, 7)), getBalances(a.username)]);
   return ok({ subscribed: true, week, current, next, balances, regenerateCost: PLAN_REGENERATE_COST, safety: planSafety(a.profile.conditions), disclaimerAccepted: !!a.profile.disclaimer_accepted_at });
 });

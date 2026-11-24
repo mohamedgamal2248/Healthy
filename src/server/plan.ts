@@ -5,7 +5,8 @@ import { addDays, weekStart } from "@/lib/dates";
 import { weeklyInsight } from "./ai/extra";
 import { dailyTarget } from "./food";
 import { bmr, dailyCalories, dailyWaterCups, weeklyAdjustment, type Goal, type Activity, type Sex } from "@/lib/nutrition";
-import { buildWeekPlan, planPool, rebalanceDay, requiredTags, type PlanMealRef, type PlanDay } from "@/lib/planner";
+import { buildWeekPlan, isAffordable, planPool, rebalanceDay, requiredTags, type PlanMealRef, type PlanDay } from "@/lib/planner";
+import { MEAL_SEEDS } from "@/data/meals";
 import { hasActivePlan, refundCredit, spendCredit } from "./credits";
 import { aiConfigured, trackUsage, estimateCostUsd, type Usage } from "./ai/provider";
 import { generateRecipe } from "./ai/recipe";
@@ -16,7 +17,7 @@ import { loadStreak, recentCompletedCount } from "./challenges";
 
 export type StoredPlan = {
   id: string; week_start: string; daily_calorie_target: number; daily_water_target: number; adjustment_kcal: number; created_at: string;
-  plan: { days: PlanDay[]; notes: { gaps_unfilled: number; ai_filled: number } };
+  plan: { days: PlanDay[]; notes: { gaps_unfilled: number; ai_filled: number; balanced?: boolean } };
 };
 
 type Weight = { weight_kg: number; logged_date: string; is_official: boolean; created_at: string };
@@ -97,7 +98,7 @@ async function generate(a: Auth, week: string, kind: "first" | "refresh" | "rege
   const aiWasNeeded = built.gaps.length > 0 && aiConfigured();
   // A paid regenerate whose AI part produced nothing is not delivered work: the caller refunds it.
   if (requestId && aiWasNeeded && aiFilled === 0) throw new HttpError(502, "ai_failed", "تعذّر إكمال الخطة هذه المرة. أعدنا لك الكريدت تلقائيًا، حاول مرة أخرى.", "We couldn't complete the plan this time. Your credit was refunded automatically; please try again.");
-  const planJson = { days: built.days, notes: { gaps_unfilled: unfilled, ai_filled: aiFilled } };
+  const planJson = { days: built.days, notes: { gaps_unfilled: unfilled, ai_filled: aiFilled, balanced: true } };
 
   const row = must(
     await db().from("hl_diet_plans").upsert({ username: a.username, week_start: week, daily_calorie_target: calorieTarget, daily_water_target: water, adjustment_kcal: adjustment, plan: planJson, status: "active", created_at: new Date().toISOString() }, { onConflict: "username,week_start" }).select("*").single(),
@@ -145,6 +146,29 @@ export async function createPlan(a: Auth, mode: "auto" | "regenerate"): Promise<
     return (await planForWeek(a.username, next)) ?? (await generate(a, next, "refresh", null));
   }
   return existing;
+}
+
+/**
+ * Plans saved before the daily-target fix can be off target or contain premium / imported meals. They are rebuilt for free
+ * (no credit, same weekly adjustment) the next time the user opens the plan.
+ */
+const CUISINE = new Map(MEAL_SEEDS.map((m) => [m.id, m.cuisine]));
+export function planNeedsRepair(p: StoredPlan, premium: boolean): boolean {
+  if (p.plan.notes?.balanced) return false; // built by the current rules: never rebuilt again (no loop)
+  const target = p.daily_calorie_target;
+  const off = p.plan.days.some((d) => d.slots.length >= 3 && Math.abs(d.total_kcal - target) > target * 0.05);
+  const imported = !premium && p.plan.days.some((d) => d.slots.some((s) => s.source === "catalogue" && s.meal_id && !isAffordable({ id: s.meal_id, meal_type: s.type, name_ar: s.name_ar, name_en: s.name_en, calories: 0, protein_g: 0, tags: [], cuisine: CUISINE.get(s.meal_id) })));
+  return off || imported;
+}
+export async function repairPlansIfNeeded(a: Auth): Promise<void> {
+  const week = weekStart(a.today);
+  const premium = !!(a.profile as { plan_premium?: boolean }).plan_premium;
+  for (const w of [week, addDays(week, 7)]) {
+    const cur = await planForWeek(a.username, w);
+    if (cur && planNeedsRepair(cur, premium)) {
+      try { await generate(a, w, "regenerate", null); } catch (e) { console.error("[plan] repair skipped", e instanceof Error ? e.message : e); }
+    }
+  }
 }
 
 // ------------------------------------------------------------------ weekly report
