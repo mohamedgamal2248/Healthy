@@ -5,7 +5,7 @@ import { PGlite } from "@electric-sql/pglite";
 
 async function db() {
   const pg = new PGlite();
-  for (const f of ["0001_init", "0002_cuisine_and_ai_cache", "0003_hardening_growth", "0006_referral_lock", "0007_scale", "0008_push", "0009_pi_notify", "0010_growth", "0011_macros"]) {
+  for (const f of ["0001_init", "0002_cuisine_and_ai_cache", "0003_hardening_growth", "0006_referral_lock", "0007_scale", "0008_push", "0009_pi_notify", "0010_growth", "0011_macros", "0012_ai_prefs"]) {
     const sql = readFileSync(`supabase/migrations/${f}.sql`, "utf8").replace(/revoke all on [\s\S]*?;/g, "");
     await pg.exec(sql);
   }

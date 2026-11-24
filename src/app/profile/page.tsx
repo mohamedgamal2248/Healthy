@@ -8,6 +8,7 @@ import { Field, Gate, Notice, PageHeader, Spinner, VerifiedBadge } from "@/compo
 import { DisclaimerBanner } from "@/components/Domain";
 import { Icon } from "@/components/Icon";
 import { AppFeatures } from "@/components/AppFeatures";
+import { ALLERGENS, EQUIPMENT, JOINTS, LEVELS, PREF_LABELS } from "@/lib/ai-prefs";
 
 type F = { age: string; sex: string; weight: string; height: string; goal: string; activity: string; conditions: string[] };
 
@@ -68,6 +69,8 @@ function Inner() {
   const [accept, setAccept] = useState(false);
   const [leader, setLeader] = useState(p.leaderboard_visible);
   const [f, setF] = useState<F>({ age: "", sex: "", weight: "", height: "", goal: "", activity: "", conditions: [] });
+  const [ai, setAi] = useState({ allergies: p.allergies ?? [], dislikes: p.dislikes ?? "", equipment: p.equipment ?? [], level: p.fitness_level ?? "", avoid: p.avoid_joints ?? [], household: p.household?.toString() ?? "" });
+  const toggleAi = (k: "allergies" | "equipment" | "avoid", v: string) => setAi((x) => ({ ...x, [k]: x[k].includes(v) ? x[k].filter((y) => y !== v) : [...x[k], v] }));
   useEffect(() => {
     setF({ age: p.age?.toString() ?? "", sex: p.sex ?? "", weight: p.weight_kg?.toString() ?? "", height: p.height_cm?.toString() ?? "", goal: p.goal ?? "", activity: p.activity ?? "", conditions: p.conditions });
     setLeader(p.leaderboard_visible);
@@ -77,7 +80,7 @@ function Inner() {
   const toggleCond = (c: string) => set("conditions", f.conditions.includes(c) ? f.conditions.filter((x) => x !== c) : [...f.conditions, c]);
   const num = (s: string) => (s.trim() === "" ? null : Number(s));
 
-  const body = () => ({ age: num(f.age), sex: f.sex || null, weight_kg: num(f.weight), height_cm: num(f.height), goal: f.goal || null, activity: f.activity || null, conditions: f.conditions, leaderboard_visible: leader });
+  const body = () => ({ age: num(f.age), sex: f.sex || null, weight_kg: num(f.weight), height_cm: num(f.height), goal: f.goal || null, activity: f.activity || null, conditions: f.conditions, leaderboard_visible: leader, allergies: ai.allergies, dislikes: ai.dislikes.trim() || null, equipment: ai.equipment, fitness_level: ai.level || null, avoid_joints: ai.avoid, household: ai.household ? Number(ai.household) : null });
   const save = async (acceptNow: boolean) => {
     setSaving(true);
     try {
@@ -157,6 +160,20 @@ function Inner() {
       </section>
       <section className="card space-y-5"><h2 className="h2">{steps[1].title}</h2>{steps[1].body}</section>
       <section className="card space-y-5"><h2 className="h2">{steps[2].title}</h2>{steps[2].body}</section>
+      <section className="card space-y-5">
+        <div><h2 className="h2">{tr("تفضيلات Healthy AI", "Healthy AI preferences")}</h2><p className="muted mt-1">{tr("بتتبعت مع كل طلب عشان الوصفات والتمارين تطلع على مقاسك. اختيارية وخاصة بك.", "Sent with every request so meals and workouts fit you. Optional and private.")}</p></div>
+        <div><span className="label">{tr("حساسية أكل (ممنوعة تمامًا في الوصفات)", "Food allergies (never used in recipes)")}</span>
+          <div className="flex flex-wrap gap-2">{ALLERGENS.map((k) => (<button type="button" key={k} className="chip" aria-pressed={ai.allergies.includes(k)} onClick={() => toggleAi("allergies", k)}>{tr(PREF_LABELS[k].ar, PREF_LABELS[k].en)}</button>))}</div></div>
+        <Field label={tr("أكل مش بتحبه (اختياري)", "Foods you dislike (optional)")}><input className="field" value={ai.dislikes} maxLength={80} onChange={(e) => setAi((x) => ({ ...x, dislikes: e.target.value }))} placeholder={tr("مثال: كوسة، سبانخ", "e.g. zucchini, spinach")} /></Field>
+        <Field label={tr("عدد الأشخاص اللي بتطبخ لهم", "People you cook for")}><input className="field" inputMode="numeric" type="number" min={1} max={8} value={ai.household} onChange={(e) => setAi((x) => ({ ...x, household: e.target.value }))} placeholder="1" /></Field>
+        <div><span className="label">{tr("مستوى التمرين", "Fitness level")}</span><Choice label={tr("المستوى", "Level")} value={ai.level} onChange={(v) => setAi((x) => ({ ...x, level: v }))} options={LEVELS.map((k) => [k, tr(PREF_LABELS[k].ar, PREF_LABELS[k].en)] as [string, string])} /></div>
+        <div><span className="label">{tr("أدوات عندك", "Equipment you have")}</span>
+          <div className="flex flex-wrap gap-2">{EQUIPMENT.map((k) => (<button type="button" key={k} className="chip" aria-pressed={ai.equipment.includes(k)} onClick={() => toggleAi("equipment", k)}>{tr(PREF_LABELS[k].ar, PREF_LABELS[k].en)}</button>))}</div>
+          <p className="muted mt-2">{tr("من غير اختيار = وزن الجسم فقط.", "None selected = bodyweight only.")}</p></div>
+        <div><span className="label">{tr("مفاصل تحب تريّحها في التمارين", "Joints to go easy on in workouts")}</span>
+          <div className="flex flex-wrap gap-2">{JOINTS.map((k) => (<button type="button" key={k} className="chip" aria-pressed={ai.avoid.includes(k)} onClick={() => toggleAi("avoid", k)}>{tr(PREF_LABELS[k].ar, PREF_LABELS[k].en)}</button>))}</div>
+          <p className="muted mt-2">{tr("اختيار تفضيل فقط، مش تشخيص ولا علاج. لأي ألم راجع طبيبك.", "A preference only, not a diagnosis or treatment. See your doctor for any pain.")}</p></div>
+      </section>
       <section className="card space-y-4">
         <h2 className="h2">{tr("اللغة والخصوصية", "Language and privacy")}</h2>
         <div><span className="label">{tr("اللغة", "Language")}</span><Choice label={tr("اللغة", "Language")} value={lang} onChange={(v) => setLang(v as "ar" | "en")} options={[["ar", "العربية"], ["en", "English"]]} /></div>

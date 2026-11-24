@@ -5,6 +5,7 @@ import { useApp } from "./AppProvider";
 import { Icon } from "./Icon";
 import { Spinner } from "./ui";
 import { MACRO_COLORS } from "./Rings";
+import { adjustScan, type Swap } from "@/lib/scanmath";
 
 export type ScanHints = { cook: string | null; size: string | null; extras: string[] };
 const COOK = [["boiled", "مسلوق", "Boiled"], ["oil", "بالزيت", "With oil"], ["fried", "مقلي", "Fried"], ["grilled", "مشوي", "Grilled"]] as const;
@@ -39,7 +40,7 @@ export function ScanQuestions({ value, onChange }: { value: ScanHints; onChange:
   );
 }
 
-type Ing = { name: string; grams: number; kcal: number };
+type Ing = { name: string; grams: number; kcal: number; alternatives?: { name: string; kcal_per_100g: number }[] };
 type Totals = { calories: { mid: number }; protein_g: { mid: number }; carbs_g: number; fat_g: number };
 const STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
 const fmtPortion = (p: number, ar: boolean) => (ar ? p.toLocaleString("ar-EG") : String(p));
@@ -48,20 +49,20 @@ const fmtPortion = (p: number, ar: boolean) => (ar ? p.toLocaleString("ar-EG") :
  * Adjust a photo result before adding it: portion stepper and "fix result" (untick ingredients that aren't there).
  * The preview here is for display; the server recomputes the logged numbers from the stored analysis.
  */
-export function ScanAdjust({ recipeId, name, totals, ingredients, onAdded }: { recipeId: string; name: string; totals: Totals; ingredients: Ing[]; onAdded: () => void }) {
+export function ScanAdjust({ recipeId, name, totals, ingredients, confidence, onAdded }: { recipeId: string; name: string; totals: Totals; ingredients: Ing[]; confidence?: "low" | "medium" | "high"; onAdded: () => void }) {
   const { tr, lang, toast, errMsg } = useApp();
   const [portion, setPortion] = useState(1);
-  const [fixing, setFixing] = useState(false);
+  const unsure = ingredients.some((i) => i.alternatives?.length);
+  const [fixing, setFixing] = useState(unsure || confidence === "low");
   const [exclude, setExclude] = useState<number[]>([]);
+  const [swap, setSwap] = useState<Swap[]>([]);
   const [busy, setBusy] = useState(false);
-  const all = ingredients.reduce((n, i) => n + Math.max(0, i.kcal), 0);
-  const removed = ingredients.reduce((n, i, k) => n + (exclude.includes(k) ? Math.max(0, i.kcal) : 0), 0);
-  const f = (all > 0 ? (all - removed) / all : 1) * portion;
-  const v = { kcal: Math.round(totals.calories.mid * f), p: Math.round(totals.protein_g.mid * f), c: Math.round(totals.carbs_g * f), fat: Math.round(totals.fat_g * f) };
+  const a = adjustScan(totals, ingredients, portion, exclude, swap);
+  const v = { kcal: a.calories, p: Math.round(a.protein_g), c: Math.round(a.carbs_g), fat: Math.round(a.fat_g) };
   const step = (dir: 1 | -1) => { const i = STEPS.indexOf(portion); const n = STEPS[Math.max(0, Math.min(STEPS.length - 1, i + dir))]; setPortion(n); };
   const add = async () => {
     setBusy(true);
-    try { await api("/food", { body: { source: "recipe", recipeId, portion, exclude } }); toast(tr("تمت الإضافة إلى يومك", "Added to your day"), "ok"); onAdded(); }
+    try { await api("/food", { body: { source: "recipe", recipeId, portion, exclude, swap } }); toast(tr("تمت الإضافة إلى يومك", "Added to your day"), "ok"); onAdded(); }
     catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
   };
   return (
@@ -94,10 +95,16 @@ export function ScanAdjust({ recipeId, name, totals, ingredients, onAdded }: { r
                   <span className="min-w-0 flex-1 truncate">{i.name}</span>
                   <span className="tabular-nums">{Math.round(i.kcal)} {tr("سعرة", "kcal")}</span>
                 </button>
+                {i.alternatives?.length && !off ? (
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5 ps-2">
+                    <span className="text-xs font-bold text-sun-600">{tr("مش متأكد، هل هو:", "Not sure, is it:")}</span>
+                    {i.alternatives.map((alt, ai) => { const on = swap.some((x) => x.i === k && x.a === ai); return <button key={ai} className="chip !min-h-8 !px-2.5 text-xs" aria-pressed={on} onClick={() => setSwap(on ? swap.filter((x) => x.i !== k) : [...swap.filter((x) => x.i !== k), { i: k, a: ai }])}>{alt.name}</button>; })}
+                  </div>
+                ) : null}
               </li>
             );
           })}
-          <li className="px-1 text-xs font-bold text-ink-soft">{tr("شيل أي مكوّن مش موجود في طبقك، والأرقام تتعدل.", "Untick anything that isn't on your plate; the numbers update.")}</li>
+          <li className="px-1 text-xs font-bold text-ink-soft">{unsure ? tr("اختار الصح لو Healthy AI مش متأكد، وشيل أي مكوّن مش في طبقك. الأرقام تتعدل.", "Pick the right one where Healthy AI isn't sure, and untick anything not on your plate. The numbers update.") : tr("شيل أي مكوّن مش موجود في طبقك، والأرقام تتعدل.", "Untick anything that isn't on your plate; the numbers update.")}</li>
         </ul>
       )}
       <div className="grid grid-cols-2 gap-2">

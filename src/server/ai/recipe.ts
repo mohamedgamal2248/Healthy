@@ -3,6 +3,7 @@ import { AiNotConfigured, callModel, extractJson, type AiMessage, timeLeftMs } f
 import { outputIsSafe, REFUSAL_AR, safeRefusalText } from "./safety";
 import { MIN_DAILY_KCAL } from "@/config/pricing";
 import { langInstruction, type Lang } from "./lang";
+import { dayLines, prefsLines, violatesPrefs, type AiPrefs, type DayCtx } from "./context";
 
 export const RecipeSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -23,7 +24,7 @@ export class AiRefused extends Error {
   }
 }
 
-export type ProfileContext = { goal: string | null; conditions: string[]; lang?: Lang };
+export type ProfileContext = { goal: string | null; conditions: string[]; lang?: Lang; prefs?: AiPrefs; day?: DayCtx | null };
 
 const SHAPE = `{
   "name": "اسم الوصفة",
@@ -36,7 +37,7 @@ const SHAPE = `{
   "suitable_for": ["تخسيس", "نباتي"]
 }`;
 
-const RULES = `قواعد صارمة:
+export const RULES = `قواعد صارمة:
 - أجب بالعربية (لهجة مبسّطة) فقط، واستخدم مكونات رخيصة ومتوفرة في مصر (فول، عدس، بيض، جبنة قريش، خضار موسمية، أرز، فراخ، تونة...) إلا إذا طلب المستخدم غير ذلك.
 - أنت تقدّم إرشادات غذائية عامة فقط. ممنوع التشخيص أو العلاج أو ذكر أي دواء أو مكمل غذائي أو جرعة، وممنوع التوصية بالصيام. ممنوع ادعاء أن الأكل يعالج أو يشفي مرضًا.
 - إذا طلب المستخدم تشخيصًا أو علاجًا أو نظامًا غذائيًا لطفل، أرجع فقط: {"refusal": "${REFUSAL_AR}"}
@@ -45,13 +46,16 @@ const RULES = `قواعد صارمة:
 - لو الطلب عن طبق أو مكوّن غير مألوف ولا تعرف طريقة تحضيره المعتادة، استخدم أداة البحث على الويب للتأكد من الطريقة، ثم اكتب وصفتك الخاصة بصياغتك (لا تنسخ نصًا من أي موقع).
 - أرجع كائن JSON واحدًا فقط بدون أي نص قبله أو بعده.`;
 
-function profileLines(p: ProfileContext): string {
+export function profileLines(p: ProfileContext): string {
   const lines: string[] = [];
   if (p.goal === "lose") lines.push("هدف المستخدم: تخسيس، فاجعل الوصفة منخفضة السعرات (حوالي ٢٥٠–٤٥٠ سعرة) وعالية الألياف.");
   if (p.goal === "gain") lines.push("هدف المستخدم: بناء عضلات، فاجعل البروتين مرتفعًا.");
   if (p.conditions.includes("diabetes")) lines.push("المستخدم أعلن إصابته بالسكري: تجنب السكريات المضافة والنشويات المكررة الكثيرة.");
   if (p.conditions.includes("hypertension")) lines.push("المستخدم أعلن إصابته بالضغط: قلّل الملح وتجنب المخللات والأجبان المالحة.");
   if (p.conditions.includes("pregnancy")) lines.push("المستخدمة أعلنت الحمل: تجنب الأطعمة النيئة وغير المطهوة جيدًا.");
+  if (p.prefs) { const x = prefsLines(p.prefs, "recipe"); if (x) lines.push(x); }
+  const d = dayLines(p.day);
+  if (d) lines.push(d);
   return lines.join("\n");
 }
 
@@ -59,31 +63,39 @@ export function recipeSystemPrompt(p: ProfileContext): string {
   return `أنت "الكوتش" في تطبيق صحتي لمستخدمي Pi في مصر. تكتب وصفة واحدة كاملة بصيغة JSON بالشكل التالي بالضبط:\n${SHAPE}\n\n${RULES}\n${profileLines(p)}${langInstruction(p.lang ?? "ar")}`;
 }
 
-function validate(raw: unknown): Recipe {
+/** Rejects a recipe that uses an allergen / disliked food the user declared (the prompt asks too; this is the safety net). */
+export function recipeViolation(r: Recipe, prefs?: AiPrefs): string | null {
+  if (!prefs) return null;
+  return violatesPrefs([r.name, ...r.ingredients.map((i) => i.item), ...r.substitutions.map((x) => x.use)].join(" \n "), prefs);
+}
+
+export function validateRecipe(raw: unknown, prefs?: AiPrefs): Recipe {
   if (raw && typeof raw === "object" && "refusal" in raw) {
     throw new AiRefused(safeRefusalText((raw as { refusal: unknown }).refusal, REFUSAL_AR));
   }
   const parsed = RecipeSchema.safeParse(raw);
   if (!parsed.success) throw new AiUnusable("schema");
   if (!outputIsSafe(JSON.stringify(parsed.data))) throw new AiUnusable("unsafe_content");
+  const bad = recipeViolation(parsed.data, prefs);
+  if (bad) throw new AiUnusable(`prefs:${bad}`);
   return parsed.data;
 }
 
 /** One generation attempt plus one retry. Throws AiUnusable when both fail (caller refunds the credit). */
 export async function generateRecipe(userText: string, profile: ProfileContext): Promise<Recipe> {
   const system = recipeSystemPrompt(profile);
-  const messages: AiMessage[] = [{ role: "user", content: userText }];
+  let messages: AiMessage[] = [{ role: "user", content: userText }];
   let lastErr: unknown;
   const t0 = Date.now();
   for (let attempt = 0; attempt < 2; attempt++) {
     if (attempt > 0 && Date.now() - t0 > 35_000 || timeLeftMs() < 25_000) break; // never retry past the time budget
     try {
       const text = await callModel({ system, messages, webSearch: true, maxTokens: 2500 });
-      return validate(extractJson(text));
+      return validateRecipe(extractJson(text), profile.prefs);
     } catch (e) {
       if (e instanceof AiRefused || e instanceof AiNotConfigured) throw e;
       lastErr = e;
-      
+      if (e instanceof AiUnusable && e.message.startsWith("prefs:")) messages = [{ role: "user", content: `${userText}\n\n(ملاحظة: ردك السابق تضمّن «${e.message.slice(6)}» وهو ممنوع على هذا المستخدم. أعد الكتابة بدونه تمامًا.)` }];
     }
   }
   throw new AiUnusable(lastErr instanceof Error ? lastErr.message : "unusable");

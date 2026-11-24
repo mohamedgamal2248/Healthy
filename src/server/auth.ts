@@ -14,6 +14,12 @@ export type Profile = {
   goal: "lose" | "gain" | "maintain" | null;
   activity: "low" | "medium" | "high" | null;
   conditions: string[];
+  allergies: string[];
+  dislikes: string | null;
+  equipment: string[];
+  fitness_level: "beginner" | "intermediate" | "advanced" | null;
+  avoid_joints: string[];
+  household: number | null;
   disclaimer_accepted_at: string | null;
   language: "ar" | "en";
   timezone: string;

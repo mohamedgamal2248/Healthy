@@ -629,3 +629,104 @@ test("no emoji anywhere in the UI source: icons are SVG in the site's colours", 
   const hits = walk("src").filter((f) => emoji.test(readFileSync(f, "utf8")));
   assert.deepEqual(hits, []);
 });
+
+test("AI preferences: allergies and dislikes are enforced on the output, with no false alarm on 'white cheese' or 'white'", async () => {
+  const { violatesPrefs, prefsFromProfile, prefsLines, dayLines, dayCtxFrom, ctxKey, mealSlot } = await import("../src/server/ai/context");
+  const p = (x: object) => prefsFromProfile(x);
+  const eggs = p({ allergies: ["eggs"] });
+  assert.equal(violatesPrefs("بيض مسلوق", eggs), "eggs");
+  assert.equal(violatesPrefs("2 boiled eggs", eggs), "eggs");
+  assert.equal(violatesPrefs("جبنة بيضاء وطماطم", eggs), null);
+  assert.equal(violatesPrefs("white rice", eggs), null);
+  assert.equal(violatesPrefs("جبنة قريش", p({ allergies: ["dairy"] })), "dairy");
+  assert.equal(violatesPrefs("tahini sauce", p({ allergies: ["sesame"] })), "sesame");
+  assert.equal(violatesPrefs("مكرونة", p({ allergies: ["gluten"] })), "gluten");
+  assert.equal(violatesPrefs("سمك مشوي", p({ allergies: ["seafood"] })), "seafood");
+  assert.equal(violatesPrefs("لوز مبشور", p({ allergies: ["nuts"] })), "nuts");
+  assert.equal(violatesPrefs("كوسة محشية", p({ dislikes: "كوسة، سبانخ" })), "كوسه");
+  assert.equal(violatesPrefs("رز وفراخ", p({ dislikes: "كوسة" })), null);
+  // junk in the profile is dropped, free text is cleaned and capped
+  const junk = p({ allergies: ["nuts", "bogus"], dislikes: "<script>x</script> فول", equipment: ["laser"], fitness_level: "god", household: 99 });
+  assert.deepEqual(junk.allergies, ["nuts"]);
+  assert.ok(!/[<>]/.test(junk.dislikes));
+  assert.deepEqual(junk.equipment, []);
+  assert.equal(junk.level, null);
+  assert.equal(junk.household, null);
+  // prompt lines
+  assert.match(prefsLines(eggs, "recipe"), /ممنوع تمامًا.*البيض/);
+  assert.match(prefsLines(p({ household: 4 }), "recipe"), /4 أشخاص/);
+  assert.match(prefsLines(p({ equipment: ["dumbbells"], fitness_level: "intermediate", avoid_joints: ["knees"] }), "workout"), /دمبل[\s\S]*متوسط[\s\S]*الركبة/);
+  assert.match(prefsLines(p({}), "workout"), /وزن الجسم فقط/);
+  assert.equal(prefsLines(eggs, "workout").includes("البيض"), false);
+  // day context: what is left today, local meal slot, and distinct cache keys
+  const d = dayCtxFrom({ calories: 1100, protein_g: 60 }, 1800, 3, 19);
+  assert.equal(d.remaining, 700);
+  assert.equal(d.slot, "dinner");
+  assert.match(dayLines(d), /المتبقي حوالي 700/);
+  assert.match(dayLines(dayCtxFrom({ calories: 1900, protein_g: 90 }, 1800, 4, 21)), /خفيفة جدًا/);
+  assert.equal(dayLines(null), "");
+  assert.equal(mealSlot(8), "breakfast"); assert.equal(mealSlot(13), "lunch"); assert.equal(mealSlot(2), "snack");
+  assert.notEqual(ctxKey(eggs, d), ctxKey(p({}), d));
+  assert.notEqual(ctxKey(eggs, d), ctxKey(eggs, dayCtxFrom({ calories: 200, protein_g: 5 }, 1800, 1, 19)));
+  const { cleanDislikes } = await import("../src/lib/ai-prefs");
+  assert.equal(cleanDislikes("a<b>c, د"), "a b c, د");
+  assert.equal(cleanDislikes("x".repeat(200)).length, 80);
+});
+
+test("fridge ideas: schema, and an idea that uses an allergen is rejected (credit is refunded by the caller)", async () => {
+  const { validateFridge, cleanNote, isRecipeRefine, isWorkoutRefine } = await import("../src/server/ai/extra");
+  const { prefsFromProfile } = await import("../src/server/ai/context");
+  const idea = (name: string, item: string) => ({ name, ingredients: [{ item, quantity: "2" }, { item: "طماطم", quantity: "1" }], missing: [], steps: ["قطّع", "اطبخ"], calories: 300, protein: 20 });
+  const ok = { seen: ["بيض", "طماطم"], ideas: [idea("عجة", "بيض"), idea("سلطة", "خيار")] };
+  assert.equal(validateFridge(ok).ideas.length, 2);
+  assert.throws(() => validateFridge({ seen: ["x"], ideas: [idea("a", "b")] }), /schema/);
+  assert.throws(() => validateFridge(ok, prefsFromProfile({ allergies: ["eggs"] })), /prefs:eggs/);
+  assert.equal(validateFridge({ ...ok, ideas: [idea("سلطة خيار", "خيار"), idea("شوربة", "عدس")] }, prefsFromProfile({ allergies: ["eggs"] })).ideas.length, 2);
+  assert.throws(() => validateFridge({ refusal: "x" }), /refused/);
+  // refinements: fixed list only; the swap note is plain letters and short
+  assert.equal(cleanNote("بيض; DROP <b>TABLE</b>"), "بيض DROP b TABLE b");
+  assert.equal(cleanNote("x".repeat(100)).length, 40);
+  assert.equal(isRecipeRefine("cheaper"), true); assert.equal(isRecipeRefine("easier"), false); assert.equal(isWorkoutRefine("shorter"), true); assert.equal(isWorkoutRefine("x"), false);
+});
+
+test("photo estimate: kcal far from the Egyptian reference is pulled back; totals follow; swapping a look-alike updates the numbers", async () => {
+  const { calibrateScan, ScanSchema, scanInconsistency } = await import("../src/server/ai/scan");
+  const { adjustScan, ingKcal } = await import("../src/lib/scanmath");
+  const { matchFoodRef } = await import("../src/config/egypt-foods");
+  const { normalizeText } = await import("../src/server/ai/safety");
+  assert.equal(matchFoodRef(normalizeText("كشري"))?.id, "koshari");
+  assert.equal(matchFoodRef(normalizeText("Grilled chicken breast"))?.id, "chicken_grilled");
+  assert.equal(matchFoodRef(normalizeText("white rice"))?.id, "rice");
+  assert.equal(matchFoodRef(normalizeText("cooking oil"))?.id, "oil");
+  const base = ScanSchema.parse({
+    is_food: true, dish_name: "Chicken and rice", confidence: "medium", setting: "home", portion: "one plate", estimated_total_g: 400,
+    ingredients: [{ name: "Grilled chicken breast", grams: 200, kcal: 500, certainty: "seen" }, { name: "White rice", grams: 200, kcal: 260, certainty: "seen" }],
+    totals: { calories: { low: 650, mid: 760, high: 880 }, protein_g: { low: 50, mid: 60, high: 70 }, carbs_g: 55, fat_g: 20 }, notes: [], assumptions: ["Plate 26 cm."],
+  });
+  const cal = calibrateScan(base, "en");
+  assert.equal(cal.ingredients[0].kcal, 330); // 200 g x 165 / 100
+  assert.equal(cal.ingredients[1].kcal, 260); // already close: untouched
+  assert.ok(cal.totals.calories.mid < base.totals.calories.mid);
+  assert.equal(scanInconsistency(cal), null);
+  assert.match(cal.assumptions.at(-1) ?? "", /reference table/);
+  assert.equal(calibrateScan(cal, "en"), cal, "already calibrated -> unchanged");
+  // swap: lentils 150 g (174 kcal) -> foul at 110 kcal/100 g = 165
+  const ings = [{ name: "Lentils", grams: 150, kcal: 174, alternatives: [{ name: "Foul", kcal_per_100g: 60 }] }, { name: "Rice", grams: 100, kcal: 130 }];
+  const t = { calories: { mid: 304 }, protein_g: { mid: 15 }, carbs_g: 50, fat_g: 4 };
+  assert.equal(ingKcal(ings[0], 0, [{ i: 0, a: 0 }]), 90);
+  assert.equal(adjustScan(t, ings, 1, []).calories, 304);
+  assert.equal(adjustScan(t, ings, 1, [], [{ i: 0, a: 0 }]).calories, Math.round(304 * (90 + 130) / 304));
+  assert.equal(adjustScan(t, ings, 1, [], [{ i: 0, a: 5 }]).calories, 304, "an invalid alternative is ignored");
+  assert.equal(adjustScan(t, ings, 2, [1]).calories, Math.round(304 * (174 / 304) * 2));
+});
+
+test("AI challenge rows never block the normal daily picks, and can't be swapped", async () => {
+  const { readFileSync } = await import("node:fs");
+  const c = readFileSync("src/server/challenges.ts", "utf8");
+  assert.match(c, /!rows\.some\(\(r\) => !r\.challenge_id\.startsWith\("ai_"\)\)/);
+  assert.match(c, /target\.challenge_id\.startsWith\("ai_"\)/);
+  const chef = readFileSync("src/server/chef.ts", "utf8");
+  assert.match(chef, /REFINE_LIMITS = \{ perResult: 5, perDay: 15 \}/);
+  assert.match(chef, /type: "follow-up", input_summary: .*credit_cost: 0/);
+  assert.match(chef, /ctxKey\(prefs, day\)/);
+});

@@ -2,6 +2,8 @@ import { db, must } from "./supabase";
 import { E, HttpError } from "./http";
 import type { Auth } from "./auth";
 import { addDays, weekStart } from "@/lib/dates";
+import { weeklyInsight } from "./ai/extra";
+import { dailyTarget } from "./food";
 import { bmr, dailyCalories, dailyWaterCups, weeklyAdjustment, type Goal, type Activity, type Sex } from "@/lib/nutrition";
 import { buildWeekPlan, requiredTags, type PlanMealRef, type PlanDay } from "@/lib/planner";
 import { hasActivePlan, refundCredit, spendCredit } from "./credits";
@@ -167,13 +169,35 @@ export async function buildReport(a: Auth, week: string) {
   return { week_start: week, weight_change: change, current_weight: cur ? Number(cur.weight_kg) : null, streak: effectiveStreak(streak, a.today), challenges_completed: completed, favourite_meal: fav, avg_water: avgWater, tip_en: tip.en, tip_ar: tip.ar };
 }
 
+/**
+ * The report's short AI-written insight (part of the plan, no credit). Written at most once a day per week, from real numbers only,
+ * and skipped silently if the provider is off or fails: the rule-based tip is always there.
+ */
+async function aiInsight(a: Auth, week: string, r: Awaited<ReturnType<typeof buildReport>>, prior: { insight?: string; insight_at?: string } | null) {
+  if (prior?.insight && prior.insight_at && Date.now() - new Date(prior.insight_at).getTime() < 86400_000) return { insight: prior.insight, insight_at: prior.insight_at };
+  if (!aiConfigured()) return {};
+  try {
+    const end = addDays(week, 6);
+    const food = must(await db().from("hl_food_log").select("date,calories,protein_g").eq("username", a.username).gte("date", week).lte("date", end).limit(400)) as { date: string; calories: number; protein_g: number }[];
+    const days = new Set(food.map((f) => f.date));
+    const sum = (k: "calories" | "protein_g") => food.reduce((n, f) => n + Number(f[k]), 0);
+    const target = await dailyTarget(a);
+    const { result } = await trackUsage(() => weeklyInsight({
+      goal: a.profile.goal, days_logged: days.size, avg_kcal: days.size ? Math.round(sum("calories") / days.size) : null, avg_protein_g: days.size ? Math.round(sum("protein_g") / days.size) : null,
+      target_kcal: target, challenges_done: r.challenges_completed, avg_water_cups: r.avg_water, weight_change_kg: r.weight_change, streak: r.streak,
+    }, a.profile.language === "en" ? "en" : "ar"), 30_000);
+    return { insight: result, insight_at: new Date().toISOString() };
+  } catch { return prior?.insight ? { insight: prior.insight, insight_at: prior.insight_at } : {}; }
+}
+
 export async function saveReport(a: Auth, week: string) {
   if (!(await hasActivePlan(a.username))) throw E.needPlan();
   const r = await buildReport(a, week);
   const { tip_ar, tip_en, ...summary } = r;
-  void tip_en;
-  must(await db().from("hl_weekly_reports").upsert({ username: a.username, week_start: week, summary: { ...summary, tip_en }, tip: tip_ar }, { onConflict: "username,week_start" }));
-  return r;
+  const old = must(await db().from("hl_weekly_reports").select("summary").eq("username", a.username).eq("week_start", week).maybeSingle()) as { summary: { insight?: string; insight_at?: string } } | null;
+  const ai = await aiInsight(a, week, r, old?.summary ?? null);
+  must(await db().from("hl_weekly_reports").upsert({ username: a.username, week_start: week, summary: { ...summary, tip_en, ...ai }, tip: tip_ar }, { onConflict: "username,week_start" }));
+  return { ...r, ...ai };
 }
 
 export { bmr };

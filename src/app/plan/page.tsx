@@ -11,7 +11,7 @@ import { Icon } from "@/components/Icon";
 import { EatTabs } from "@/components/EatTabs";
 import type { StoredPlan } from "@/server/plan";
 
-type Report = { week_start: string; weight_change: number | null; current_weight: number | null; streak: number; challenges_completed: number; favourite_meal: { name_ar: string; name_en: string } | null; avg_water: number | null; tip_ar: string; tip_en: string };
+type Report = { week_start: string; weight_change: number | null; current_weight: number | null; streak: number; challenges_completed: number; favourite_meal: { name_ar: string; name_en: string } | null; avg_water: number | null; tip_ar: string; tip_en: string; insight?: string };
 type PlanResp = { subscribed: boolean; week?: string; current?: StoredPlan | null; next?: StoredPlan | null; balances?: Balances; regenerateCost?: number; safety?: { cautions: { ar: string; en: string }[]; doctor_note: { ar: string; en: string } | null } };
 const TYPE = { breakfast: ["فطار", "Breakfast", "sun"], lunch: ["غدا", "Lunch", "utensils"], dinner: ["عشا", "Dinner", "moon"] } as const;
 
@@ -154,6 +154,7 @@ function Inner() {
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {[[tr("تغيّر الوزن", "Weight change"), report.weight_change === null ? "—" : `${report.weight_change > 0 ? "+" : ""}${report.weight_change} kg`], [tr("السلسلة", "Streak"), String(report.streak)], [tr("تحديات منجزة", "Challenges done"), String(report.challenges_completed)], [tr("وجبة الأسبوع المفضلة", "Favourite meal"), report.favourite_meal ? (lang === "ar" ? report.favourite_meal.name_ar : report.favourite_meal.name_en) : "—"]].map(([l, v]) => (<div key={l} className="rounded-2xl bg-brand-50 p-3 text-center"><p className="text-xs font-bold text-ink-soft">{l}</p><p className="mt-1 text-sm font-extrabold leading-snug tabular-nums">{v}</p></div>))}
             </div>
+            {report.insight && <div className="rounded-2xl border border-brand-200 bg-white p-3.5"><p className="mb-1 flex items-center gap-1.5 text-xs font-extrabold text-brand-700"><Icon name="sparkles" size={15} />{tr("ملخص Healthy AI لأسبوعك", "Healthy AI's take on your week")}</p><p className="text-sm font-semibold leading-relaxed">{report.insight}</p></div>}
             <Notice tone="ok" icon="sparkles">{tr(report.tip_ar, report.tip_en)}</Notice>
           </>
         ) : <p className="muted">{tr("اضغط تحديث التقرير لإنشاء تقرير هذا الأسبوع.", "Press Update report to create this week's report.")}</p>}

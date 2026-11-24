@@ -83,23 +83,82 @@ export type RecipeContent = {
 
 export type ScanResult = {
   dish_name: string; dish_name_local?: string; confidence: "low" | "medium" | "high"; setting: string; portion: string; estimated_total_g: number;
-  ingredients: { name: string; grams: number; kcal: number; certainty: "seen" | "likely" }[];
+  ingredients: { name: string; grams: number; kcal: number; certainty: "seen" | "likely"; alternatives?: { name: string; kcal_per_100g: number }[] }[];
   totals: { calories: { low: number; mid: number; high: number }; protein_g: { low: number; mid: number; high: number }; carbs_g: number; fat_g: number };
   notes: string[]; assumptions: string[];
 };
 
+export type FridgeIdea = { name: string; minutes?: number; ingredients: { item: string; quantity: string }[]; missing: string[]; steps: string[]; calories: number; protein: number };
+
 export type CoachContent = Omit<RecipeContent, "recipe"> & {
   scan?: ScanResult;
-  kind?: "recipe" | "workout" | "challenge" | "scan";
+  kind?: "recipe" | "workout" | "challenge" | "scan" | "fridge";
   recipe?: RecipeContent["recipe"];
+  fridge?: { seen: string[]; ideas: FridgeIdea[] };
   card?: { name: string; summary: string; level?: string; duration_min?: number; sections: { heading: string; items: string[] }[]; tips: string[] };
 };
 
 /** Picks the right view for AI result (recipe, workout or challenge). */
 export function ContentView({ content, actions }: { content: CoachContent; actions?: ReactNode }) {
   if (content.kind === "scan" && content.scan) return <ScanView content={content} actions={actions} />;
+  if (content.kind === "fridge" && content.fridge) return <FridgeView content={content} actions={actions} />;
   if (content.kind && content.kind !== "recipe" && content.card) return <CardView content={content} actions={actions} />;
   return <RecipeView content={content as RecipeContent} actions={actions} />;
+}
+
+/** "From my fridge": what the AI understood, then 3 meal ideas the user can open and log with one tap (numbers are estimates). */
+export function FridgeView({ content, actions }: { content: CoachContent; actions?: ReactNode }) {
+  const { tr, toast, errMsg } = useApp();
+  const f = content.fridge!;
+  const [open, setOpen] = useState(0);
+  const [busy, setBusy] = useState<number | null>(null);
+  const add = async (i: number) => {
+    const x = f.ideas[i];
+    setBusy(i);
+    try {
+      await api("/food", { body: { source: "manual", name: x.name.slice(0, 120), calories: Math.round(x.calories), protein_g: Math.round(x.protein) } });
+      toast(tr("تمت الإضافة إلى يومك", "Added to your day"), "ok");
+      window.dispatchEvent(new Event("healthy:refresh"));
+    } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(null); }
+  };
+  return (
+    <article className="card space-y-4">
+      <header>
+        <p className="text-xs font-extrabold text-brand-600">{tr("أفكار من اللي عندك", "Ideas from what you have")}</p>
+        <div className="mt-2 flex flex-wrap gap-1.5">{f.seen.map((s) => <span key={s} className="rounded-full bg-brand-50 px-3 py-1 text-sm font-bold text-brand-800">{s}</span>)}</div>
+      </header>
+      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      <ul className="space-y-3">
+        {f.ideas.map((x, i) => {
+          const on = open === i;
+          return (
+            <li key={i} className={`rounded-2xl border-2 ${on ? "border-brand-500" : "border-line"}`}>
+              <button className="flex w-full items-center gap-3 p-3.5 text-start" onClick={() => setOpen(on ? -1 : i)} aria-expanded={on}>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-600 font-extrabold text-white">{i + 1}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-extrabold leading-snug">{x.name}</span>
+                  <span className="mt-0.5 flex flex-wrap gap-x-3 text-xs font-bold text-ink-soft"><span>{Math.round(x.calories)} {tr("سعرة", "kcal")}</span><span>{Math.round(x.protein)} {tr("جم بروتين", "g protein")}</span>{x.minutes ? <span>{x.minutes} {tr("د", "min")}</span> : null}</span>
+                </span>
+                <Icon name={on ? "minus" : "plus"} size={20} className="text-brand-600" />
+              </button>
+              {on && (
+                <div className="space-y-3 border-t border-line p-3.5">
+                  <ul className="divide-y divide-line rounded-xl border border-line">{x.ingredients.map((g, k) => <li key={k} className="flex items-center justify-between gap-3 px-3 py-2"><span className="font-bold">{g.item}</span><span className="text-sm text-ink-soft">{g.quantity}</span></li>)}</ul>
+                  {x.missing.length > 0 && <p className="rounded-xl bg-sun-50 p-2.5 text-sm font-bold text-sun-600">{tr("ناقص بسيط: ", "Small missing items: ")}{x.missing.join(tr("، ", ", "))}</p>}
+                  <ol className="space-y-2">{x.steps.map((s, k) => <li key={k} className="flex gap-2.5"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-extrabold text-brand-800">{k + 1}</span><span className="pt-0.5 text-sm">{s}</span></li>)}</ol>
+                  <button className="btn-primary w-full" onClick={() => add(i)} disabled={busy !== null}>{busy === i ? <Spinner size={18} /> : <Icon name="plus" size={18} />}{tr("أضف ليومي", "Add to my day")}</button>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <Notice tone="info">{tr("الأرقام تقديرية للإرشاد العام وتتغير بالمقادير والزيت.", "Numbers are estimates for general guidance and change with amounts and oil.")}</Notice>
+      {content.cautions.map((x, k) => (<Notice key={k} tone="warn">{tr(x.ar, x.en)}</Notice>))}
+      {content.doctor_note && <Notice tone="warn" icon="shieldCheck">{tr(content.doctor_note.ar, content.doctor_note.en)}</Notice>}
+      <footer className="border-t border-line pt-3 text-xs font-semibold text-ink-soft">{tr(DISCLAIMER_AR, DISCLAIMER_EN)}</footer>
+    </article>
+  );
 }
 
 export function ScanView({ content, actions }: { content: CoachContent; actions?: ReactNode }) {

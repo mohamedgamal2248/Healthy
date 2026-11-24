@@ -14,6 +14,7 @@ export type Me = {
     username: string; kyc_verified: boolean; age: number | null; sex: "male" | "female" | null; weight_kg: number | null; height_cm: number | null;
     goal: "lose" | "gain" | "maintain" | null; activity: "low" | "medium" | "high" | null; conditions: string[];
     disclaimer_accepted_at: string | null; language: Lang; timezone: string; leaderboard_visible: boolean; notify_pi?: boolean; reminder_hour?: number;
+    allergies?: string[]; dislikes?: string | null; equipment?: string[]; fitness_level?: "beginner" | "intermediate" | "advanced" | null; avoid_joints?: string[]; household?: number | null;
   };
   balances: Balances | null;
   isAdmin: boolean;

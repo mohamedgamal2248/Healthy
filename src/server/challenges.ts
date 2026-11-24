@@ -50,7 +50,8 @@ async function rowsForDay(username: string, date: string) {
 /** Assign today's 3 challenges on first visit of the local day. */
 export async function ensureToday(a: Auth) {
   let rows = await rowsForDay(a.username, a.today);
-  if (rows.length === 0) {
+  // Days that only hold the user's own AI challenge still get the normal daily picks.
+  if (!rows.some((r) => !r.challenge_id.startsWith("ai_"))) {
     const pool = await activePool();
     if (pool.length === 0) return { rows: [], swapUsed: false };
     const picks = pickChallenges(pool, `${a.username}:${a.today}`, DAILY_COUNT);
@@ -75,6 +76,7 @@ export async function swapChallenge(a: Auth, userChallengeId: string) {
   const target = rows.find((r) => r.id === userChallengeId);
   if (!target) throw E.notFound();
   if (target.status === "completed") throw E.bad("لا يمكن تبديل تحدٍّ أنجزته بالفعل.", "You can't swap a challenge you already completed.");
+  if (target.challenge_id.startsWith("ai_")) throw E.bad("لا يمكن تبديل تحدٍّ من Healthy AI.", "A Healthy AI challenge can't be swapped.");
   const pool = await activePool();
   const all = must(await db().from("hl_user_challenges").select("challenge_id").eq("username", a.username).eq("date", a.today)) as { challenge_id: string }[];
   const used = new Set(all.map((r) => r.challenge_id));

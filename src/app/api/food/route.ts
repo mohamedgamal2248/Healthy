@@ -13,6 +13,7 @@ const Ref = z.object({
   entryId: z.string().uuid().optional(),
   portion: z.number().min(0.5).max(3).optional(),
   exclude: z.array(z.number().int().min(0).max(19)).max(20).optional(),
+  swap: z.array(z.object({ i: z.number().int().min(0).max(19), a: z.number().int().min(0).max(1) })).max(20).optional(),
 });
 
 /** Today's food diary: entries, totals and the daily target. */

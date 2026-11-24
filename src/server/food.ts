@@ -4,6 +4,7 @@ import type { Auth } from "./auth";
 import { addDays, weekStart } from "@/lib/dates";
 import { dailyCalories, type Activity, type Goal, type Sex } from "@/lib/nutrition";
 import { getMeal } from "./meals";
+import { adjustScan, type ScanIng, type ScanTotals, type Swap } from "@/lib/scanmath";
 
 export type FoodEntry = { id: string; name: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; source: "meal" | "scan" | "manual"; estimated: boolean };
 export const MAX_ENTRIES_PER_DAY = 40;
@@ -69,8 +70,8 @@ export async function recentFoods(a: Auth, limit = 6): Promise<(FoodEntry & { da
 }
 
 type Add = { name: string; calories: number; protein_g: number; carbs_g: number | null; fat_g: number | null; source: FoodEntry["source"]; source_id: string | null };
-type ScanTotals = { calories: { mid: number }; protein_g: { mid: number }; carbs_g: number; fat_g: number };
-type ScanLite = { dish_name: string; dish_name_local?: string; ingredients?: { kcal: number }[]; totals: ScanTotals };
+type ScanLite = { dish_name: string; dish_name_local?: string; ingredients?: ScanIng[]; totals: ScanTotals };
+export { adjustScan };
 
 /** Portion multiplier chosen on the result screen: ¼ steps between ½ and 3. */
 export function validPortion(p: unknown): number {
@@ -79,20 +80,8 @@ export function validPortion(p: unknown): number {
   return Math.round(n * 4) / 4;
 }
 
-/**
- * Scale a photo analysis on the SERVER from the stored result: the portion multiplier, and ingredients the user
- * removed ("fix result"). Removing ingredients scales every total by the share of ingredient calories kept.
- */
-export function adjustScan(t: ScanTotals, ingredients: { kcal: number }[], portion: number, exclude: number[]) {
-  const all = ingredients.reduce((n, i) => n + Math.max(0, i.kcal), 0);
-  const removed = ingredients.reduce((n, i, k) => n + (exclude.includes(k) ? Math.max(0, i.kcal) : 0), 0);
-  const keep = all > 0 ? Math.max(0, (all - removed) / all) : 1;
-  const f = keep * portion;
-  return { calories: Math.round(t.calories.mid * f), protein_g: r1(t.protein_g.mid * f), carbs_g: r1(t.carbs_g * f), fat_g: r1(t.fat_g * f) };
-}
-
 /** Resolve what to log from a SERVER-side source, so the client can never invent nutrition numbers for catalogue, AI or repeated items. */
-export async function resolveEntry(a: Auth, b: { source?: string; mealId?: string; recipeId?: string; entryId?: string; portion?: number; exclude?: number[] }): Promise<Add> {
+export async function resolveEntry(a: Auth, b: { source?: string; mealId?: string; recipeId?: string; entryId?: string; portion?: number; exclude?: number[]; swap?: Swap[] }): Promise<Add> {
   const ar = a.profile.language === "ar";
   const portion = validPortion(b.portion);
   if (b.source === "meal" && b.mealId) {
@@ -109,7 +98,8 @@ export async function resolveEntry(a: Auth, b: { source?: string; mealId?: strin
       const ings = c.scan.ingredients ?? [];
       const exclude = [...new Set((b.exclude ?? []).filter((k) => Number.isInteger(k) && k >= 0 && k < ings.length))];
       if (ings.length && exclude.length >= ings.length) throw E.bad("لا يمكن حذف كل المكونات.", "You can't remove every ingredient.");
-      const t = adjustScan(c.scan.totals, ings, portion, exclude);
+      const swap = (b.swap ?? []).filter((x) => Number.isInteger(x.i) && x.i >= 0 && x.i < ings.length && Number.isInteger(x.a) && x.a >= 0 && x.a < (ings[x.i].alternatives?.length ?? 0));
+      const t = adjustScan(c.scan.totals, ings, portion, exclude, swap);
       return { name: (ar && c.scan.dish_name_local ? c.scan.dish_name_local : c.scan.dish_name).slice(0, 120), ...t, source: "scan", source_id: r.id };
     }
     if (c?.recipe) return { name: c.recipe.name.slice(0, 120), calories: Math.round(c.recipe.calories * portion), protein_g: r1(c.recipe.protein * portion), carbs_g: null, fat_g: null, source: "scan", source_id: r.id };

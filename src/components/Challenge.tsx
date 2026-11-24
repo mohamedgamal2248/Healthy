@@ -5,7 +5,7 @@ import { BADGES } from "@/data/badges";
 
 const TYPE_ICON: Record<string, string> = {
   water: "drop", steps: "steps", walk: "steps", sleep: "moon", no_sugar: "shield", no_soda: "shield", vegetables: "leaf", fruit: "carrot",
-  no_late_food: "clock", no_fried: "flame", stretch: "sparkles", mindful: "heart", protein: "utensils",
+  no_late_food: "clock", custom: "sparkles", no_fried: "flame", stretch: "sparkles", mindful: "heart", protein: "utensils",
 };
 const TYPE_TONE: Record<string, string> = { water: "bg-sky-50 text-sky-600", sleep: "bg-indigo-50 text-indigo-600", steps: "bg-brand-50 text-brand-600", walk: "bg-brand-50 text-brand-600" };
 
@@ -23,7 +23,7 @@ export function ChallengeCard({ c, onDone, onSwap, canSwap, busy }: { c: Challen
         <p className={`font-extrabold leading-snug ${done ? "text-brand-800" : ""}`}>{lang === "ar" ? c.title_ar : c.title_en}</p>
         {done && <p className="text-xs font-bold text-brand-700">{tr("أحسنت! تم الإنجاز", "Done, well done!")}</p>}
       </div>
-      {!done && canSwap && onSwap && (
+      {!done && canSwap && onSwap && c.type !== "custom" && (
         <button className="btn-ghost btn-sm !px-2.5" onClick={() => onSwap(c.id)} disabled={busy} aria-label={tr("تبديل التحدي", "Swap challenge")} title={tr("تبديل التحدي (مرة واحدة يوميًا)", "Swap (once a day)")}>
           <Icon name="swap" size={20} />
         </button>

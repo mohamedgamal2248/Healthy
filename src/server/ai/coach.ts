@@ -3,6 +3,7 @@ import { callModel, extractJson, AiNotConfigured, timeLeftMs } from "./provider"
 import { outputIsSafe, REFUSAL_AR, safeRefusalText } from "./safety";
 import { AiRefused, AiUnusable, type ProfileContext } from "./recipe";
 import { langInstruction } from "./lang";
+import { prefsLines } from "./context";
 
 export type CoachKind = "recipe" | "workout" | "challenge";
 export const COACH_KINDS: CoachKind[] = ["recipe", "workout", "challenge"];
@@ -48,9 +49,10 @@ function profileNotes(p: ProfileContext) {
 export function cardSystemPrompt(kind: Exclude<CoachKind, "recipe">, p: ProfileContext): string {
   const task =
     kind === "workout"
-      ? "اكتب برنامج تمرين منزلي عام واحد للمبتدئين: أقسام (إحماء، تمارين رئيسية بعدد التكرارات أو الزمن وفترات الراحة، تهدئة). بدون أجهزة، وآمن، وانصح بالتوقف عند الألم أو الدوخة."
+      ? `اكتب برنامج تمرين منزلي عام واحد${p.prefs?.level ? "" : " للمبتدئين"}: أقسام (إحماء، تمارين رئيسية بعدد التكرارات أو الزمن وفترات الراحة، تهدئة). ${p.prefs?.equipment.length ? "التزم بالأدوات المتاحة المذكورة أدناه." : "بدون أجهزة."} وآمن، وانصح بالتوقف عند الألم أو الدوخة.`
       : "اكتب تحدّي صحيًا مخصصًا لمدة ٧ أيام: قسم لكل مرحلة أو أيام، وبنود صغيرة قابلة للتنفيذ يوميًا (مياه، حركة، نوم، أكل)، وكيف يتابع المستخدم تقدمه.";
-  return `أنت "الكوتش" في تطبيق Healthy. ${task}\nأرجع JSON بالشكل التالي بالضبط:\n${SHAPE}\n\n${COMMON}\n${profileNotes(p)}${langInstruction(p.lang ?? "ar")}`;
+  const pl = p.prefs ? prefsLines(p.prefs, kind) : "";
+  return `أنت "الكوتش" في تطبيق Healthy. ${task}\nأرجع JSON بالشكل التالي بالضبط:\n${SHAPE}\n\n${COMMON}\n${profileNotes(p)}${pl ? `\n${pl}` : ""}${langInstruction(p.lang ?? "ar")}`;
 }
 
 export async function generateCard(kind: Exclude<CoachKind, "recipe">, userText: string, profile: ProfileContext): Promise<Card> {
