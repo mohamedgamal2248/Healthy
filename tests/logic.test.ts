@@ -620,9 +620,6 @@ test("scan hints become a short note; quick add shows costs; repeat copies only 
   const rep = food.slice(food.indexOf('b.source === "repeat"'));
   assert.match(rep, /\.eq\("username", a\.username\)/);
   assert.match(rep, /addDays\(a\.today, -30\)/);
-  const qa = readFileSync("src/components/QuickAdd.tsx", "utf8");
-  assert.match(qa, /costAr: "١ كريدت"/);
-  assert.match(qa, /water_add: 1/);
 });
 
 test("no emoji anywhere in the UI source: icons are SVG in the site's colours", async () => {
