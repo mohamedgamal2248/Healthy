@@ -1,3 +1,4 @@
+import { dailyWaterCups } from "@/lib/nutrition";
 import { db, must } from "./supabase";
 import { ensureSeeded } from "./seed";
 import { grantTrial } from "./credits";
@@ -47,6 +48,13 @@ async function rowsForDay(username: string, date: string) {
   ) as unknown as { id: string; challenge_id: string; status: "assigned" | "swapped" | "completed"; challenges: Omit<ChallengeRow, "id" | "active"> }[];
 }
 
+/** Water challenges use the user's own daily water target, so Today, the plan and Progress show one number. */
+function personalise(c: TodayChallenge, a: Auth): TodayChallenge {
+  if (c.type !== "water" || !a.profile.weight_kg) return c;
+  const cups = dailyWaterCups(Number(a.profile.weight_kg));
+  return { ...c, target_value: cups, title_ar: `اشرب ${cups.toLocaleString("ar-EG")} أكواب مياه`, title_en: `Drink ${cups} cups of water` };
+}
+
 /** Assign today's 3 challenges on first visit of the local day. */
 export async function ensureToday(a: Auth) {
   let rows = await rowsForDay(a.username, a.today);
@@ -66,7 +74,7 @@ export async function ensureToday(a: Auth) {
   const swapUsed = rows.some((r) => r.status === "swapped");
   const list: TodayChallenge[] = rows
     .filter((r) => r.status !== "swapped")
-    .map((r) => ({ id: r.id, challenge_id: r.challenge_id, status: r.status as "assigned" | "completed", ...r.challenges }));
+    .map((r) => personalise({ id: r.id, challenge_id: r.challenge_id, status: r.status as "assigned" | "completed", ...r.challenges }, a));
   return { rows: list, swapUsed };
 }
 

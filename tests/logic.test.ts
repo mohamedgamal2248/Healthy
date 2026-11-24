@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { applyCompletion, effectiveStreak, freezeAvailable, isFrozen, streakBadges, type StreakState } from "../src/lib/streak";
 import { addDays, weekStart, localDate } from "../src/lib/dates";
 import { dailyCalories, clampCalories, weeklyAdjustment } from "../src/lib/nutrition";
-import { buildWeekPlan } from "../src/lib/planner";
+import { buildWeekPlan, SNACKS } from "../src/lib/planner";
 import { MEAL_SEEDS } from "../src/data/meals";
 import { paymentMismatch, memoFor, completedProperly } from "../src/server/payment-verify";
 import { isRefusalRequest, normalizeText, outputIsSafe } from "../src/server/ai/safety";
@@ -68,6 +68,7 @@ test("week plan: 7 days x 3 meals, respects condition tags and 1,200 floor", () 
   assert.equal(r.calorieTarget, 1200);
   assert.equal(r.days.length, 7);
   for (const d of r.days) for (const s of d.slots) {
+    if (s.type === "snack") { assert.ok(SNACKS.find((x) => x.id === s.meal_id)!.tags.includes("diabetes_friendly")); continue; }
     const m = meals.find((x) => x.id === s.meal_id)!;
     assert.ok(m.tags.includes("diabetes_friendly") && m.tags.includes("low_salt"), m.id);
   }
@@ -792,17 +793,19 @@ test("diet plan: every day matches the daily target (+-5%), affordable Egyptian 
   assert.ok(!pool.some((m) => /shrimp|avocado|coconut|bulgogi|curry|taco|salmon/i.test(`${m.id} ${m.name_en}`)));
   assert.ok(planPool(meals, true).length > pool.length, "international / premium is an explicit opt-in");
   for (const target of [1300, 1800, 2200, 2830]) {
-    const plan = buildWeekPlan({ meals: pool, calorieTarget: target, conditions: [], goal: "maintain", weekStart: "2026-11-23", seed: "t" });
+    const plan = buildWeekPlan({ meals: pool, calorieTarget: target, conditions: [], goal: "maintain", weekStart: "2026-11-23", seed: "t", weightKg: target / 30 });
     for (const d of plan.days) {
       assert.ok(Math.abs(d.total_kcal - target) <= target * 0.05, `${target}: ${d.total_kcal}`);
       assert.equal(d.total_kcal, d.slots.reduce((n, s) => n + s.calories, 0));
-      assert.ok(d.slots.every((s) => s.servings >= 0.5 && s.servings <= 3 && Number.isInteger(s.servings * 4)));
+      // Realistic portions: 0.75x .. 1.5x, quarter steps; snacks stay one serving and fill the rest (at most 3).
+      assert.ok(d.slots.every((s) => s.servings >= 0.75 && s.servings <= 1.5 && Number.isInteger(s.servings * 4)), JSON.stringify(d.slots.map((s) => s.servings)));
+      assert.ok(d.slots.filter((s) => s.type === "snack").length <= 3);
     }
   }
   const { readFileSync } = await import("node:fs");
   const page = readFileSync("src/app/plan/page.tsx", "utf8");
   assert.match(page, /day\.total_kcal\} \/ \{plan\.daily_calorie_target\}/);
-  assert.match(page, /تعني حصة مضاعفة/);
+  assert.match(page, /حصة ونصف/);
 });
 
 test("Arabic UI: diary meals keep both names; progress average is over logged days; weight has one source; pricing never flashes a wrong state", async () => {

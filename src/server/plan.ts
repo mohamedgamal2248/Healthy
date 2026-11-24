@@ -5,7 +5,7 @@ import { addDays, weekStart } from "@/lib/dates";
 import { weeklyInsight } from "./ai/extra";
 import { dailyTarget } from "./food";
 import { bmr, dailyCalories, dailyWaterCups, weeklyAdjustment, type Goal, type Activity, type Sex } from "@/lib/nutrition";
-import { buildWeekPlan, isAffordable, planPool, rebalanceDay, requiredTags, type PlanMealRef, type PlanDay } from "@/lib/planner";
+import { buildWeekPlan, isAffordable, MAX_SERV, planPool, rebalanceDay, requiredTags, type PlanMealRef, type PlanDay } from "@/lib/planner";
 import { MEAL_SEEDS } from "@/data/meals";
 import { hasActivePlan, refundCredit, spendCredit } from "./credits";
 import { aiConfigured, trackUsage, estimateCostUsd, type Usage } from "./ai/provider";
@@ -56,7 +56,7 @@ async function generate(a: Auth, week: string, kind: "first" | "refresh" | "rege
   const allMeals = must(await db().from("hl_meals").select("id,meal_type,name_ar,name_en,calories,protein_g,tags,cuisine,ingredients").eq("active", true)) as PlanMealRef[];
   // Default plan: the affordable Egyptian set only. International / premium meals only when the user opted in.
   const meals = planPool(allMeals, !!(p as { plan_premium?: boolean }).plan_premium);
-  const built = buildWeekPlan({ meals, calorieTarget, conditions: p.conditions, goal: p.goal, weekStart: week, seed: `${a.username}:${week}` });
+  const built = buildWeekPlan({ meals, calorieTarget, conditions: p.conditions, goal: p.goal, weekStart: week, seed: `${a.username}:${week}`, weightKg: input.weightKg });
 
   // Complete slots the catalogue cannot fill (e.g. no meal carries the required condition tags) with AI.
   let aiFilled = 0;
@@ -88,7 +88,7 @@ async function generate(a: Auth, week: string, kind: "first" | "refresh" | "rege
     } catch (e) { console.error("[plan] ai gap fill", e instanceof Error ? e.message : e); }
     aiUsage = usage;
     for (const d of built.days) {
-      const order = { breakfast: 0, lunch: 1, dinner: 2 } as const;
+      const order = { breakfast: 0, lunch: 1, dinner: 2, snack: 3 } as const;
       d.slots.sort((x, y) => order[x.type] - order[y.type]);
       rebalanceDay(d.slots, calorieTarget); // AI-filled slots change the total: balance the day again
       d.total_kcal = d.slots.reduce((s, x) => s + x.calories, 0);
@@ -154,10 +154,12 @@ export async function createPlan(a: Auth, mode: "auto" | "regenerate"): Promise<
  */
 const CUISINE = new Map(MEAL_SEEDS.map((m) => [m.id, m.cuisine]));
 export function planNeedsRepair(p: StoredPlan, premium: boolean): boolean {
+  // Plans from before the realistic-portion rule (up to 3x servings) are rebuilt once with snacks instead.
+  if (p.plan.days.some((d) => d.slots.some((s) => s.servings > MAX_SERV))) return true;
   if (p.plan.notes?.balanced) return false; // built by the current rules: never rebuilt again (no loop)
   const target = p.daily_calorie_target;
   const off = p.plan.days.some((d) => d.slots.length >= 3 && Math.abs(d.total_kcal - target) > target * 0.05);
-  const imported = !premium && p.plan.days.some((d) => d.slots.some((s) => s.source === "catalogue" && s.meal_id && !isAffordable({ id: s.meal_id, meal_type: s.type, name_ar: s.name_ar, name_en: s.name_en, calories: 0, protein_g: 0, tags: [], cuisine: CUISINE.get(s.meal_id) })));
+  const imported = !premium && p.plan.days.some((d) => d.slots.some((s) => s.source === "catalogue" && s.meal_id && s.type !== "snack" && !isAffordable({ id: s.meal_id, meal_type: s.type, name_ar: s.name_ar, name_en: s.name_en, calories: 0, protein_g: 0, tags: [], cuisine: CUISINE.get(s.meal_id) })));
   return off || imported;
 }
 export async function repairPlansIfNeeded(a: Auth): Promise<void> {

@@ -13,7 +13,7 @@ import { WeeklyCard } from "@/components/WeeklyCard";
 type P = {
   today: string; weights: { weight_kg: number; logged_date: string; is_official: boolean }[]; habitToday: { water_cups: number | null; sleep_hours: number | null; steps: number | null } | null;
   habitsWeek: { date: string; water_cups: number | null }[]; weekDays: string[]; streak: { current: number; longest: number; total: number }; badges: { badge_key: string }[]; waterTarget: number;
-  goal?: "lose" | "gain" | "maintain" | null; calories?: { avg7: number | null; daysLogged: number; target: number | null };
+  goal?: "lose" | "gain" | "maintain" | null; calories?: { avg7: number | null; daysLogged: number; partialDays?: number; target: number | null };
 };
 
 const goalLabel = (g: string, l: "ar" | "en") => ({ lose: ["خسارة وزن", "lose weight"], gain: ["زيادة وزن", "gain weight"], maintain: ["ثبات الوزن", "keep weight"] } as Record<string, [string, string]>)[g]?.[l === "ar" ? 0 : 1] ?? "";
@@ -108,8 +108,8 @@ function Inner() {
 
       {d.calories && (
         <Link href="/diary" className="card flex items-center justify-between gap-3">
-          <span><span className="block text-sm font-bold text-ink-soft">{tr(`متوسط سعراتك في الأيام المسجّلة فقط (${d.calories.daysLogged} من ٧ أيام)`, `Average over logged days only (${d.calories.daysLogged} of 7 days)`)}</span><span className="block text-3xl font-extrabold tabular-nums">{d.calories.avg7 ?? "—"}</span></span>
-          <span className="text-end text-xs font-bold">{d.calories.avg7 === null ? <span className="text-ink-soft">{tr("سجّل أكلك لتظهر", "Log food to see it")}</span> : d.calories.target ? (Math.abs(d.calories.avg7 - d.calories.target) <= d.calories.target * 0.1 ? <span className="text-brand-700">{tr("ضمن هدفك", "On target")}</span> : <span className="text-sun-600">{d.calories.avg7 > d.calories.target ? tr(`أعلى من هدفك (${d.calories.target})`, `Above your goal (${d.calories.target})`) : tr(`أقل من هدفك (${d.calories.target})`, `Below your goal (${d.calories.target})`)}</span>) : null}<span className="block text-ink-soft">{tr(`${d.calories.daysLogged} أيام مسجّلة`, `${d.calories.daysLogged} days logged`)}</span></span>
+          <span><span className="block text-sm font-bold text-ink-soft">{tr(`متوسط سعراتك في الأيام المسجّلة كاملة (${d.calories.daysLogged} من ٧ أيام)`, `Average over fully logged days only (${d.calories.daysLogged} of 7 days)`)}</span><span className="block text-3xl font-extrabold tabular-nums">{d.calories.avg7 ?? "—"}</span></span>
+          <span className="text-end text-xs font-bold">{d.calories.avg7 === null ? <span className="text-ink-soft">{d.calories.partialDays ? tr("سجّل كل وجبات اليوم ليظهر", "Log a full day to see it") : tr("سجّل أكلك لتظهر", "Log food to see it")}</span> : d.calories.target ? (Math.abs(d.calories.avg7 - d.calories.target) <= d.calories.target * 0.1 ? <span className="text-brand-700">{tr("ضمن هدفك", "On target")}</span> : <span className="text-sun-600">{d.calories.avg7 > d.calories.target ? tr(`أعلى من هدفك (${d.calories.target})`, `Above your goal (${d.calories.target})`) : tr(`أقل من هدفك (${d.calories.target})`, `Below your goal (${d.calories.target})`)}</span>) : null}<span className="block text-ink-soft">{tr(`${d.calories.daysLogged} أيام مسجّلة`, `${d.calories.daysLogged} days logged`)}</span></span>
         </Link>
       )}
 

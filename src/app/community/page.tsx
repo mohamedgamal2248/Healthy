@@ -16,6 +16,8 @@ type Pub = {
 };
 type Mine = { joined: boolean; myDays: number; checkedToday: boolean; hidden: boolean; myTeam: string; likedIds: string[]; savedIds: string[] };
 type PR = { id: string; title: string; author: string; calories?: number; protein?: number; likes: number; saves: number };
+/** Below this many members, counts and ranks are hidden: they say little and make a new group look empty. */
+const SMALL_GROUP = 5;
 type Row = { rank: number; username: string; days: number; streak: number };
 type R = PR & { liked: boolean; saved: boolean };
 
@@ -55,7 +57,7 @@ function Inner() {
       <section className="overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-sun-500 to-sun-600 p-5 text-white shadow-(--shadow-card)">
         <p className="flex items-center gap-2 text-sm font-extrabold text-sun-100"><Icon name="users" size={18} />{tr("تحدي الأسبوع الجماعي", "This week's group challenge")}</p>
         <h2 className="mt-1 text-2xl font-extrabold leading-snug">{lang === "ar" ? d.group.title_ar : d.group.title_en}</h2>
-        <p className="mt-1 text-sm font-bold text-sun-100">{tr(`${d.stats.members} بايونير انضموا · ${d.stats.checkedToday} سجّلوا اليوم`, `${d.stats.members} pioneers joined · ${d.stats.checkedToday} checked in today`)}{myRank ? tr(` · ترتيبك ${myRank}`, ` · your rank ${myRank}`) : ""}</p>
+        <p className="mt-1 text-sm font-bold text-sun-100">{d.stats.members >= SMALL_GROUP ? <>{tr(`${d.stats.members} بايونير انضموا · ${d.stats.checkedToday} سجّلوا اليوم`, `${d.stats.members} pioneers joined · ${d.stats.checkedToday} checked in today`)}{myRank ? tr(` · ترتيبك ${myRank}`, ` · your rank ${myRank}`) : ""}</> : tr("تحدي الأسبوع لكل البايونيرز: انضم وادعُ أصحابك.", "This week's challenge for every Pioneer: join and invite your friends.")}</p>
         {d.joined ? (
           <div className="mt-4 flex items-center gap-3">
             <div className="flex-1"><div className="h-3 overflow-hidden rounded-full bg-white/30"><div className="h-full rounded-full bg-white" style={{ width: `${Math.min(100, (d.myDays / 7) * 100)}%` }} /></div><p className="mt-1 text-sm font-bold">{d.myDays}/7 {tr("أيام", "days")}</p></div>

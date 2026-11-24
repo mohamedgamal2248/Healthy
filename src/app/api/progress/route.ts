@@ -20,16 +20,19 @@ export const GET = route(async (req) => {
     db().from("hl_food_log").select("date,calories").eq("username", a.username).gte("date", from).lte("date", a.today).limit(300),
     dailyTarget(a),
   ]);
-  // Average over the days that have at least one entry (an empty day is "not logged", not "ate nothing").
-  const perDay = new Map<string, number>();
-  for (const r of must(food) as { date: string; calories: number }[]) perDay.set(r.date, (perDay.get(r.date) ?? 0) + r.calories);
+  // Average over fully logged days only: an empty day is "not logged", and a day under half the target is a partial log
+  // (one snack entered), not "ate 300 kcal". Counting those would make the average look like starvation.
+  const allDays = new Map<string, number>();
+  for (const r of must(food) as { date: string; calories: number }[]) allDays.set(r.date, (allDays.get(r.date) ?? 0) + r.calories);
+  const minFullDay = target ? target * 0.5 : 800;
+  const perDay = new Map([...allDays].filter(([, kcal]) => kcal >= minFullDay));
   const avgCalories = perDay.size ? Math.round([...perDay.values()].reduce((n, v) => n + v, 0) / perDay.size) : null;
   const hs = must(habits) as { date: string; water_cups: number | null; sleep_hours: number | null; steps: number | null }[];
   return ok({
     today: a.today,
     weights: (must(weights) as unknown[]).reverse(),
     goal: a.profile.goal,
-    calories: { avg7: avgCalories, daysLogged: perDay.size, target },
+    calories: { avg7: avgCalories, daysLogged: perDay.size, partialDays: allDays.size - perDay.size, target },
     habitToday: hs.find((h) => h.date === a.today) ?? null,
     habitsWeek: hs,
     streak: { current: effectiveStreak(streak, a.today), longest: streak.longest, total: streak.total },
