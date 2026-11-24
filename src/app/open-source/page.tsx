@@ -19,11 +19,10 @@ export default function OpenSource() {
       <section className="card space-y-2">
         <h2 className="h2 flex items-center gap-2"><Icon name="book" size={20} />{tr("الرخصة", "The license")}</h2>
         <p className="muted !text-base leading-relaxed">{tr("الكود يُنشر برخصة PiOS التي تسمح بالنسخ والتعديل وبناء أعمال مشتقة، بشرط استخدامها لتطوير وتشغيل وتسويق تطبيقات لشبكة Pi الرسمية فقط. الرخصة موجودة كما هي في ملف LICENSE.", "The code is published under the PiOS license. It allows copying, modification and derivative works, solely to develop, use and market applications for the official Pi Network. The license is included unchanged in the LICENSE file.")}</p>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <a className="btn-primary btn-sm" href={REPO} target="_blank" rel="noopener noreferrer"><Icon name="share" size={16} />{tr("المستودع على GitHub", "Repository on GitHub")}</a>
-          <a className="btn-ghost btn-sm" href={`${REPO}/blob/main/LICENSE`} target="_blank" rel="noopener noreferrer">{tr("نص الرخصة", "License text")}</a>
-          <a className="btn-ghost btn-sm" href="https://github.com/pi-apps/PiOS" target="_blank" rel="noopener noreferrer">PiOS</a>
-        </div>
+        <ul className="space-y-1 pt-1 text-sm" dir="ltr">
+          <li className="chip select-all">{REPO}</li>
+          <li className="chip select-all">https://github.com/pi-apps/PiOS</li>
+        </ul>
       </section>
 
       <section className="card space-y-2">

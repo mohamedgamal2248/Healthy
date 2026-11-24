@@ -153,7 +153,7 @@ Verification (`src/server/payment-verify.ts`) checks, against the **purchase row
 
 The grant is a single SQL transaction (`hl_complete_purchase`) that takes a per-purchase lock, so concurrent completions cannot grant twice. Recovery is built in: `reconcileOne` for stuck payments, `/api/payments/incomplete` for payments left open by the SDK, and a daily cron job.
 
-Items are a monthly plan (30 days, no auto-renewal) and two credit packs. Prices are set in US dollars, converted to Pi by the server at purchase time (live rate, rounded up to a whole Pi), shown in the app in Pi before the Pioneer confirms, and locked for 30 minutes. Definitions live in `src/config/pricing.ts`; `PRICING_MODE=fixed` uses fixed Pi amounts (useful on a Testnet staging copy, where Test-Pi has no market price).
+Items are a monthly plan (30 days, no auto-renewal) and two credit packs. Prices are shown in the app in Pi before the Pioneer confirms (the server adjusts them to the market at purchase time, rounded to a whole Pi) and locked for 30 minutes. Definitions live in `src/config/pricing.ts`; `PRICING_MODE=fixed` uses fixed Pi amounts (useful on a Testnet staging copy, where Test-Pi has no market price).
 
 ## Reminders at your own hour
 
