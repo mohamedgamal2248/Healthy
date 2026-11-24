@@ -5,6 +5,7 @@ import { adminUsernames, requireUser } from "@/server/auth";
 import { getBalances } from "@/server/credits";
 import { rateLimit } from "@/server/ratelimit";
 import { validTz } from "@/lib/dates";
+import { latestWeight, logWeight } from "@/server/weight";
 import { ALLERGENS, EQUIPMENT, JOINTS, LEVELS, cleanDislikes } from "@/lib/ai-prefs";
 
 export const GET = route(async (req) => {
@@ -12,7 +13,8 @@ export const GET = route(async (req) => {
   const balances = a.profile.kyc_verified ? await getBalances(a.username) : null;
   const { pi_uid: _uid, token_version: _tv, deleted_at: _d, created_at: _c, ...profile } = a.profile;
   void _uid; void _tv; void _d; void _c;
-  return ok({ profile, balances, isAdmin: adminUsernames().includes(a.username.toLowerCase()) });
+  const lw = await latestWeight(a.username);
+  return ok({ profile: { ...profile, weight_kg: lw ? lw.kg : profile.weight_kg, weight_date: lw?.date ?? null }, balances, isAdmin: adminUsernames().includes(a.username.toLowerCase()) });
 });
 
 const Patch = z.object({
@@ -29,6 +31,7 @@ const Patch = z.object({
   fitness_level: z.enum(LEVELS).nullable().optional(),
   avoid_joints: z.array(z.enum(JOINTS)).max(4).optional(),
   household: z.number().int().min(1).max(8).nullable().optional(),
+  plan_premium: z.boolean().optional(),
   language: z.enum(["ar", "en"]).optional(),
   timezone: z.string().max(60).optional(),
   leaderboard_visible: z.boolean().optional(),
@@ -42,6 +45,9 @@ export const PATCH = route(async (req) => {
   const parsed = Patch.safeParse(await readJson(req));
   if (!parsed.success) throw E.bad("بيانات الملف الصحي غير صالحة.", "Invalid profile data.");
   const { accept_disclaimer, ...fields } = parsed.data;
+  // A weight typed in the profile is a dated log entry like any other (one source of truth); it is not written to the profile directly.
+  const newWeight = fields.weight_kg;
+  delete (fields as { weight_kg?: unknown }).weight_kg;
   if (fields.dislikes !== undefined) fields.dislikes = cleanDislikes(fields.dislikes) || null;
   const update: Record<string, unknown> = { ...fields, updated_at: new Date().toISOString() };
   const merged = { ...a.profile, ...fields };
@@ -56,6 +62,7 @@ export const PATCH = route(async (req) => {
     update.disclaimer_accepted_at = a.profile.disclaimer_accepted_at ?? new Date().toISOString();
   }
   must(await db().from("hl_profiles").update(update).eq("username", a.username));
+  if (typeof newWeight === "number" && Number(a.profile.weight_kg) !== newWeight) await logWeight(a, newWeight);
   return ok({ ok: true });
 });
 

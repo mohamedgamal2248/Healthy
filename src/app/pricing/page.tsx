@@ -39,18 +39,20 @@ export default function PricingPage() {
   }, [handoff, ready, data, me, signIn]);
   const verified = !!me?.profile.kyc_verified;
   const planActive = !!me?.balances?.planActive;
+  const planLoaded = !!me?.balances; // until the balances arrive we show a neutral placeholder, never "Not active"
+  const expiresAt = expires ?? me?.balances?.planExpiresAt ?? null;
 
   return (
     <div className="mx-auto max-w-6xl py-6">
       <PageHeader title={tr("الكريدت والباقات", "Credits & plans")} sub={tr("ادفع بـ Pi مرة واحدة، وتتفعّل الخدمة فور التحقق من الدفع على الخادم.", "Pay once with Pi; the service activates as soon as the server verifies the payment.")} />
-      {data?.network !== "mainnet" && <div className="mb-4"><Notice tone="info">{tr("التطبيق الآن على شبكة Pi التجريبية (Testnet): المدفوعات بعملة Pi التجريبية.", "The app is on the Pi Testnet: payments use Test Pi.")}</Notice></div>}
+      {data?.network === "testnet" && <div className="mb-4"><Notice tone="info">{tr("التطبيق الآن على شبكة Pi التجريبية (Testnet): المدفوعات بعملة Pi التجريبية.", "The app is on the Pi Testnet: payments use Test Pi.")}</Notice></div>}
       {me && (
         <div className="mb-6 grid gap-3 md:grid-cols-2">
-          <CreditBalance b={me.balances} />
+          {me.balances ? <CreditBalance b={me.balances} /> : verified ? <div className="card h-28 animate-pulse bg-brand-50" aria-label={tr("جارٍ التحميل", "Loading")} /> : null}
           <div className="card flex items-center gap-3">
             <div className="flex-1">
               <p className="text-sm font-extrabold text-ink-soft">{tr("الخطة الشهرية", "Monthly plan")}</p>
-              <p className="text-lg font-extrabold">{planActive && expires ? tr(`فعّالة حتى ${new Date(expires).toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric" })}`, `Active until ${new Date(expires).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`) : tr("غير مفعّلة", "Not active")}</p>
+              {!planLoaded ? <span className="block h-7 w-40 animate-pulse rounded-lg bg-brand-100" aria-label={tr("جارٍ التحميل", "Loading")} /> : <p className="text-lg font-extrabold">{planActive && expiresAt ? tr(`فعّالة حتى ${new Date(expiresAt).toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric" })}`, `Active until ${new Date(expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`) : tr("غير مفعّلة", "Not active")}</p>}
               {planActive && <p className="muted">{tr("لا يوجد تجديد تلقائي. يفتح زر التجديد عند انتهاء الـ ٣٠ يومًا.", "No auto-renewal. The renew button opens when the 30 days end.")}</p>}
             </div>
           </div>
@@ -66,9 +68,9 @@ export default function PricingPage() {
           trial={data.trialCredits}
           locked={signingIn || (!!me && !verified)}
           lockedKeys={planActive ? ["plan_monthly"] : []}
-          lockedNote={() => (expires ? tr(`التجديد متاح بعد ${new Date(expires).toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric" })}`, `Renewal opens on ${new Date(expires).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`) : "")}
+          lockedNote={() => (expiresAt ? tr(`التجديد متاح بعد ${new Date(expiresAt).toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric" })}`, `Renewal opens on ${new Date(expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`) : "")}
           onBuy={(i) => (me ? setBuy(i) : signIn())}
-          buyLabel={(i) => (!me ? tr("سجّل الدخول للشراء", "Sign in to buy") : i.kind === "plan" ? (planActive ? tr("الخطة فعّالة", "Plan active") : expires ? tr("تجديد الخطة", "Renew plan") : tr("اشترك الآن", "Subscribe")) : tr("اشترِ الباقة", "Buy pack"))}
+          buyLabel={(i) => (!me ? tr("سجّل الدخول للشراء", "Sign in to buy") : i.kind === "plan" ? (planActive ? tr("الخطة فعّالة", "Plan active") : expiresAt ? tr("تجديد الخطة", "Renew plan") : tr("اشترك الآن", "Subscribe")) : tr("اشترِ الباقة", "Buy pack"))}
         />
       )}
       {paid && new URLSearchParams(typeof window === "undefined" ? "" : window.location.search).get("handoff") === "1" && <div className="mt-4"><Notice tone="ok">{tr("تم الدفع. ارجع إلى المتصفح الذي كنت فيه وسيظهر رصيدك المحدّث تلقائيًا.", "Payment complete. Go back to the browser you came from and your updated balance will appear automatically.")}</Notice></div>}

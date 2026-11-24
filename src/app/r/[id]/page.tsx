@@ -13,8 +13,8 @@ export const dynamic = "force-dynamic";
 export default async function SharedRecipe({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
-  const { data: r } = await db().from("hl_recipes").select("title,content,username,shared").eq("id", id).maybeSingle();
-  if (!r || !r.shared) notFound();
+  const { data: r } = await db().from("hl_recipes").select("title,content,username,shared,hidden").eq("id", id).maybeSingle();
+  if (!r || !r.shared || r.hidden) notFound();
   const { data: author } = await db().from("hl_profiles").select("kyc_verified,deleted_at,leaderboard_visible").eq("username", r.username).maybeSingle();
   if (author?.deleted_at) notFound();
   return (

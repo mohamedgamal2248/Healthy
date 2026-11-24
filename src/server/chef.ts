@@ -4,7 +4,7 @@ import type { Auth } from "./auth";
 import { AI_LIMITS, RECIPE_COST } from "@/config/pricing";
 import { spendCredit, refundCredit } from "./credits";
 import { aiConfigured, AiNotConfigured, trackUsage, estimateCostUsd, type Usage } from "./ai/provider";
-import { generateRecipe, AiRefused, RecipeSchema, type Recipe } from "./ai/recipe";
+import { generateRecipe, AiRefused, RecipeSchema, recipeNumbersProblem, type Recipe } from "./ai/recipe";
 import { generateCard, CardSchema, isCoachKind, type Card, type CoachKind } from "./ai/coach";
 import { enforceGenerationLimits, withDeadline } from "./ai/limits";
 import { analyzeMealPhoto, validImage, type Scan } from "./ai/scan";
@@ -14,7 +14,7 @@ import { foodDay } from "./food";
 import { addDays } from "@/lib/dates";
 import { createHash } from "node:crypto";
 import { detectLang, asLang } from "./ai/lang";
-import { cautionsFor, hasMedicalFlag, isRefusalRequest, DOCTOR_NOTE_AR, DOCTOR_NOTE_EN, REFUSAL_AR, REFUSAL_EN } from "./ai/safety";
+import { asksForBulk, cautionsFor, hasMedicalFlag, isRefusalRequest, normalizeText, outputIsSafe, DOCTOR_NOTE_AR, DOCTOR_NOTE_EN, REFUSAL_AR, REFUSAL_EN } from "./ai/safety";
 
 export type CoachContent = {
   kind: CoachKind | "scan" | "fridge";
@@ -34,11 +34,16 @@ export function recipeCacheKey(text: string, goal: string | null, conditions: st
   return createHash("sha256").update(`${kind}|${lang}|${norm}|${goal ?? ""}|${[...conditions].sort().join(",")}${extra ? `|${extra}` : ""}`).digest("hex");
 }
 
-async function cachedOutput(key: string, kind: CoachKind): Promise<Recipe | Card | null> {
+/** A cached answer is checked again with today's rules, so an old entry can never bring back something we now refuse. */
+async function cachedOutput(key: string, kind: CoachKind, allowBulk = false): Promise<Recipe | Card | null> {
   const row = must(await db().from("hl_ai_cache").select("recipe,hits,created_at").eq("key", key).maybeSingle()) as { recipe: unknown; hits: number; created_at: string } | null;
   if (!row || Date.now() - new Date(row.created_at).getTime() > CACHE_DAYS * 86400000) return null;
   const parsed = (kind === "recipe" ? RecipeSchema : CardSchema).safeParse(row.recipe);
   if (!parsed.success) return null;
+  if (!outputIsSafe(JSON.stringify(parsed.data)) || (kind === "recipe" && recipeNumbersProblem(parsed.data as Recipe, allowBulk))) {
+    await db().from("hl_ai_cache").delete().eq("key", key);
+    return null;
+  }
   await db().from("hl_ai_cache").update({ hits: row.hits + 1 }).eq("key", key);
   return parsed.data;
 }
@@ -62,6 +67,31 @@ export function wrapContent(kind: CoachKind, out: Recipe | Card, conditions: str
     cautions: cautionsFor(conditions),
     doctor_note: hasMedicalFlag(conditions) ? { ar: DOCTOR_NOTE_AR, en: DOCTOR_NOTE_EN } : null,
   };
+}
+
+const SAVED_COLS = "id,title,content,shared,like_count,save_count,created_at,username";
+const normSig = (s: string) => normalizeText(s).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+/** Same dish = same normalised title + main ingredients (recipe), title + sections (workout / challenge), or the same three ideas (fridge). */
+export function resultSignature(c: CoachContent): string | null {
+  if (c.kind === "recipe" && c.recipe) return `recipe|${normSig(c.recipe.name)}|${c.recipe.ingredients.slice(0, 4).map((i) => normSig(i.item)).sort().join(",")}`;
+  if ((c.kind === "workout" || c.kind === "challenge") && c.card) return `${c.kind}|${normSig(c.card.name)}|${c.card.sections.map((x) => normSig(x.heading)).join(",")}`;
+  if (c.kind === "fridge" && c.fridge) return `fridge|${c.fridge.ideas.map((i) => normSig(i.name)).sort().join(",")}`;
+  return null;
+}
+/** The user's own saved result (last 30 days, visible) that is the same dish, or null. */
+async function findDuplicate(username: string, content: CoachContent) {
+  const sig = resultSignature(content);
+  if (!sig) return null;
+  const rows = must(await db().from("hl_recipes").select(SAVED_COLS).eq("username", username).eq("hidden", false).gte("created_at", new Date(Date.now() - 30 * 86400000).toISOString()).order("created_at", { ascending: false }).limit(80)) as { content: CoachContent }[];
+  return rows.find((r) => resultSignature(r.content) === sig) ?? null;
+}
+/** Returns the existing result instead of saving a copy, and gives the credit back (the user got nothing new). */
+async function duplicateOr<T>(username: string, requestId: string, content: CoachContent, usage: Usage): Promise<(T & { duplicate: true }) | null> {
+  const dup = await findDuplicate(username, content);
+  if (!dup) return null;
+  await refundCredit(requestId);
+  must(await db().from("hl_ai_requests").update({ status: "refunded", error: "duplicate", tokens_in: usage.tokensIn, tokens_out: usage.tokensOut, est_cost_usd: estimateCostUsd(usage) }).eq("id", requestId));
+  return { ...(dup as unknown as T), duplicate: true };
 }
 
 /** Today's eating so far + local time, so a meal request fits what is left. Never blocks the request if it fails. */
@@ -106,7 +136,7 @@ export async function coachGenerate(a: Auth, prompt: string, kindIn: unknown = "
         const prefs = prefsFromProfile(a.profile);
         const day = kind === "recipe" ? await dayContext(a) : null;
         const key = recipeCacheKey(text, a.profile.goal, a.profile.conditions, kind, lang, ctxKey(prefs, day));
-        let o = await cachedOutput(key, kind);
+        let o = await cachedOutput(key, kind, asksForBulk(text));
         if (!o) {
           const ctx = { goal: a.profile.goal, conditions: a.profile.conditions, lang, prefs, day };
           o = kind === "recipe" ? await generateRecipe(text, ctx) : await generateCard(kind, text, ctx);
@@ -119,6 +149,8 @@ export async function coachGenerate(a: Auth, prompt: string, kindIn: unknown = "
     usage = tracked.usage;
     const content = wrapContent(kind, out, a.profile.conditions);
     const title = "name" in out ? out.name : "";
+    const dup = await duplicateOr<{ id: string }>(a.username, req.id, content, usage);
+    if (dup) return dup;
     const saved = must(
       await db().from("hl_recipes").insert({ username: a.username, title, content, source_request_id: req.id }).select("id,title,content,shared,like_count,save_count,created_at,username").single(),
     );
@@ -214,6 +246,8 @@ export async function fridgeMeals(a: Auth, imageIn: unknown, textIn: unknown, ui
     usage = tracked.usage;
     const fridge = tracked.result;
     const content: CoachContent = { kind: "fridge", fridge, cautions: cautionsFor(a.profile.conditions), doctor_note: hasMedicalFlag(a.profile.conditions) ? { ar: DOCTOR_NOTE_AR, en: DOCTOR_NOTE_EN } : null };
+    const dupF = await duplicateOr<{ id: string }>(a.username, req.id, content, usage);
+    if (dupF) return dupF;
     const title = (lang === "en" ? "From my fridge: " : "من اللي عندي: ") + fridge.seen.slice(0, 3).join(lang === "en" ? ", " : "، ");
     const saved = must(
       await db().from("hl_recipes").insert({ username: a.username, title: title.slice(0, 120), content, source_request_id: req.id }).select("id,title,content,shared,like_count,save_count,created_at,username").single(),

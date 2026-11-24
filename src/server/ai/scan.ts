@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { callModel, extractJson, AiNotConfigured, timeLeftMs } from "./provider";
-import { outputIsSafe, normalizeText } from "./safety";
+import { outputIsSafe, normalizeText, haramHit, MAX_SINGLE_MEAL_KCAL } from "./safety";
 import { FOOD_REF_PROMPT, matchFoodRef } from "@/config/egypt-foods";
 import { AiRefused, AiUnusable } from "./recipe";
 import { langInstruction, type Lang } from "./lang";
@@ -35,6 +35,16 @@ export const ScanSchema = z.object({
   assumptions: z.array(z.string().trim().min(3).max(240)).min(1).max(6),
 });
 export type Scan = z.infer<typeof ScanSchema>;
+
+export const HARAM_AR_MSG = "الطبق ده فيه لحم خنزير أو كحول، وHealthy مابيحلّلش الأكل ده. تم استرجاع الكريدت.";
+export const HARAM_EN_MSG = "This plate contains pork or alcohol, which Healthy doesn't analyse. Your credit was refunded.";
+
+/** A single plate above the cap is shown as it is (it is a real plate) but with a plain note, so nobody logs it as one normal meal. */
+export function flagLarge(s: Scan, lang: Lang): Scan {
+  if (s.totals.calories.mid <= MAX_SINGLE_MEAL_KCAL || s.notes.length >= 5) return s;
+  const note = lang === "en" ? "This is a lot for one meal (over 900 kcal). It may be meant for sharing: use the portion buttons before adding it." : "ده كتير على وجبة واحدة (أكتر من ٩٠٠ سعرة). ممكن يكون لأكتر من شخص: استخدم أزرار الحصة قبل الإضافة.";
+  return { ...s, notes: [...s.notes, note] };
+}
 
 export const NOT_FOOD_AR = "ما قدرتش أشوف وجبة واضحة في الصورة. صوّر الطبق من فوق بإضاءة كويسة وحاول تاني، ولم يُخصم أي طلب.";
 export const NOT_FOOD_EN = "I couldn't see a clear meal in the photo. Take it from above in good light and try again; no request was used.";
@@ -101,9 +111,9 @@ export function scanInconsistency(s: Scan): string | null {
   const grams = s.ingredients.reduce((n, i) => n + i.grams, 0);
   if (grams > s.estimated_total_g * 1.6 + 50) return "grams_mismatch";
   const sum = s.ingredients.reduce((n, i) => n + i.kcal, 0);
-  if (sum < c.mid * 0.7 || sum > c.mid * 1.3) return "ingredients_sum_mismatch";
+  if (sum < c.mid * 0.8 || sum > c.mid * 1.2) return "ingredients_sum_mismatch"; // the total must match its ingredients within 20%
   const macroKcal = 4 * p.mid + 4 * s.totals.carbs_g + 9 * s.totals.fat_g;
-  if (macroKcal < c.mid * 0.7 || macroKcal > c.mid * 1.3) return "macros_mismatch";
+  if (macroKcal < c.mid * 0.8 || macroKcal > c.mid * 1.2) return "macros_mismatch"; // protein x4 + carbs x4 + fat x9 within 20% of the total
   if (c.high > c.mid * 2 || c.low < c.mid * 0.4) return "range_too_wide";
   return null;
 }
@@ -196,12 +206,13 @@ export async function analyzeMealPhoto(image: string, note: string, profile: { g
       if (!parsed.success) throw new AiUnusable("schema");
       const s = parsed.data;
       if (!s.is_food) throw new AiRefused(lang === "en" ? NOT_FOOD_EN : NOT_FOOD_AR);
+      if (haramHit(JSON.stringify(s))) throw new AiRefused(lang === "en" ? HARAM_EN_MSG : HARAM_AR_MSG);
       if (!outputIsSafe(JSON.stringify(s))) throw new AiUnusable("unsafe_content");
       const cal = calibrateScan(s, lang);
       const use = !scanInconsistency(cal) ? cal : s;
       const bad = scanInconsistency(use);
       if (bad) throw new AiUnusable(bad);
-      return use;
+      return flagLarge(use, lang);
     } catch (e) {
       if (e instanceof AiRefused || e instanceof AiNotConfigured) throw e;
       last = e;

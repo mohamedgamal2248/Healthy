@@ -5,7 +5,7 @@ import { addDays, weekStart } from "@/lib/dates";
 import { weeklyInsight } from "./ai/extra";
 import { dailyTarget } from "./food";
 import { bmr, dailyCalories, dailyWaterCups, weeklyAdjustment, type Goal, type Activity, type Sex } from "@/lib/nutrition";
-import { buildWeekPlan, requiredTags, type PlanMealRef, type PlanDay } from "@/lib/planner";
+import { buildWeekPlan, planPool, rebalanceDay, requiredTags, type PlanMealRef, type PlanDay } from "@/lib/planner";
 import { hasActivePlan, refundCredit, spendCredit } from "./credits";
 import { aiConfigured, trackUsage, estimateCostUsd, type Usage } from "./ai/provider";
 import { generateRecipe } from "./ai/recipe";
@@ -52,7 +52,9 @@ async function generate(a: Auth, week: string, kind: "first" | "refresh" | "rege
   const calorieTarget = dailyCalories(input); // never below 1,200 kcal
   const water = dailyWaterCups(input.weightKg);
 
-  const meals = must(await db().from("hl_meals").select("id,meal_type,name_ar,name_en,calories,protein_g,tags").eq("active", true)) as PlanMealRef[];
+  const allMeals = must(await db().from("hl_meals").select("id,meal_type,name_ar,name_en,calories,protein_g,tags,cuisine,ingredients").eq("active", true)) as PlanMealRef[];
+  // Default plan: the affordable Egyptian set only. International / premium meals only when the user opted in.
+  const meals = planPool(allMeals, !!(p as { plan_premium?: boolean }).plan_premium);
   const built = buildWeekPlan({ meals, calorieTarget, conditions: p.conditions, goal: p.goal, weekStart: week, seed: `${a.username}:${week}` });
 
   // Complete slots the catalogue cannot fill (e.g. no meal carries the required condition tags) with AI.
@@ -87,6 +89,7 @@ async function generate(a: Auth, week: string, kind: "first" | "refresh" | "rege
     for (const d of built.days) {
       const order = { breakfast: 0, lunch: 1, dinner: 2 } as const;
       d.slots.sort((x, y) => order[x.type] - order[y.type]);
+      rebalanceDay(d.slots, calorieTarget); // AI-filled slots change the total: balance the day again
       d.total_kcal = d.slots.reduce((s, x) => s + x.calories, 0);
     }
   }

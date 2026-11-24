@@ -83,6 +83,7 @@ function Inner() {
         <div className="card flex flex-col !p-3.5">
           <p className="text-sm font-bold text-ink-soft">{tr("وزنك", "Your weight")}</p>
           <p className="text-3xl font-extrabold tabular-nums">{latest ? latest.kg.toFixed(1) : "—"}<span className="text-base font-bold text-ink-soft"> {tr("كجم", "kg")}</span></p>
+          {latest && <p className="text-xs font-bold text-ink-soft">{new Date(`${latest.date}T12:00:00Z`).toLocaleDateString(tr("ar-EG", "en-GB"), { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}</p>}
           <p className="text-xs font-bold text-ink-soft">{change === null ? (d.goal ? tr(`هدفك: ${goalLabel(d.goal, "ar")}`, `Goal: ${goalLabel(d.goal, "en")}`) : tr("سجّل وزنك لتبدأ", "Log your weight to start")) : tr(`${change > 0 ? "+" : ""}${change.toFixed(1)} كجم منذ البداية`, `${change > 0 ? "+" : ""}${change.toFixed(1)} kg since you started`)}</p>
           <a href="#weight" className="btn-primary btn-sm mt-auto !mt-3"><Icon name="scale" size={16} />{tr("سجّل وزنك", "Log weight")}</a>
         </div>
@@ -107,7 +108,7 @@ function Inner() {
 
       {d.calories && (
         <Link href="/diary" className="card flex items-center justify-between gap-3">
-          <span><span className="block text-sm font-bold text-ink-soft">{tr("متوسط سعراتك اليومي (آخر ٧ أيام)", "Daily average calories (last 7 days)")}</span><span className="block text-3xl font-extrabold tabular-nums">{d.calories.avg7 ?? "—"}</span></span>
+          <span><span className="block text-sm font-bold text-ink-soft">{tr(`متوسط سعراتك في الأيام المسجّلة فقط (${d.calories.daysLogged} من ٧ أيام)`, `Average over logged days only (${d.calories.daysLogged} of 7 days)`)}</span><span className="block text-3xl font-extrabold tabular-nums">{d.calories.avg7 ?? "—"}</span></span>
           <span className="text-end text-xs font-bold">{d.calories.avg7 === null ? <span className="text-ink-soft">{tr("سجّل أكلك لتظهر", "Log food to see it")}</span> : d.calories.target ? (Math.abs(d.calories.avg7 - d.calories.target) <= d.calories.target * 0.1 ? <span className="text-brand-700">{tr("ضمن هدفك", "On target")}</span> : <span className="text-sun-600">{d.calories.avg7 > d.calories.target ? tr(`أعلى من هدفك (${d.calories.target})`, `Above your goal (${d.calories.target})`) : tr(`أقل من هدفك (${d.calories.target})`, `Below your goal (${d.calories.target})`)}</span>) : null}<span className="block text-ink-soft">{tr(`${d.calories.daysLogged} أيام مسجّلة`, `${d.calories.daysLogged} days logged`)}</span></span>
         </Link>
       )}

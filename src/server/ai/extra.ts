@@ -2,8 +2,8 @@
 // result, and the weekly insight. Same safety net as every other AI output: schema, safe-text and preference checks.
 import { z } from "zod";
 import { callModel, extractJson, AiNotConfigured, timeLeftMs } from "./provider";
-import { outputIsSafe, safeRefusalText, REFUSAL_AR } from "./safety";
-import { AiRefused, AiUnusable, RULES, profileLines, recipeSystemPrompt, validateRecipe, type ProfileContext, type Recipe } from "./recipe";
+import { outputIsSafe, safeRefusalText, REFUSAL_AR, asksForBulk } from "./safety";
+import { AiRefused, AiUnusable, RULES, profileLines, recipeSystemPrompt, validateRecipe, recipeNumbersProblem, type ProfileContext, type Recipe } from "./recipe";
 import { CardSchema, cardSystemPrompt, OFFTOPIC_AR, type Card } from "./coach";
 import { langInstruction, type Lang } from "./lang";
 import { violatesPrefs } from "./context";
@@ -53,11 +53,12 @@ ${RULES.replace(/^قواعد صارمة:\n/, "").replace(/- أجب بالعرب�
 ${profileLines(p)}${langInstruction(p.lang ?? "ar")}`;
 }
 
-export function validateFridge(raw: unknown, prefs?: ProfileContext["prefs"]): Fridge {
+export function validateFridge(raw: unknown, prefs?: ProfileContext["prefs"], allowBulk = false): Fridge {
   if (raw && typeof raw === "object" && "refusal" in raw) throw new AiRefused(safeRefusalText((raw as { refusal: unknown }).refusal, REFUSAL_AR));
   const parsed = FridgeSchema.safeParse(raw);
   if (!parsed.success) throw new AiUnusable("schema");
   if (!outputIsSafe(JSON.stringify(parsed.data))) throw new AiUnusable("unsafe_content");
+  for (const i of parsed.data.ideas) { const num = recipeNumbersProblem(i, allowBulk); if (num) throw new AiUnusable(num); }
   if (prefs) for (const i of parsed.data.ideas) { const bad = violatesPrefs([i.name, ...i.ingredients.map((x) => x.item)].join(" \n "), prefs); if (bad) throw new AiUnusable(`prefs:${bad}`); }
   return parsed.data;
 }
@@ -72,7 +73,7 @@ export async function generateFridge(text: string, image: string | null, profile
     if (attempt > 0 && Date.now() - t0 > 35_000 || timeLeftMs() < 25_000) break;
     try {
       const out = await callModel({ system, messages: [{ role: "user", content, ...(image ? { images: [image] } : {}) }], maxTokens: 3200 });
-      return validateFridge(extractJson(out), profile.prefs);
+      return validateFridge(extractJson(out), profile.prefs, asksForBulk(text));
     } catch (e) {
       if (e instanceof AiRefused || e instanceof AiNotConfigured) throw e;
       last = e;

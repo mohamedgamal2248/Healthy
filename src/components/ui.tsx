@@ -13,9 +13,12 @@ export function Spinner({ size = 22 }: { size?: number }) {
   );
 }
 
+/** Shaped like a real page (title, two stat cards, content rows) so the screen is never a blank white block while data loads. */
 export function PageSkeleton() {
   return (
-    <div className="space-y-3" aria-busy="true">
+    <div className="mx-auto max-w-3xl space-y-4 py-5" aria-busy="true" role="status" aria-label="loading">
+      <div className="space-y-2"><div className="skeleton h-8 w-44" /><div className="skeleton h-4 w-64 max-w-full" /></div>
+      <div className="grid grid-cols-2 gap-3"><div className="skeleton h-24" /><div className="skeleton h-24" /></div>
       <div className="skeleton h-28" />
       <div className="skeleton h-24" />
       <div className="skeleton h-24" />

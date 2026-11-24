@@ -310,7 +310,7 @@ export const ITEM_COPY = {
 export function itemBenefits(i: PriceItem, tr: (a: string, e: string) => string): string[] {
   return i.kind === "plan"
     ? [tr(`${i.credits} طلب AI شهريًا (وجبات، تمارين، تحديات)`, `${i.credits} AI requests per month (meals, workouts, challenges)`), tr("نظام غذائي شخصي يتجدد كل أسبوع", "Personal diet plan refreshed weekly"), tr("تقرير أسبوعي مفصّل", "Weekly report"), tr(`صالحة ${i.days} يومًا من تاريخ الدفع`, `Valid ${i.days} days from payment`)]
-    : [tr(`${i.credits} طلب AI (وجبات، تمارين، تحديات)`, `${i.credits} AI requests (meals, workouts, challenges)`), tr("بدون تاريخ انتهاء", "Never expires"), tr("كل طلب جديد = ١ كريدت", "Each new request = 1 credit")];
+    : [tr(`${i.credits} طلب AI (وجبات، تمارين، تحديات)`, `${i.credits} AI requests (meals, workouts, challenges)`), i.key === "pack_large" ? tr("بدون تاريخ انتهاء: سعر الطلب قريب من الخطة الشهرية لكن من غير حد ٣٠ يومًا", "Never expires: about the same price per request as the monthly plan, without the 30-day limit") : tr("بدون تاريخ انتهاء", "Never expires"), tr("كل طلب جديد = ١ كريدت", "Each new request = 1 credit")];
 }
 
 /** Pi payment sheet for plan and pack purchases (U2A only). The server verifies before granting anything. */
@@ -320,7 +320,7 @@ export function PaySheet({ item: itemIn, onClose, onPaid }: { item: PriceItem | 
   useEffect(() => {
     setFresh(null);
     if (!itemIn) return;
-    api<{ items: PriceItem[] }>("/pricing").then((r) => setFresh(r.items.find((x) => x.key === itemIn.key) ?? null)).catch(() => {});
+    api<{ items: PriceItem[] }>("/pricing?fresh=1").then((r) => setFresh(r.items.find((x) => x.key === itemIn.key) ?? null)).catch(() => {});
   }, [itemIn]);
   const item = fresh ?? itemIn;
   const [busy, setBusy] = useState(false);

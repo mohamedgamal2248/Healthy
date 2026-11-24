@@ -69,7 +69,7 @@ function Inner() {
   const [accept, setAccept] = useState(false);
   const [leader, setLeader] = useState(p.leaderboard_visible);
   const [f, setF] = useState<F>({ age: "", sex: "", weight: "", height: "", goal: "", activity: "", conditions: [] });
-  const [ai, setAi] = useState({ allergies: p.allergies ?? [], dislikes: p.dislikes ?? "", equipment: p.equipment ?? [], level: p.fitness_level ?? "", avoid: p.avoid_joints ?? [], household: p.household?.toString() ?? "" });
+  const [ai, setAi] = useState({ allergies: p.allergies ?? [], dislikes: p.dislikes ?? "", equipment: p.equipment ?? [], level: p.fitness_level ?? "", avoid: p.avoid_joints ?? [], household: p.household?.toString() ?? "", premium: !!p.plan_premium });
   const toggleAi = (k: "allergies" | "equipment" | "avoid", v: string) => setAi((x) => ({ ...x, [k]: x[k].includes(v) ? x[k].filter((y) => y !== v) : [...x[k], v] }));
   useEffect(() => {
     setF({ age: p.age?.toString() ?? "", sex: p.sex ?? "", weight: p.weight_kg?.toString() ?? "", height: p.height_cm?.toString() ?? "", goal: p.goal ?? "", activity: p.activity ?? "", conditions: p.conditions });
@@ -80,7 +80,7 @@ function Inner() {
   const toggleCond = (c: string) => set("conditions", f.conditions.includes(c) ? f.conditions.filter((x) => x !== c) : [...f.conditions, c]);
   const num = (s: string) => (s.trim() === "" ? null : Number(s));
 
-  const body = () => ({ age: num(f.age), sex: f.sex || null, weight_kg: num(f.weight), height_cm: num(f.height), goal: f.goal || null, activity: f.activity || null, conditions: f.conditions, leaderboard_visible: leader, allergies: ai.allergies, dislikes: ai.dislikes.trim() || null, equipment: ai.equipment, fitness_level: ai.level || null, avoid_joints: ai.avoid, household: ai.household ? Number(ai.household) : null });
+  const body = () => ({ age: num(f.age), sex: f.sex || null, weight_kg: num(f.weight), height_cm: num(f.height), goal: f.goal || null, activity: f.activity || null, conditions: f.conditions, leaderboard_visible: leader, allergies: ai.allergies, dislikes: ai.dislikes.trim() || null, equipment: ai.equipment, fitness_level: ai.level || null, avoid_joints: ai.avoid, household: ai.household ? Number(ai.household) : null, plan_premium: ai.premium });
   const save = async (acceptNow: boolean) => {
     setSaving(true);
     try {
@@ -105,6 +105,7 @@ function Inner() {
           <Field label={tr("الوزن (كجم)", "Weight (kg)")}><input className="field" inputMode="decimal" type="number" min={20} max={400} step="0.1" value={f.weight} onChange={(e) => set("weight", e.target.value)} /></Field>
           <Field label={tr("الطول (سم)", "Height (cm)")}><input className="field" inputMode="decimal" type="number" min={80} max={250} value={f.height} onChange={(e) => set("height", e.target.value)} /></Field>
         </div>
+        {me?.profile.weight_date && <p className="muted">{tr(`وزنك الحالي مسجّل بتاريخ ${new Date(`${me.profile.weight_date}T12:00:00Z`).toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}. أي وزن جديد تكتبه هنا يُسجَّل بتاريخ اليوم.`, `Your current weight was logged on ${new Date(`${me.profile.weight_date}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}. A new weight typed here is logged with today's date.`)}</p>}
         <p className="muted">{tr("يمكنك تخطي هذه الخطوة وإكمالها لاحقًا، لكن النظام الغذائي يحتاجها.", "You can skip this and complete it later, but the diet plan needs it.")}</p>
       </div>) },
     { title: tr("النشاط والحالة الصحية", "Activity and health"), valid: true, body: (
@@ -165,6 +166,7 @@ function Inner() {
         <div><span className="label">{tr("حساسية أكل (ممنوعة تمامًا في الوصفات)", "Food allergies (never used in recipes)")}</span>
           <div className="flex flex-wrap gap-2">{ALLERGENS.map((k) => (<button type="button" key={k} className="chip" aria-pressed={ai.allergies.includes(k)} onClick={() => toggleAi("allergies", k)}>{tr(PREF_LABELS[k].ar, PREF_LABELS[k].en)}</button>))}</div></div>
         <Field label={tr("أكل مش بتحبه (اختياري)", "Foods you dislike (optional)")}><input className="field" value={ai.dislikes} maxLength={80} onChange={(e) => setAi((x) => ({ ...x, dislikes: e.target.value }))} placeholder={tr("مثال: كوسة، سبانخ", "e.g. zucchini, spinach")} /></Field>
+        <label className="flex cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1 h-6 w-6 accent-brand-600" checked={ai.premium} onChange={(e) => setAi((x) => ({ ...x, premium: e.target.checked }))} /><span><span className="block font-bold">{tr("أضف وجبات عالمية ومكونات غالية لخطتي", "Include international and premium meals in my plan")}</span><span className="muted">{tr("الخطة الافتراضية من أكل مصري رخيص ومتوفر (فول وعدس وبيض وقريش وخضار موسمية).", "The default plan uses affordable Egyptian food (foul, lentils, eggs, cottage cheese, seasonal vegetables).")}</span></span></label>
         <Field label={tr("عدد الأشخاص اللي بتطبخ لهم", "People you cook for")}><input className="field" inputMode="numeric" type="number" min={1} max={8} value={ai.household} onChange={(e) => setAi((x) => ({ ...x, household: e.target.value }))} placeholder="1" /></Field>
         <div><span className="label">{tr("مستوى التمرين", "Fitness level")}</span><Choice label={tr("المستوى", "Level")} value={ai.level} onChange={(v) => setAi((x) => ({ ...x, level: v }))} options={LEVELS.map((k) => [k, tr(PREF_LABELS[k].ar, PREF_LABELS[k].en)] as [string, string])} /></div>
         <div><span className="label">{tr("أدوات عندك", "Equipment you have")}</span>

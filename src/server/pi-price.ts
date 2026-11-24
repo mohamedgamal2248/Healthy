@@ -12,7 +12,7 @@ let last: PiRate | null = null;
 export async function getPiRate(): Promise<PiRate> {
   if (last && Date.now() - last.asOf < TTL_MS) return last;
   try {
-    const res = await fetch(OKX, { cache: "no-store", signal: AbortSignal.timeout(6000) });
+    const res = await fetch(OKX, { cache: "no-store", signal: AbortSignal.timeout(2500) });
     const j = (await res.json()) as { data?: { last?: string }[] };
     const p = Number(j.data?.[0]?.last);
     if (Number.isFinite(p) && p >= SANE.min && p <= SANE.max) {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { AiNotConfigured, callModel, extractJson, type AiMessage, timeLeftMs } from "./provider";
-import { outputIsSafe, REFUSAL_AR, safeRefusalText } from "./safety";
+import { outputIsSafe, REFUSAL_AR, safeRefusalText, MAX_SINGLE_MEAL_KCAL, asksForBulk } from "./safety";
 import { MIN_DAILY_KCAL } from "@/config/pricing";
 import { langInstruction, type Lang } from "./lang";
 import { dayLines, prefsLines, violatesPrefs, type AiPrefs, type DayCtx } from "./context";
@@ -69,7 +69,14 @@ export function recipeViolation(r: Recipe, prefs?: AiPrefs): string | null {
   return violatesPrefs([r.name, ...r.ingredients.map((i) => i.item), ...r.substitutions.map((x) => x.use)].join(" \n "), prefs);
 }
 
-export function validateRecipe(raw: unknown, prefs?: AiPrefs): Recipe {
+/** Numbers that cannot be true together: protein alone worth more energy than the whole serving, or a single meal over the cap. */
+export function recipeNumbersProblem(r: { calories: number; protein: number }, allowBulk = false): string | null {
+  if (r.protein * 4 > r.calories * 1.1) return "protein_exceeds_calories";
+  if (!allowBulk && r.calories > MAX_SINGLE_MEAL_KCAL) return "meal_too_large";
+  return null;
+}
+
+export function validateRecipe(raw: unknown, prefs?: AiPrefs, allowBulk = false): Recipe {
   if (raw && typeof raw === "object" && "refusal" in raw) {
     throw new AiRefused(safeRefusalText((raw as { refusal: unknown }).refusal, REFUSAL_AR));
   }
@@ -78,6 +85,8 @@ export function validateRecipe(raw: unknown, prefs?: AiPrefs): Recipe {
   if (!outputIsSafe(JSON.stringify(parsed.data))) throw new AiUnusable("unsafe_content");
   const bad = recipeViolation(parsed.data, prefs);
   if (bad) throw new AiUnusable(`prefs:${bad}`);
+  const num = recipeNumbersProblem(parsed.data, allowBulk);
+  if (num) throw new AiUnusable(num);
   return parsed.data;
 }
 
@@ -91,10 +100,11 @@ export async function generateRecipe(userText: string, profile: ProfileContext):
     if (attempt > 0 && Date.now() - t0 > 35_000 || timeLeftMs() < 25_000) break; // never retry past the time budget
     try {
       const text = await callModel({ system, messages, webSearch: true, maxTokens: 2500 });
-      return validateRecipe(extractJson(text), profile.prefs);
+      return validateRecipe(extractJson(text), profile.prefs, asksForBulk(userText));
     } catch (e) {
       if (e instanceof AiRefused || e instanceof AiNotConfigured) throw e;
       lastErr = e;
+      if (e instanceof AiUnusable && e.message === "meal_too_large") messages = [{ role: "user", content: `${userText}\n\n(ملاحظة: ردك السابق تجاوز ٩٠٠ سعرة للوجبة الواحدة. اكتب وجبة واحدة بحد أقصى ٦٠٠ سعرة للفرد.)` }];
       if (e instanceof AiUnusable && e.message.startsWith("prefs:")) messages = [{ role: "user", content: `${userText}\n\n(ملاحظة: ردك السابق تضمّن «${e.message.slice(6)}» وهو ممنوع على هذا المستخدم. أعد الكتابة بدونه تمامًا.)` }];
     }
   }

@@ -14,7 +14,7 @@ import { CoachThinking } from "@/components/CoachThinking";
 import { CameraCapture } from "@/components/CameraCapture";
 import { toCompressedDataUrl } from "@/lib/image";
 
-type Recipe = { id: string; title: string; content: CoachContent; shared: boolean };
+type Recipe = { id: string; title: string; content: CoachContent; shared: boolean; duplicate?: boolean };
 type Kind = "recipe" | "workout" | "challenge" | "scan" | "fridge";
 
 const EXAMPLES: Record<Kind, { ar: string; en: string }[]> = {
@@ -97,7 +97,7 @@ function ChefInner() {
       if (kind === "fridge") { setPhoto(null); setPrompt(""); }
       setRecipe(r.recipe); setFav(false); setShareUrl(null); setTracked(false); setBalances(r.balances);
       refresh();
-      toast(tr("تم حفظ النتيجة في مكتبتك", "Result saved to your library"), "ok");
+      toast(r.recipe.duplicate ? tr("عندك نفس النتيجة محفوظة بالفعل، فرجّعنا لك الكريدت", "You already have this exact result saved, so your credit was returned") : tr("تم حفظ النتيجة في مكتبتك", "Result saved to your library"), "ok");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       if (e instanceof ApiError && e.code === "refused") setRefusal(tr(e.ar, e.en));

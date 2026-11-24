@@ -1,9 +1,8 @@
 import { z } from "zod";
-import { db, must } from "@/server/supabase";
 import { ok, readJson, route, E } from "@/server/http";
 import { requireUser } from "@/server/auth";
 import { rateLimit } from "@/server/ratelimit";
-import { weekStart } from "@/lib/dates";
+import { logWeight } from "@/server/weight";
 import { hasActivePlan } from "@/server/credits";
 import { createPlan } from "@/server/plan";
 
@@ -15,13 +14,9 @@ export const POST = route(async (req) => {
   await rateLimit("weight", a.username, 40, 3600);
   const parsed = Body.safeParse(await readJson(req));
   if (!parsed.success) throw E.bad("اكتب وزنًا صحيحًا بالكيلوجرام.", "Enter a valid weight in kg.");
-  const week = weekStart(a.today);
-  const official = must(await db().from("hl_weight_logs").select("id").eq("username", a.username).eq("week_start", week).eq("is_official", true).maybeSingle());
-  const isOfficial = !official;
-  must(await db().from("hl_weight_logs").insert({ username: a.username, weight_kg: parsed.data.weight_kg, logged_date: a.today, is_official: isOfficial, week_start: week }));
+  const { official: isOfficial } = await logWeight(a, parsed.data.weight_kg);
   let planRefreshed = false;
   if (isOfficial) {
-    must(await db().from("hl_profiles").update({ weight_kg: parsed.data.weight_kg, updated_at: new Date().toISOString() }).eq("username", a.username));
     // A new official weight refreshes the plan for the next week (subscribers; free).
     if (a.profile.kyc_verified && a.profile.disclaimer_accepted_at && (await hasActivePlan(a.username))) {
       try {

@@ -4,9 +4,10 @@ import type { Auth } from "./auth";
 import { addDays, weekStart } from "@/lib/dates";
 import { dailyCalories, type Activity, type Goal, type Sex } from "@/lib/nutrition";
 import { getMeal } from "./meals";
+import { MEAL_SEEDS } from "@/data/meals";
 import { adjustScan, type ScanIng, type ScanTotals, type Swap } from "@/lib/scanmath";
 
-export type FoodEntry = { id: string; name: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; source: "meal" | "scan" | "manual"; estimated: boolean };
+export type FoodEntry = { id: string; name: string; name_ar?: string; name_en?: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; source: "meal" | "scan" | "manual"; estimated: boolean };
 export const MAX_ENTRIES_PER_DAY = 40;
 /** Daily macro split of the calorie target (energy share): protein 25%, carbs 50%, fat 25%. */
 export const MACRO_SPLIT = { protein: 0.25, carbs: 0.5, fat: 0.25 } as const;
@@ -36,14 +37,18 @@ export async function dailyTarget(a: Auth): Promise<number | null> {
   return dailyCalories({ weightKg: Number(p.weight_kg), heightCm: Number(p.height_cm), age: p.age, sex: p.sex as Sex, goal: p.goal as Goal, activity: p.activity as Activity, conditions: p.conditions });
 }
 
-type Row = { id: string; name: string; calories: number; protein_g: number | string; carbs_g: number | string | null; fat_g: number | string | null; source: FoodEntry["source"]; created_at?: string; date?: string };
-const COLS = "id,name,calories,protein_g,carbs_g,fat_g,source,created_at,date";
+type Row = { id: string; name: string; calories: number; protein_g: number | string; carbs_g: number | string | null; fat_g: number | string | null; source: FoodEntry["source"]; source_id?: string | null; created_at?: string; date?: string };
+const COLS = "id,name,calories,protein_g,carbs_g,fat_g,source,source_id,created_at,date";
+
+// Catalogue names in both languages: a meal logged in English still reads in Arabic after the language is switched.
+const MEAL_NAMES = new Map(MEAL_SEEDS.map((m) => [m.id, { ar: m.name_ar, en: m.name_en }]));
 
 export function toEntry(r: Row): FoodEntry {
   const protein = Number(r.protein_g);
   const known = r.carbs_g !== null && r.fat_g !== null;
   const est = known ? { carbs_g: Number(r.carbs_g), fat_g: Number(r.fat_g) } : estimateCarbsFat(r.calories, protein);
-  return { id: r.id, name: r.name, calories: r.calories, protein_g: protein, ...est, source: r.source, estimated: !known };
+  const names = r.source === "meal" && r.source_id ? MEAL_NAMES.get(r.source_id) : undefined;
+  return { id: r.id, name: r.name, ...(names ? { name_ar: names.ar, name_en: names.en } : {}), calories: r.calories, protein_g: protein, ...est, source: r.source, estimated: !known };
 }
 
 export async function foodDay(a: Auth) {

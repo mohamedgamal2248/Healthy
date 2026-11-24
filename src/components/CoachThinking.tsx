@@ -56,7 +56,7 @@ export function CoachThinking({ kind = "recipe", compact }: { kind?: Kind; compa
           <i className="cth-sk h-3 w-[72%]" />
         </div>
       )}
-      {!compact && <p className="muted text-center">{tr("قد يستغرق الأمر حتى دقيقة", "This can take up to a minute")}</p>}
+      {!compact && <p className="muted text-center">{tr("عادة من ٢٠ إلى ٦٠ ثانية. لو اتأخر أكتر من كده بيرجع الكريدت تلقائيًا.", "Usually 20 to 60 seconds. If it takes longer, your credit is refunded automatically.")}</p>}
     </div>
   );
 }

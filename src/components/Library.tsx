@@ -21,7 +21,7 @@ export function LibraryView() {
     api<{ meals: MealRow[]; recipes: R[] }>("/favourites").then(setFavs).catch(() => {});
   }, [toast, errMsg]);
   const unfav = async (id: string) => { setFavs((f) => f && { ...f, meals: f.meals.filter((m) => m.id !== id) }); try { await api("/favourites", { body: { type: "meal", id } }); } catch (e) { toast(errMsg(e), "err"); } };
-  if (!recipes || !favs) return <PageSkeleton />;
+  if (!recipes) return <PageSkeleton />; // favourites load in parallel and only the Favourites tab waits for them
   const RecipeRow = ({ r }: { r: R }) => (
     <Link href={`/chef?recipe=${r.id}`} className="card-row !min-h-16 hover:shadow-md">
       <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-600"><Icon name={r.content.kind === "workout" ? "bolt" : r.content.kind === "challenge" ? "flame" : r.content.kind === "scan" ? "camera" : r.content.kind === "fridge" ? "image" : "utensils"} size={24} /></span>
@@ -36,6 +36,7 @@ export function LibraryView() {
         {([["recipes", tr("طلباتي من Healthy AI", "My Healthy AI results")], ["fav", tr("المفضلة", "Favourites")]] as const).map(([k, l]) => (<button key={k} onClick={() => setTab(k)} aria-pressed={tab === k} className={`min-h-11 rounded-xl text-sm font-extrabold ${tab === k ? "bg-white text-brand-800 shadow-sm" : "text-ink-soft"}`}>{l}</button>))}
       </div>
       {tab === "recipes" ? (recipes.length ? <div className="space-y-2.5">{recipes.map((r) => <RecipeRow key={r.id} r={r} />)}</div> : <EmptyState icon="chef" title={tr("مفيش نتائج لسه", "Nothing yet")} body={tr("كل نتيجة تطلبها من Healthy AI تتحفظ هنا تلقائيًا.", "Every Healthy AI result is saved here automatically.")} action={<Link href="/chef" className="btn-primary">{tr("جرّب Healthy AI", "Try Healthy AI")}</Link>} />)
+        : !favs ? <PageSkeleton />
         : favs.meals.length + favs.recipes.length === 0 ? <EmptyState icon="heart" title={tr("مفيش مفضلات", "No favourites")} body={tr("اضغط على القلب في أي وجبة أو وصفة لحفظها.", "Tap the heart on any meal or recipe to save it.")} />
         : <div className="space-y-4">{favs.recipes.length > 0 && <div className="space-y-2.5">{favs.recipes.map((r) => <RecipeRow key={r.id} r={r} />)}</div>}<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{favs.meals.map((m) => <MealCard key={m.id} meal={m} fav onFav={unfav} />)}</div></div>}
     </div>

@@ -39,6 +39,7 @@ export function PricingGrid({ items, trial, onBuy, buyLabel, locked, lockedKeys 
             <p className="flex items-center gap-2 text-sm font-extrabold text-ink-soft"><Icon name={copy.icon} size={16} className="text-brand-600" />{tr(copy.ar, copy.en)}</p>
             <p className="mt-1 text-3xl font-extrabold tabular-nums">{i.pricePi} <span className="text-lg">Pi</span>{i.kind === "plan" && <span className="text-sm font-bold text-ink-soft"> / {tr("٣٠ يومًا", "30 days")}</span>}</p>
             {usdLabel(i.usd) && <p className="text-sm font-bold text-ink-soft tabular-nums"><bdi dir="ltr">{usdLabel(i.usd)}</bdi> <span className="font-semibold">{tr("بسعر Pi اليوم", "at today's Pi rate")}</span></p>}
+            {i.credits > 0 && <p className="text-xs font-bold text-ink-soft tabular-nums">{tr(`حوالي ${(i.pricePi / i.credits).toFixed(2)} Pi للطلب`, `About ${(i.pricePi / i.credits).toFixed(2)} Pi per request`)}</p>}
             <ul className="mt-4 flex-1 space-y-2 text-sm font-semibold">{itemBenefits(i, tr).map((b) => (<li key={b} className="flex gap-2"><Icon name="check" size={16} className="mt-1 shrink-0 text-brand-600" />{b}</li>))}</ul>
             {onBuy && (() => {
               const off = lockedKeys.includes(i.key);

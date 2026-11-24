@@ -9,7 +9,7 @@ import { Icon } from "@/components/Icon";
 import { CalorieCard, FoodTile, MacroRings } from "@/components/Rings";
 import type { MealRow } from "@/server/meals";
 
-type Entry = { id: string; name: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; source: "meal" | "scan" | "manual"; estimated: boolean };
+type Entry = { id: string; name: string; name_ar?: string; name_en?: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; source: "meal" | "scan" | "manual"; estimated: boolean };
 type Day = { date: string; entries: Entry[]; totals: { calories: number; protein_g: number; carbs_g: number; fat_g: number }; target: number | null; targets: { protein: number; carbs: number; fat: number } | null; recent?: (Entry & { date: string })[] };
 type Tab = "meals" | "recent" | "manual";
 
@@ -91,7 +91,7 @@ function AddSheet({ open, initialTab, recent, onClose, onAdded }: { open: boolea
 }
 
 function Inner() {
-  const { tr, toast, errMsg } = useApp();
+  const { tr, lang, toast, errMsg } = useApp();
   const { data: d, setData, reload } = useGet<Day>("/food", (e) => toast(errMsg(e), "err"));
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("meals");
@@ -126,7 +126,7 @@ function Inner() {
             <li key={e.id} className="card-row !min-h-16">
               <FoodTile source={e.source} size={44} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-extrabold">{e.name}</p>
+                <p className="truncate font-extrabold">{(lang === "ar" ? e.name_ar : e.name_en) ?? e.name}</p>
                 <p className="text-xs font-bold text-ink-soft tabular-nums">{e.calories} {tr("سعرة", "kcal")} · {tr("ب", "P")} {Math.round(e.protein_g)} · {tr("ك", "C")} {Math.round(e.carbs_g)} · {tr("د", "F")} {Math.round(e.fat_g)}{e.estimated ? ` · ${tr("تقديري", "est.")}` : ""}</p>
               </div>
               <button className="btn-ghost btn-sm !px-2.5" onClick={() => remove(e.id)} disabled={busy === e.id} aria-label={tr(`حذف ${e.name}`, `Delete ${e.name}`)}>{busy === e.id ? <Spinner size={16} /> : <Icon name="trash" size={18} />}</button>

@@ -3,6 +3,11 @@ import { memo } from "./memo";
 import type { Auth } from "./auth";
 import { GROUP_DEFAULTS } from "@/data/challenges";
 import { addDays, dayNumber, hash, weekStart } from "@/lib/dates";
+import { MEAL_SEEDS } from "@/data/meals";
+
+/** Meals from the catalogue shown on an empty Recipes tab, clearly labelled as examples from the Healthy team (never as user activity). */
+const EXAMPLE_IDS = ["foul-balady", "veggie-omelette", "lentil-soup-salad", "grilled-chicken-rice", "megadara", "molokhia-chicken"];
+export const exampleMeals = () => EXAMPLE_IDS.map((id) => MEAL_SEEDS.find((m) => m.id === id)).filter(Boolean).map((m) => ({ id: m!.id, name_ar: m!.name_ar, name_en: m!.name_en, calories: m!.calories, protein_g: m!.protein_g, time_min: m!.time_min }));
 
 export type Group = { id: string; week_start: string; challenge_id: string | null; title_ar: string; title_en: string };
 
@@ -63,7 +68,7 @@ export async function topRecipes() {
   S.filter((s) => verified.has(s.username)).forEach((s) => score.set(s.source_id, (score.get(s.source_id) ?? 0) + 1));
   const ids = [...score.keys()];
   if (!ids.length) return [];
-  const recipes = must(await db().from("hl_recipes").select("id,username,title,content,like_count,save_count").in("id", ids).eq("shared", true)) as { id: string; username: string; title: string; content: { recipe: { calories: number; protein: number } }; like_count: number; save_count: number }[];
+  const recipes = must(await db().from("hl_recipes").select("id,username,title,content,like_count,save_count").in("id", ids).eq("shared", true).eq("hidden", false)) as { id: string; username: string; title: string; content: { recipe: { calories: number; protein: number } }; like_count: number; save_count: number }[];
   const okAuthors = await visibleAuthors(recipes.map((r) => r.username));
   return recipes
     .filter((r) => okAuthors.has(r.username))
@@ -106,7 +111,7 @@ export async function groupSnapshot(username: string, today: string) {
 
 /** Newest shared recipes (so fresh content shows up even before it collects likes). */
 export async function latestRecipes() {
-  const rows = must(await db().from("hl_recipes").select("id,username,title,content,like_count,save_count,shared_at").eq("shared", true).order("shared_at", { ascending: false }).limit(10)) as { id: string; username: string; title: string; content: { recipe: { calories: number; protein: number } }; like_count: number; save_count: number }[];
+  const rows = must(await db().from("hl_recipes").select("id,username,title,content,like_count,save_count,shared_at").eq("shared", true).eq("hidden", false).order("shared_at", { ascending: false }).limit(10)) as { id: string; username: string; title: string; content: { recipe: { calories: number; protein: number } }; like_count: number; save_count: number }[];
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id);
   const okAuthors = await visibleAuthors(rows.map((r) => r.username));
@@ -120,6 +125,7 @@ export type PublicCommunity = {
   group: Group; board: Awaited<ReturnType<typeof leaderboard>>; monthBoard: Awaited<ReturnType<typeof monthlyBoard>>;
   teams: { key: string; ar: string; en: string; members: number; days: number }[];
   topRecipes: PublicRecipe[]; latestRecipes: PublicRecipe[]; stats: { members: number; checkedToday: number };
+  examples: ReturnType<typeof exampleMeals>;
 };
 
 /** Everything on the community page that is the same for every visitor. Safe to serve from the CDN. */
@@ -130,5 +136,5 @@ export async function publicCommunity(today: string): Promise<PublicCommunity> {
     memo(`gc:${group.id}:${today}`, 30_000, async () => (must(await db().rpc("hl_group_counts", { p_group: group.id, p_date: today })) as { members: number; checked: number }[])[0] ?? { members: 0, checked: 0 }),
   ]);
   const strip = (r: { id: string; title: string; author: string; calories?: number; protein?: number; likes: number; saves: number }): PublicRecipe => ({ id: r.id, title: r.title, author: r.author, calories: r.calories, protein: r.protein, likes: r.likes, saves: r.saves });
-  return { group, board, monthBoard: month, teams: team.teams.map((t) => ({ ...t })), topRecipes: top.map(strip), latestRecipes: latest.map(strip), stats: { members: Number(counts.members), checkedToday: Number(counts.checked) } };
+  return { group, board, monthBoard: month, teams: team.teams.map((t) => ({ ...t })), topRecipes: top.map(strip), latestRecipes: latest.map(strip), stats: { members: Number(counts.members), checkedToday: Number(counts.checked) }, examples: exampleMeals() };
 }

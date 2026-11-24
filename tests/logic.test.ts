@@ -748,3 +748,83 @@ test("docs match the code: Mainnet by default, no stale Testnet claims, no price
   assert.match(pricing, /usdLabel\(i\.usd\)/);
   assert.equal(existsSync("public/logo-options"), false, "unused logo variants are not shipped");
 });
+
+test("pork and alcohol can never be saved: rejected on every path, in English and Arabic", async () => {
+  const { haramHit, outputIsSafe, asksForBulk } = await import("../src/server/ai/safety");
+  const { validateRecipe, recipeNumbersProblem } = await import("../src/server/ai/recipe");
+  const { validateFridge } = await import("../src/server/ai/extra");
+  for (const bad of ["Beef burger with bacon and cheese sauce", "برجر لحم بقري مع لحم مقدد وصوص جبن", "pork chops", "جيلاتين", "a glass of wine", "كحول", "ham sandwich", "turkey sausage", "خنزير"]) {
+    assert.ok(haramHit(bad), bad);
+    assert.equal(outputIsSafe(bad), false, bad);
+  }
+  for (const fine of ["hamburger bun", "swine flu", "graham", "هامبورجر دجاج", "grilled chicken breast", "لحم بقري مشوي", "foul with lemon", "lentil soup"]) assert.equal(haramHit(fine), null, fine);
+  const recipe = (name: string, item: string, calories = 450, protein = 30) => ({ name, ingredients: [{ item, quantity: "100 g" }, { item: "خس", quantity: "1" }], steps: ["اطبخ", "قدّم"], calories, protein, benefits: [{ ingredient: item, benefit: "بروتين" }], substitutions: [], suitable_for: [] });
+  // the exact fixture from the live test: must be rejected before anything is saved (the caller then refunds the credit)
+  assert.throws(() => validateRecipe(recipe("Beef burger with bacon and cheese sauce", "bacon")), /unsafe_content/);
+  assert.throws(() => validateRecipe(recipe("برجر لحم", "لحم مقدد")), /unsafe_content/);
+  assert.throws(() => validateRecipe(recipe("Fruit dessert", "wine")), /unsafe_content/);
+  assert.throws(() => validateFridge({ seen: ["x"], ideas: [{ name: "Ham omelette", minutes: 5, ingredients: [{ item: "ham", quantity: "2" }, { item: "egg", quantity: "2" }], missing: [], steps: ["cook", "serve"], calories: 300, protein: 20 }, { name: "Salad", ingredients: [{ item: "cucumber", quantity: "1" }, { item: "tomato", quantity: "1" }], missing: [], steps: ["cut", "serve"], calories: 100, protein: 3 }] }), /unsafe_content/);
+  // one meal over 900 kcal is refused unless the user asked for a family / sharing meal; protein cannot exceed the calories
+  assert.throws(() => validateRecipe(recipe("Big plate", "rice", 1200, 40)), /meal_too_large/);
+  assert.equal(validateRecipe(recipe("Big plate", "rice", 1200, 40), undefined, true).calories, 1200);
+  assert.equal(asksForBulk("وجبة عائلية للمشاركة"), true);
+  assert.equal(asksForBulk("غدا ٥٠٠ سعرة"), false);
+  assert.equal(recipeNumbersProblem({ calories: 200, protein: 80 }), "protein_exceeds_calories");
+  assert.equal(validateRecipe(recipe("Egyptian lunch", "chicken breast", 520, 48)).calories, 520);
+});
+
+test("failed or non-compliant output is refunded and never saved; cached answers are re-checked; quarantined results stay hidden", async () => {
+  const { readFileSync } = await import("node:fs");
+  const chef = readFileSync("src/server/chef.ts", "utf8");
+  // every paid path refunds in its catch block, and the cache is re-validated before reuse
+  assert.equal((chef.match(/await refundCredit\(req\.id\)/g) ?? []).length, 3);
+  assert.match(chef, /!outputIsSafe\(JSON\.stringify\(parsed\.data\)\)/);
+  assert.match(chef, /duplicateOr</);
+  const { resultSignature } = await import("../src/server/chef");
+  const r = (name: string, items: string[]) => ({ kind: "recipe" as const, recipe: { name, ingredients: items.map((item) => ({ item, quantity: "1" })), steps: ["a", "b"], calories: 300, protein: 20, benefits: [], substitutions: [], suitable_for: [] }, cautions: [], doctor_note: null });
+  assert.equal(resultSignature(r("Omelette!", ["Eggs", "Tomato"]) as never), resultSignature(r("omelette", ["tomato", "eggs"]) as never), "same dish, different case / order");
+  assert.notEqual(resultSignature(r("Omelette", ["eggs", "tomato"]) as never), resultSignature(r("Omelette", ["eggs", "cheese"]) as never));
+  for (const f of ["src/app/api/recipes/route.ts", "src/server/community.ts", "src/app/api/favourites/route.ts"]) assert.match(readFileSync(f, "utf8"), /eq\("hidden", false\)/, f);
+  assert.match(readFileSync("src/app/r/[id]/page.tsx", "utf8"), /r\.hidden/);
+});
+
+test("diet plan: every day matches the daily target (+-5%), affordable Egyptian meals only by default, portions explained", async () => {
+  const { MEAL_SEEDS } = await import("../src/data/meals");
+  const { buildWeekPlan, planPool, isAffordable } = await import("../src/lib/planner");
+  const meals = MEAL_SEEDS as never as Parameters<typeof planPool>[0];
+  const pool = planPool(meals, false);
+  assert.ok(pool.length >= 50 && pool.every(isAffordable));
+  assert.ok(!pool.some((m) => /shrimp|avocado|coconut|bulgogi|curry|taco|salmon/i.test(`${m.id} ${m.name_en}`)));
+  assert.ok(planPool(meals, true).length > pool.length, "international / premium is an explicit opt-in");
+  for (const target of [1300, 1800, 2200, 2830]) {
+    const plan = buildWeekPlan({ meals: pool, calorieTarget: target, conditions: [], goal: "maintain", weekStart: "2026-11-23", seed: "t" });
+    for (const d of plan.days) {
+      assert.ok(Math.abs(d.total_kcal - target) <= target * 0.05, `${target}: ${d.total_kcal}`);
+      assert.equal(d.total_kcal, d.slots.reduce((n, s) => n + s.calories, 0));
+      assert.ok(d.slots.every((s) => s.servings >= 0.5 && s.servings <= 3 && Number.isInteger(s.servings * 4)));
+    }
+  }
+  const { readFileSync } = await import("node:fs");
+  const page = readFileSync("src/app/plan/page.tsx", "utf8");
+  assert.match(page, /day\.total_kcal\} \/ \{plan\.daily_calorie_target\}/);
+  assert.match(page, /تعني حصة مضاعفة/);
+});
+
+test("Arabic UI: diary meals keep both names; progress average is over logged days; weight has one source; pricing never flashes a wrong state", async () => {
+  const { toEntry } = await import("../src/server/food");
+  const e = toEntry({ id: "1", name: "Foul medames with lemon and baladi bread", calories: 330, protein_g: 17, carbs_g: null, fat_g: null, source: "meal", source_id: "foul-balady" });
+  assert.match(e.name_ar ?? "", /فول/);
+  assert.match(e.name_en ?? "", /Foul/);
+  assert.equal(toEntry({ id: "2", name: "x", calories: 1, protein_g: 0, carbs_g: null, fat_g: null, source: "manual", source_id: null }).name_ar, undefined);
+  const { readFileSync } = await import("node:fs");
+  const progress = readFileSync("src/app/api/progress/route.ts", "utf8");
+  assert.match(progress, /perDay\.size/);
+  assert.match(readFileSync("src/app/progress/page.tsx", "utf8"), /logged days only/);
+  assert.match(readFileSync("src/server/weight.ts", "utf8"), /update\(\{ weight_kg: kg/);
+  assert.match(readFileSync("src/app/api/weight/route.ts", "utf8"), /logWeight\(a/);
+  const pricing = readFileSync("src/app/pricing/page.tsx", "utf8");
+  assert.match(pricing, /data\?\.network === "testnet"/);
+  assert.doesNotMatch(pricing, /network !== "mainnet"/);
+  assert.match(pricing, /planLoaded/);
+  assert.match(readFileSync("src/app/api/pricing/route.ts", "utf8"), /cdnJson\(body, 30, 300\)/);
+});

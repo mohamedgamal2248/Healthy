@@ -22,7 +22,7 @@ export const GET = route(async (req) => {
     a.profile.kyc_verified ? getBalances(a.username) : Promise.resolve(null),
     a.profile.kyc_verified ? groupSnapshot(a.username, a.today).catch(() => null) : Promise.resolve(null),
     db().from("hl_credit_ledger").select("id", { count: "exact", head: true }).eq("username", a.username).eq("reason", "trial_grant"),
-    db().from("hl_recipes").select("id", { count: "exact", head: true }).eq("username", a.username),
+    db().from("hl_recipes").select("id", { count: "exact", head: true }).eq("username", a.username).eq("hidden", false),
     foodDay(a),
   ]);
   // Week strip: the last 7 local days with whether a challenge was done and whether food was logged.

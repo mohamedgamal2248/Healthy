@@ -11,7 +11,7 @@ export const GET = route(async (req) => {
   const recipeIds = favs.filter((f) => f.source_type === "recipe").map((f) => f.source_id);
   const [meals, recipes] = await Promise.all([
     mealIds.length ? db().from("hl_meals").select("*").in("id", mealIds) : Promise.resolve({ data: [], error: null }),
-    recipeIds.length ? db().from("hl_recipes").select("id,title,content,username,created_at,shared").in("id", recipeIds) : Promise.resolve({ data: [], error: null }),
+    recipeIds.length ? db().from("hl_recipes").select("id,title,content,username,created_at,shared").in("id", recipeIds).eq("hidden", false) : Promise.resolve({ data: [], error: null }),
   ]);
   const rec = (must(recipes as never) as { username: string; content: { cautions?: unknown; doctor_note?: unknown } }[]).map((r) => (r.username === a.username ? r : { ...r, content: publicContent(r.content) }));
   return ok({ meals: must(meals as never), recipes: rec });

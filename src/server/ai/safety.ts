@@ -56,6 +56,21 @@ export function dailyKcalTooLow(text: string): boolean {
   const re = [new RegExp(`(\\d{3,4})\\s*${unit}[^.\\n]{0,25}${per}`, "g"), new RegExp(`${per}[^\\d.\\n]{0,25}(\\d{3,4})\\s*${unit}`, "g")];
   return re.some((r) => [...n.matchAll(r)].some((m) => Number(m[1]) < MIN_DAILY_KCAL));
 }
-export const outputIsSafe = (text: string) => !FORBIDDEN_OUTPUT.test(text) && !dailyKcalTooLow(text);
+/**
+ * Pork and alcohol never appear in anything Healthy generates (an app for Egypt: halal by default). Checked on the normalised
+ * text (Arabic letters folded) with word boundaries, so "ham" never matches "hamburger" and "wine" never matches "swine flu".
+ */
+const HARAM_EN = /(?<![\p{L}])(?:pork|bacon|ham|prosciutto|pancetta|pepperoni|chorizo|salami|mortadella|lard|gelatin|gelatine|sausages?|hot ?dogs?|wine|beer|alcohol(?:ic)?|rum|vodka|whisk(?:e)?y|liquor|champagne|cider|brandy|cocktails?)(?![\p{L}])/iu;
+const HARAM_AR = /(?<![\p{L}])(?:ال|و|ب|ل|ف)*(?:خنزير|لحم مقدد|مقدد|بيكون|جامبون|هامبرجر خنزير|لارد|جيلاتين|نبيذ|بيره|كحول|كحوليه|خمر|ويسكي|فودكا|نقانق|مارتديلا|سلامي|بيبروني|شوريزو)(?![\p{L}])/u;
+/** The first pork / alcohol word found, or null. */
+export function haramHit(text: string): string | null {
+  const n = normalizeText(text);
+  return HARAM_EN.exec(n)?.[0] ?? HARAM_AR.exec(n)?.[0] ?? null;
+}
+export const outputIsSafe = (text: string) => !FORBIDDEN_OUTPUT.test(text) && !haramHit(text) && !dailyKcalTooLow(text);
+
+/** A single generated meal above this many kcal is rejected unless the user asked for a family / sharing / bulk meal. */
+export const MAX_SINGLE_MEAL_KCAL = 900;
+export const asksForBulk = (text: string) => /(عائل|عيل|عزوم|مشارك|للمشاركه|حفل|ضخم|تضخيم|bulk|family|sharing|share|party|feast|big meal)/i.test(normalizeText(text));
 
 export const kcalAboveFloor = (dailyKcal: number) => dailyKcal >= MIN_DAILY_KCAL;

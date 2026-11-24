@@ -123,16 +123,17 @@ function Inner() {
             <div className="card flex items-center gap-3"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-50 text-sky-600"><Icon name="drop" size={26} /></span><div><p className="text-xs font-bold text-ink-soft">{tr("المياه اليومية", "Daily water")}</p><p className="text-2xl font-extrabold tabular-nums">{plan.daily_water_target} <span className="text-sm">{tr("أكواب", "cups")}</span></p></div></div>
           </div>
           {plan.plan.notes.gaps_unfilled > 0 && <Notice tone="info">{tr("بعض الوجبات لم يتوفر لها بديل مناسب لحالتك في الكتالوج.", "Some slots had no suitable catalogue meal for your conditions.")}</Notice>}
+          <p className="muted">{tr("الأرقام اليومية تطابق هدفك. «حصة ٢×» تعني حصة مضاعفة من الوجبة نفسها، والسعرات والبروتين المعروضة محسوبة على الحصة المعدّلة.", "Each day matches your target. \"portion 2×\" means a double serving of that meal; the calories and protein shown are for the adjusted portion.")}</p>
           <div className="space-y-3">
             {plan.plan.days.map((day) => (
               <section key={day.date} className="card !p-4">
-                <div className="mb-3 flex items-center justify-between"><h3 className="font-extrabold">{fmt(day.date)}</h3><span className="rounded-full bg-sun-50 px-2.5 py-1 text-xs font-extrabold text-sun-600 tabular-nums">{day.total_kcal} {tr("سعرة", "kcal")}</span></div>
+                <div className="mb-3 flex items-center justify-between"><h3 className="font-extrabold">{fmt(day.date)}</h3><span className="rounded-full bg-sun-50 px-2.5 py-1 text-xs font-extrabold text-sun-600 tabular-nums">{day.total_kcal} / {plan.daily_calorie_target} {tr("سعرة", "kcal")} · {day.slots.reduce((n, x) => n + x.protein_g, 0)} {tr("جم بروتين", "g protein")}</span></div>
                 <div className="grid gap-2 md:grid-cols-3">
                   {day.slots.map((s) => (
                     <div key={s.type} className="rounded-2xl bg-brand-50/60 p-3">
                       <p className="flex items-center gap-1.5 text-xs font-extrabold text-brand-700"><Icon name={TYPE[s.type][2]} size={14} />{lang === "ar" ? TYPE[s.type][0] : TYPE[s.type][1]}{s.source === "ai" && <span className="rounded bg-white px-1.5 text-[10px]">AI</span>}</p>
                       {s.meal_id ? <Link href={`/meals/${s.meal_id}`} className="mt-1 block font-extrabold leading-snug hover:underline">{lang === "ar" ? s.name_ar : s.name_en}</Link> : <p className="mt-1 font-extrabold leading-snug">{s.name_ar}</p>}
-                      <p className="mt-1 text-xs font-bold text-ink-soft">{s.servings !== 1 && `${s.servings}× · `}{s.calories} {tr("سعرة", "kcal")} · {s.protein_g} {tr("جم", "g")}</p>
+                      <p className="mt-1 text-xs font-bold text-ink-soft">{s.servings !== 1 && `${tr("حصة", "portion")} ${s.servings}× · `}{s.calories} {tr("سعرة", "kcal")} · {s.protein_g} {tr("جم", "g")}</p>
                     </div>
                   ))}
                 </div>

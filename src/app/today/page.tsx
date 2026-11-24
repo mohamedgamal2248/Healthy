@@ -14,7 +14,7 @@ import { Icon } from "@/components/Icon";
 import { BADGES } from "@/data/badges";
 import type { MealRow } from "@/server/meals";
 
-type RecentFood = { id: string; name: string; calories: number; protein_g: number; source: "meal" | "scan" | "manual"; estimated: boolean };
+type RecentFood = { id: string; name: string; name_ar?: string; name_en?: string; calories: number; protein_g: number; source: "meal" | "scan" | "manual"; estimated: boolean };
 
 type Today = {
   date: string; challenges: ChallengeItem[]; swapUsed: boolean; streak: { current: number; longest: number; total: number; frozen?: boolean; freezeReady?: boolean }; completedToday: number;
@@ -73,7 +73,7 @@ function NextStep({ d }: { d: Today }) {
 
 /** Last meals with a one-tap "repeat" (copied on the server from the user's own entry). */
 function RecentMeals({ items, onRepeat, busy }: { items: RecentFood[]; onRepeat: (id: string) => void; busy: string | null }) {
-  const { tr } = useApp();
+  const { tr, lang } = useApp();
   if (!items.length) return null;
   return (
     <section aria-labelledby="rm">
@@ -82,7 +82,7 @@ function RecentMeals({ items, onRepeat, busy }: { items: RecentFood[]; onRepeat:
         {items.slice(0, 2).map((m) => (
           <li key={m.id} className="card-row !min-h-16">
             <FoodTile source={m.source} size={44} />
-            <div className="min-w-0 flex-1"><p className="truncate font-extrabold">{m.name}</p><p className="muted tabular-nums">{m.calories} {tr("سعرة", "kcal")} · {Math.round(m.protein_g)}{tr("ج بروتين", "g protein")}</p></div>
+            <div className="min-w-0 flex-1"><p className="truncate font-extrabold">{(lang === "ar" ? m.name_ar : m.name_en) ?? m.name}</p><p className="muted tabular-nums">{m.calories} {tr("سعرة", "kcal")} · {Math.round(m.protein_g)}{tr("ج بروتين", "g protein")}</p></div>
             <button className="btn-soft btn-sm !min-h-9 !px-3" onClick={() => onRepeat(m.id)} disabled={busy !== null} aria-label={tr(`كرر ${m.name}`, `Repeat ${m.name}`)}>{busy === m.id ? <Spinner size={16} /> : <Icon name="refresh" size={16} />}{tr("كرر", "Repeat")}</button>
           </li>
         ))}

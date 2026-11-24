@@ -12,6 +12,7 @@ type Pub = {
   group: { title_ar: string; title_en: string; week_start: string };
   board: Row[];
   topRecipes: PR[]; latestRecipes: PR[]; monthBoard: Row[]; teams: { key: string; ar: string; en: string; members: number; days: number }[]; stats: { members: number; checkedToday: number };
+  examples?: { id: string; name_ar: string; name_en: string; calories: number; protein_g: number; time_min: number }[];
 };
 type Mine = { joined: boolean; myDays: number; checkedToday: boolean; hidden: boolean; myTeam: string; likedIds: string[]; savedIds: string[] };
 type PR = { id: string; title: string; author: string; calories?: number; protein?: number; likes: number; saves: number };
@@ -91,12 +92,15 @@ function Inner() {
           <div className="flex gap-1.5">{([["week", tr("الأسبوع", "Week")], ["month", tr("الشهر", "Month")]] as const).map(([k, l]) => (<button key={k} className="chip" aria-pressed={btab === k} onClick={() => setBtab(k)}>{l}</button>))}</div>
         </div>
         {(btab === "week" ? d.board : d.monthBoard).length === 0 ? <EmptyState icon="trophy" title={tr("كن أول المتصدرين", "Be the first on the board")} body={tr("انضم وسجّل يومك لتظهر هنا.", "Join and check in to appear here.")} /> : (
-          <ol className="space-y-2">{(btab === "week" ? d.board : d.monthBoard).map((r) => (
+          <>
+          {(btab === "week" ? d.board : d.monthBoard).length < 5 && <Notice tone="ok" icon="trophy">{tr("المجتمع لسه في أوله، وإنت من الأوائل. أي يوم تسجّله بيحطك في المقدمة، وادعُ أصحابك من تحدي الأسبوع.", "The community is just starting and you're among the first Pioneers. Every day you check in keeps you at the top; invite friends from the weekly challenge.")}</Notice>}
+          <ol className="mt-3 space-y-2">{(btab === "week" ? d.board : d.monthBoard).map((r) => (
             <li key={r.username} className={`card flex items-center gap-3 !p-3 ${r.username === me?.profile.username ? "!border-brand-400 !bg-brand-50" : ""}`}>
               <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-extrabold tabular-nums ${medal[r.rank - 1] ?? "bg-canvas text-ink-soft"}`}>{r.rank}</span>
               <div className="min-w-0 flex-1"><p className="truncate font-extrabold"><bdi dir="ltr">@{r.username}</bdi></p><div className="mt-0.5 flex items-center gap-2"><VerifiedBadge small />{btab === "week" && <span className="inline-flex items-center gap-1 text-xs font-bold text-ink-soft"><Icon name="flame" size={13} className="text-sun-500" />{r.streak}</span>}</div></div>
               <p className="text-end"><span className="block text-xl font-extrabold tabular-nums">{r.days}</span><span className="text-xs font-bold text-ink-soft">{tr("يوم", "days")}</span></p>
             </li>))}</ol>
+          </>
         )}
       </section>
 
@@ -115,6 +119,15 @@ function Inner() {
               <button className="btn-ghost btn-sm !px-2.5" onClick={() => like(r.id)} aria-pressed={r.liked} aria-label={tr("إعجاب", "Like")}><Icon name="heart" size={20} filled={r.liked} className={r.liked ? "text-rose-600" : ""} /><span className="tabular-nums">{r.likes}</span></button>
               <button className="btn-ghost btn-sm !px-2.5" onClick={() => save(r.id)} aria-pressed={r.saved} aria-label={tr("حفظ", "Save")}><Icon name="book" size={20} filled={r.saved} className={r.saved ? "text-brand-600" : ""} /><span className="tabular-nums">{r.saves}</span></button>
             </li>))}</ul>
+        )}
+        {(rtab === "top" ? d.topRecipes : d.latestRecipes).length < 3 && (d.examples?.length ?? 0) > 0 && (
+          <div className="mt-5">
+            <h3 className="mb-1 font-extrabold">{tr("أمثلة من فريق Healthy", "Examples from the Healthy team")}</h3>
+            <p className="muted mb-3">{tr("دي وجبات من كتالوجنا (مش من مستخدمين). وصفاتك المنشورة هتظهر هنا مع الناس.", "These are meals from our catalogue, not from users. Recipes you publish will appear here with everyone else's.")}</p>
+            <ul className="space-y-2.5">{d.examples!.map((m) => (
+              <li key={m.id}><a href={`/meals/${m.id}`} className="card flex items-center gap-3 !p-3.5"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-600"><Icon name="utensils" size={22} /></span><span className="min-w-0 flex-1"><span className="block truncate font-extrabold">{lang === "ar" ? m.name_ar : m.name_en}</span><span className="muted block">{m.calories} {tr("سعرة", "kcal")} · {m.protein_g} {tr("جم بروتين", "g protein")} · {m.time_min} {tr("د", "min")}</span></span><span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-[11px] font-extrabold text-brand-700">{tr("مثال", "Example")}</span></a></li>
+            ))}</ul>
+          </div>
         )}
       </section>
       )}

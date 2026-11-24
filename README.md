@@ -175,7 +175,7 @@ How a request flows (`src/server/chef.ts`):
 
 1. **Guards before any cost:** authentication, health disclaimer accepted, prompt length, safety screening of the request (no diagnosis, treatment, medication, children's diet plans), rate limits (per hour, per day, global circuit breaker) and a single in-flight request per user.
 2. **Spend one credit atomically** (`hl_spend_credit`, per-user lock, order: plan, then trial, then pack).
-3. **Generate** with strict JSON schemas (zod), a time budget that actually cancels the provider call, web search for unfamiliar dishes and a 30-day cache of identical requests.
+3. **Generate** with strict JSON schemas (zod), a time budget that actually cancels the provider call, web search for unfamiliar dishes (opt-in, `AI_WEB_SEARCH=on`) and a 30-day cache of identical requests.
 4. **Validate the output:** schema, forbidden-content filter (supplements, doses, fasting, cure claims), a **1,200 kcal/day floor**, and consistency checks (calories vs ingredients vs macros) for photo analysis.
 5. **Refund automatically** on refusal, timeout, unusable output or any error. A daily job refunds requests left pending by a crashed function.
 
@@ -289,6 +289,7 @@ Server secrets are never exposed to the browser. See [`.env.example`](./.env.exa
 | `SESSION_SECRET` | 32+ random characters used to sign sessions |
 | `ADMIN_USERNAMES` | Comma-separated Pi usernames allowed into `/admin` |
 | `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`, `AI_BASE_URL`, `AI_REASONING_EFFORT` | AI provider settings |
+| `AI_WEB_SEARCH` | `on` lets recipe requests search the web for unfamiliar dishes; off by default because it roughly doubles the wait |
 | `PRICING_MODE`, `PRICE_*` | Live or fixed pricing (see `src/config/pricing.ts`) |
 | `AI_LIMIT_PER_HOUR`, `AI_LIMIT_PER_DAY`, `AI_GLOBAL_DAILY_CAP` | AI abuse and cost limits |
 | `NEXT_PUBLIC_PI_CLIENT_ID` | Optional override of the public Pi Sign-In client id |
