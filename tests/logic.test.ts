@@ -730,3 +730,21 @@ test("AI challenge rows never block the normal daily picks, and can't be swapped
   assert.match(chef, /type: "follow-up", input_summary: .*credit_cost: 0/);
   assert.match(chef, /ctxKey\(prefs, day\)/);
 });
+
+test("docs match the code: Mainnet by default, no stale Testnet claims, no price table; USD shown beside Pi prices", async () => {
+  const { readFileSync, existsSync } = await import("node:fs");
+  const { usdLabel } = await import("../src/lib/money");
+  assert.equal(usdLabel(2), "≈ $2.00");
+  assert.equal(usdLabel(0.6), "≈ $0.60");
+  assert.equal(usdLabel(undefined), "");
+  const env = readFileSync(".env.example", "utf8");
+  assert.match(env, /^NEXT_PUBLIC_PI_NETWORK=mainnet$/m);
+  assert.doesNotMatch(env, /out of scope/i);
+  const readme = readFileSync("README.md", "utf8");
+  assert.doesNotMatch(readme, /out of scope|runs on \*\*Pi Testnet\*\*/i);
+  assert.match(readme, /Pi Mainnet/);
+  assert.doesNotMatch(readme, /\| Small pack \||\| Monthly plan \||\| Large pack \|/);
+  const pricing = readFileSync("src/components/Pricing.tsx", "utf8");
+  assert.match(pricing, /usdLabel\(i\.usd\)/);
+  assert.equal(existsSync("public/logo-options"), false, "unused logo variants are not shipped");
+});

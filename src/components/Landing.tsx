@@ -6,6 +6,7 @@ import { TagChips } from "./MealCard";
 import { PricingGrid, type PriceItem } from "./Pricing";
 import { Spinner, DevLogin } from "./ui";
 import type { MealSeed } from "@/data/meals";
+import { DISH_PHOTOS, STRIP } from "@/data/dish-photos";
 import type { ChallengeSeed } from "@/data/challenges";
 
 export function Landing({ items, trial, meal, challenge, ingredientsEn }: { items: PriceItem[]; trial: number; meal: MealSeed; challenge: ChallengeSeed; ingredientsEn?: { item: string }[] }) {
@@ -57,6 +58,21 @@ export function Landing({ items, trial, meal, challenge, ingredientsEn }: { item
           </div>
         </div>
       </section>
+      {STRIP.some((d) => DISH_PHOTOS[d.key]) && (
+        <section className="mx-auto mt-8 max-w-6xl" aria-label={tr("وجبات مصرية حقيقية", "Real Egyptian meals")}>
+          <h2 className="h2 mb-3">{tr("أكل مصري حقيقي، بسعرات واضحة", "Real Egyptian food, with clear numbers")}</h2>
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {STRIP.filter((d) => DISH_PHOTOS[d.key]).map((d) => (
+              <li key={d.key} className="relative overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={DISH_PHOTOS[d.key].src} alt={tr(d.ar, d.en)} width={640} height={400} loading="lazy" decoding="async" className="aspect-[4/3] w-full object-cover" />
+                <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-3 pb-2 pt-8 text-sm font-extrabold text-white">{tr(d.ar, d.en)}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs font-semibold text-ink-soft"><Link href="/open-source#photos" className="underline">{tr("مصادر الصور وتراخيصها", "Photo credits and licences")}</Link></p>
+        </section>
+      )}
 
       <section className="mx-auto max-w-6xl py-10">
         <h2 className="h1 mb-6 text-center">{tr("كيف يعمل صحتي؟", "How Healthy works")}</h2>

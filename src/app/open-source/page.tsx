@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useApp } from "@/components/AppProvider";
 import { Icon } from "@/components/Icon";
+import { DISH_PHOTOS } from "@/data/dish-photos";
 
 const REPO = "https://github.com/mohamedgamal2248/Healthy";
 
@@ -39,6 +40,18 @@ export default function OpenSource() {
           <li>{tr("لا حفظ لأي بيانات اعتماد Pi، ولا طلب لعبارة الاسترداد أبدًا.", "No Pi credentials are stored and the passphrase is never requested.")}</li>
         </ul>
       </section>
+
+      {Object.keys(DISH_PHOTOS).length > 0 && (
+        <section id="photos" className="card space-y-2 scroll-mt-20">
+          <h2 className="h2">{tr("مصادر الصور", "Photo credits")}</h2>
+          <p className="muted">{tr("صور الأكل من Wikimedia Commons بتراخيص حرة. شكرًا لأصحابها.", "Food photos come from Wikimedia Commons under free licences. Thank you to their authors.")}</p>
+          <ul className="space-y-1.5 text-sm font-semibold" dir="ltr">
+            {Object.values(DISH_PHOTOS).map((p) => (
+              <li key={p.src}><a className="font-extrabold text-brand-700 underline" href={p.url} target="_blank" rel="noopener noreferrer">{p.title}</a> <span className="text-ink-soft">· {p.author} · {p.license}</span></li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <p className="text-xs font-bold text-ink-soft" dir="ltr">Pi, Pi Network and the Pi logo are trademarks of the Pi Community Company.</p>
       <Link href="/" className="text-sm font-extrabold text-brand-700">{tr("العودة للرئيسية", "Back to home")}</Link>

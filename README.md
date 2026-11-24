@@ -2,9 +2,11 @@
 
 **Daily health challenges, healthy budget meals, personal diet plans and an AI assistant, built for Pi Network Pioneers.**
 
-Healthy turns healthy living into a small daily habit: three short challenges a day, a streak, a catalogue of 110 affordable meals (Egyptian and international), a weekly diet plan that adapts to the user's weight, and **Healthy AI**, which creates a meal, a workout, a 7-day challenge, or analyses a meal photo on demand. Pioneers sign in with their Pi account and pay for AI requests in Pi (user-to-app payments only).
+Healthy turns healthy living into a small daily habit: three short challenges a day, a streak, a catalogue of 110 affordable meals (Egyptian and international), a weekly diet plan that adapts to the user's weight, and **Healthy AI**, which creates a meal, a workout or a 7-day challenge, suggests three meals from a photo of the fridge, or analyses a meal photo, all fitted to the user's allergies, preferences and what is left of today's calories. Pioneers sign in with their Pi account and pay for AI requests in Pi (user-to-app payments only).
 
-- Live app (Pi Mainnet): <https://healthy-ai-app.vercel.app>
+- **Network: Pi Mainnet** (production Pi app, real Pi). Test payments exist only in a separate staging copy; see [Deployment](#deployment).
+- Open in Pi Browser: <https://healthai4171.pinet.com> (the app's PiNet URL)
+- Web host: <https://healthy-ai-app.vercel.app>
 - Languages: English (default) and Arabic with full RTL support
 - License: [PiOS](./LICENSE) (Pi Open Source)
 
@@ -38,13 +40,14 @@ Healthy turns healthy living into a small daily habit: three short challenges a 
 | Area | What it does |
 |---|---|
 | **Daily challenges** | Three short challenges per day, one free swap, instant check-off, streak and reputation badges (7, 30 and 100-day streaks, sugar-free, water, walking, group challenge). |
-| **Food diary** | "My day": log meals from the catalogue, from a photo analysis or manually; calories and protein against the daily goal. Catalogue/AI items are resolved on the server. |
+| **Food diary** | "My day": calorie ring and protein / carbs / fat rings against the daily goal; log from the catalogue, a photo analysis or manually; repeat a recent meal in one tap; water in one tap. Catalogue, AI and repeated items are resolved on the server. |
 | **Streak protection** | One missed day is forgiven automatically (a "freeze" that recharges after 7 days). |
 | **Meal catalogue** | 110 meals (breakfast, lunch, dinner), Egyptian and international, with calories, protein, ingredients and steps. Filters by cuisine, type and health tags. |
 | **"I have these ingredients"** | Pick what is in the kitchen and see meals that are ready now, then meals missing one or two items. Free, no credits. |
-| **Healthy AI** | Meal, workout, 7-day challenge and **photo analysis** (calorie and protein estimate with ranges). One credit per request, refunded automatically on failure. |
+| **Healthy AI** | Meal, workout, 7-day challenge, **"from my fridge"** (photo or typed ingredients, three meal ideas) and **photo analysis** (calorie, protein, carbs and fat estimate with ranges). One credit per request, refunded automatically on failure. Free one-tap changes after a result (cheaper, no meat, fewer calories, more protein, quicker, swap an ingredient; easier / harder / shorter workouts). |
+| **AI preferences** | Allergies and disliked foods (enforced again on the output), people cooked for, fitness level, equipment and joints to go easy on. Sent with every request. |
 | **Diet plan** | Weekly plan from weight, height, age, goal, activity and declared conditions. Weekly adjustment from logged weight. Water and shopping list. |
-| **Progress** | Weight log, habit log, weekly report, and a shareable weekly card drawn on the device (no health data on it). |
+| **Progress** | Weight log, habit log, weekly report with a short AI-written insight (plan subscribers, no credit), and a shareable weekly card drawn on the device (no health data on it). |
 | **Community** | 7-day challenge with a friend (invite link), weekly group challenge, weekly and monthly leaderboards, two teams, shared recipes with likes and saves, referrals. Reputation and badges only. |
 | **Wallet** | Credit balance, plan expiry, purchase history. |
 | **Admin** | Statistics, AI cost per request type, challenge and meal management, audit log. |
@@ -150,15 +153,7 @@ Verification (`src/server/payment-verify.ts`) checks, against the **purchase row
 
 The grant is a single SQL transaction (`hl_complete_purchase`) that takes a per-purchase lock, so concurrent completions cannot grant twice. Recovery is built in: `reconcileOne` for stuck payments, `/api/payments/incomplete` for payments left open by the SDK, and a daily cron job.
 
-Plans and packs:
-
-| Item | Grants |
-|---|---|
-| Monthly plan | 40 AI requests, valid 30 days (renewal locked while active) |
-| Small pack | 10 AI requests |
-| Large pack | 30 AI requests |
-
-The price is quoted in Pi by the server at purchase time and shown in the app before the Pioneer confirms. Definitions live in `src/config/pricing.ts`; `PRICING_MODE=fixed` switches to fixed Pi amounts for Testnet.
+Items are a monthly plan (30 days, no auto-renewal) and two credit packs. Prices are set in US dollars, converted to Pi by the server at purchase time (live rate, rounded up to a whole Pi), shown in the app **with the dollar equivalent** before the Pioneer confirms, and locked for 30 minutes. Definitions live in `src/config/pricing.ts`; `PRICING_MODE=fixed` uses fixed Pi amounts (useful on a Testnet staging copy, where Test-Pi has no market price).
 
 ## Reminders at your own hour
 
@@ -184,7 +179,13 @@ How a request flows (`src/server/chef.ts`):
 4. **Validate the output:** schema, forbidden-content filter (supplements, doses, fasting, cure claims), a **1,200 kcal/day floor**, and consistency checks (calories vs ingredients vs macros) for photo analysis.
 5. **Refund automatically** on refusal, timeout, unusable output or any error. A daily job refunds requests left pending by a crashed function.
 
-Photo analysis (`src/server/ai/scan.ts`): the user photographs a meal with the in-app camera; the image is compressed on the device, validated on the server (type, size, **header-parsed dimensions**) and sent to the model only to produce the estimate. **The photo is not stored**; only the text result is saved. Text inside images is treated as data, never as instructions.
+**What the model knows about the user** (`src/server/ai/context.ts`): goal, declared conditions, the saved AI preferences, and for meal requests how many calories and how much protein are left today plus the local meal slot. Allergies and dislikes are not only prompt lines: every recipe and fridge idea is checked again on the server and an answer that uses them is rejected (and the credit refunded). Cache keys include these inputs, so personal answers are never shared between users.
+
+**From my fridge** (`fridgeMeals`): a photo and/or typed ingredients become three meal ideas with amounts, steps, calories, protein and the few items missing; one credit, same guarantees as any request.
+
+**One-tap changes** (`refineResult`): free, capped (5 per result and 15 per day), one at a time; the original is kept and the change is saved as a new result. An AI workout or 7-day challenge can be started as tracked challenges on the Today page.
+
+Photo analysis (`src/server/ai/scan.ts`): the user photographs a meal with the in-app camera; the image is compressed on the device, validated on the server (type, size, **header-parsed dimensions**) and sent to the model only to produce the estimate. **The photo is not stored**; only the text result is saved. Text inside images is treated as data, never as instructions. Ingredient calories are checked against a reference table of common Egyptian foods (`src/config/egypt-foods.ts`) and pulled back when they stray more than 30%; when two look-alike foods are possible the user is asked which one it is, and the totals update.
 
 Cost control: real token and search usage is recorded per request (for every provider) with an estimated cost, shown in the admin dashboard per request type. The cost per request is very low.
 
@@ -194,7 +195,8 @@ All objects are prefixed `hl_`. Migrations are in [`supabase/migrations`](./supa
 
 | Table | Purpose |
 |---|---|
-| `hl_profiles` | One row per Pioneer: Pi identity, KYC flag, health profile, language, timezone, session version |
+| `hl_profiles` | One row per Pioneer: Pi identity, health profile, AI preferences, language, timezone, session version |
+| `hl_food_log`, `hl_push_subscriptions` | Food diary entries (calories, protein, carbs, fat) and Web Push subscriptions |
 | `hl_challenges`, `hl_user_challenges`, `hl_streaks`, `hl_badges` | Daily challenges, streaks, badges |
 | `hl_meals`, `hl_meal_overrides`, `hl_favourites` | Catalogue and favourites |
 | `hl_purchases`, `hl_subscriptions` | Pi purchases and plan validity |
@@ -254,7 +256,7 @@ scripts/               Seed scripts
 
 ## Getting started
 
-**Requirements:** Node.js 22+, a Supabase project, a Pi Developer app (Testnet), and optionally an AI provider key.
+**Requirements:** Node.js 22+, a Supabase project, a Pi Developer app, and optionally an AI provider key. Use a **separate Testnet app and database for local work and staging**; production is Mainnet.
 
 ```bash
 git clone https://github.com/mohamedgamal2248/Healthy.git
@@ -266,8 +268,8 @@ cp .env.example .env.local        # fill in the values (see Configuration)
 1. **Database:** run the files in `supabase/migrations/` in order (SQL editor or Supabase CLI).
 2. **Seed data:** `npm run seed` (meals and challenges).
 3. **Run:** `npm run dev`.
-4. **Pi sign-in** works only inside Pi Browser or the Pi Sandbox. For localhost, set `NEXT_PUBLIC_PI_SANDBOX=true` and point your Pi Developer app's development URL at your local server. For UI-only work, `ALLOW_DEV_LOGIN=true` enables a dev login that is **always disabled in production builds**.
-5. **Pi Developer Portal:** set the app URL, verify domain ownership (`validation-key.txt` is served from `public/`), generate an API key and add it as `PI_API_KEY`.
+4. **Pi sign-in** works only inside Pi Browser or the Pi Sandbox. For localhost, create a Testnet app in Pi Developers, set `NEXT_PUBLIC_PI_NETWORK=testnet` and `NEXT_PUBLIC_PI_SANDBOX=true`, and point that app's development URL at your local server. For UI-only work, `ALLOW_DEV_LOGIN=true` enables a dev login that is **always disabled in production builds**.
+5. **Pi Developer Portal (production):** create a Mainnet app, set the app URL, verify domain ownership (`validation-key.txt` is served from `public/`), generate its API key and add it as `PI_API_KEY`. Use that app's PiNet URL as `NEXT_PUBLIC_PINET_URL`.
 
 ## Configuration
 
@@ -275,7 +277,11 @@ Server secrets are never exposed to the browser. See [`.env.example`](./.env.exa
 
 | Variable | Purpose |
 |---|---|
-| `NEXT_PUBLIC_PI_NETWORK` | `mainnet` (default). `testnet` disables payments unless `ALLOW_TESTNET_PAYMENTS=true` on a staging copy |
+| `NEXT_PUBLIC_PI_NETWORK` | `mainnet` (default; anything other than an explicit `testnet` means mainnet). `testnet` disables payments unless `ALLOW_TESTNET_PAYMENTS=true` on a staging copy |
+| `ALLOW_TESTNET_PAYMENTS` | `true` only on a Testnet staging copy |
+| `PI_KYC_MODE` | `off` (default): no KYC gate, because Pi's API exposes no KYC flag. `strict` requires one if Pi adds it |
+| `PI_PRICE_FALLBACK_USD` | USD per Pi used only if the live rate feed is unreachable (default 0.05) |
+| `ALLOW_DEV_LOGIN` | Local UI work only; ignored in production builds |
 | `NEXT_PUBLIC_PI_SANDBOX` | `true` for Sandbox on localhost |
 | `PI_API_KEY` | Pi Platform API key (server only) |
 | `NEXT_PUBLIC_PINET_URL` | Public PiNet URL used for shared links |
@@ -311,7 +317,7 @@ The suite covers streaks and timezones, planner and nutrition math, payment veri
 
 ## Deployment
 
-Deployed on **Vercel** (region `lhr1`) with the Supabase project connected through environment variables. [`vercel.json`](./vercel.json) registers a daily cron (`/api/cron/maintenance`) that reconciles stuck payments, refunds AI requests left pending, cancels dead quotes and prunes caches. The app runs on **Pi Testnet**; switching to Mainnet is an explicit configuration step and requires review of the KYC mode.
+Deployed on **Vercel** (region `lhr1`) with the Supabase project connected through environment variables. [`vercel.json`](./vercel.json) registers a daily cron (`/api/cron/maintenance`) that reconciles stuck payments, refunds AI requests left pending, cancels dead quotes and prunes caches. Production runs on **Pi Mainnet** (`NEXT_PUBLIC_PI_NETWORK` unset or `mainnet`) with the app's PiNet URL `https://healthai4171.pinet.com`. A missing variable can never enable test payments: anything other than an explicit `testnet` means mainnet. To rehearse payments, deploy a second copy with `NEXT_PUBLIC_PI_NETWORK=testnet`, `ALLOW_TESTNET_PAYMENTS=true`, a Testnet Pi app and its own database.
 
 ## Open source (PiOS)
 
@@ -330,7 +336,7 @@ To list the project in the official PiOS App List, open a pull request on `pi-ap
 - The CSP requires `unsafe-inline` for Next.js hydration.
 - Photo analysis and recipe generation are **estimates**, not medical advice.
 - The legal pages are templates and have not been reviewed by a lawyer.
-- Planned: Mainnet readiness review, push-style reminders, richer weekly reports, more meals and challenges, a load test before wide launch.
+- Planned: more meals (with photos) and challenges, a dedicated production Supabase project with backups, and a load test before wide launch.
 
 ---
 

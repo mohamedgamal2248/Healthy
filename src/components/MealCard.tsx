@@ -4,6 +4,15 @@ import { Icon } from "./Icon";
 import { useApp } from "./AppProvider";
 import { MEAL_TAGS } from "@/data/ingredients";
 import type { MealRow } from "@/server/meals";
+import { photoForMeal } from "@/data/dish-photos";
+
+/** Real dish photo (lazy, fixed ratio so nothing jumps), or nothing when the dish has none. */
+export function DishImage({ id, className = "" }: { id: string; className?: string }) {
+  const p = photoForMeal(id);
+  if (!p) return null;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={p.src} alt="" width={640} height={400} loading="lazy" decoding="async" className={`aspect-[8/5] w-full object-cover ${className}`} />;
+}
 
 export function TagChips({ tags, max = 3 }: { tags: string[]; max?: number }) {
   const { tr } = useApp();
@@ -22,6 +31,7 @@ export function MealCard({ meal, fav, onFav, label, missing }: { meal: MealRow; 
   return (
     <article className="card relative !p-0">
       <Link href={`/meals/${meal.id}`} className="block">
+        <DishImage id={meal.id} className="max-h-44 rounded-t-[inherit]" />
         <div className="space-y-2.5 p-4 pe-16">
           <div className="flex flex-wrap gap-1.5">
             {label && <span className="inline-block rounded-full bg-brand-100 px-3 py-1 text-xs font-extrabold text-brand-800">{label}</span>}
