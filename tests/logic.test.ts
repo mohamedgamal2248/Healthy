@@ -802,6 +802,14 @@ test("diet plan: every day matches the daily target (+-5%), affordable Egyptian 
       assert.ok(d.slots.filter((s) => s.type === "snack").length <= 3);
     }
   }
+  // High targets stay realistic: protein near 1.4-1.8 g/kg, never bodybuilder levels.
+  for (const seed of ["a", "b", "c", "d"]) {
+    const plan = buildWeekPlan({ meals: pool, calorieTarget: 2830, conditions: [], goal: "gain", weekStart: "2026-11-21", seed, weightKg: 84 });
+    for (const d of plan.days) {
+      assert.ok(Math.abs(d.total_kcal - 2830) <= 2830 * 0.05, `${seed}: ${d.total_kcal}`);
+      assert.ok(d.slots.reduce((n, s) => n + s.protein_g, 0) <= 84 * 2.4, `${seed}: protein`);
+    }
+  }
   const { readFileSync } = await import("node:fs");
   const page = readFileSync("src/app/plan/page.tsx", "utf8");
   assert.match(page, /day\.total_kcal\} \/ \{plan\.daily_calorie_target\}/);

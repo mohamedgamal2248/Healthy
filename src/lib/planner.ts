@@ -56,8 +56,8 @@ export const SNACKS: Snack[] = [
   { id: "snack-oats-banana-honey", name_ar: "شوفان باللبن والموز والعسل", name_en: "Oats with milk, banana and honey", calories: 420, protein_g: 14, tags: ["low_salt"] },
   { id: "snack-foul-sandwich", name_ar: "ساندوتش فول صغير", name_en: "Small foul sandwich", calories: 300, protein_g: 12, tags: ["diabetes_friendly"] },
 ];
-/** At most this many snacks per day. */
-const MAX_SNACKS = 3;
+/** At most this many snacks per day (more only for very high targets). */
+const maxSnacks = (target: number) => Math.min(6, 3 + Math.max(0, Math.ceil((target - 2900) / 350)));
 /** Daily protein target (g) for a body weight and goal: 1.4-1.8 g/kg, the common range for active adults. */
 export function proteinTarget(weightKg: number, goal: string): number {
   const perKg = goal === "gain" ? 1.8 : goal === "lose" ? 1.6 : 1.4;
@@ -138,6 +138,7 @@ export function buildWeekPlan(opts: { meals: PlanMealRef[]; calorieTarget: numbe
     prevDay = today;
     // Fill what the capped portions cannot reach with simple snacks (closest fit first, never the same one twice a day).
     const snackPool = SNACKS.filter((x) => req.every((t) => x.tags.includes(t)));
+    const MAX_SNACKS = maxSnacks(target);
     for (let k = 0; k < MAX_SNACKS; k++) {
       const reach = slots.reduce((n, x) => n + (x.type === "snack" ? x.calories : x.calories * (MAX_SERV / x.servings)), 0); // what this day could reach at most
       if (reach >= target * 1.02) break;
@@ -151,6 +152,18 @@ export function buildWeekPlan(opts: { meals: PlanMealRef[]; calorieTarget: numbe
       slots.push({ type: "snack", source: "catalogue", meal_id: pick.x.id, name_ar: pick.x.name_ar, name_en: pick.x.name_en, servings: 1, calories: pick.x.calories, protein_g: pick.x.protein_g });
     }
     rebalanceDay(slots, target);
+    // Variety can leave a day short: swap the lightest snack for a denser one until the day is back near the target.
+    for (let tries = 0; tries < 3; tries++) {
+      const now = slots.reduce((n, x) => n + x.calories, 0);
+      if (now >= target * 0.97) break;
+      const snacks = slots.filter((x) => x.type === "snack").sort((a, b) => a.calories - b.calories);
+      const light = snacks[0];
+      if (!light) break;
+      const denser = snackPool.filter((x) => x.calories > light.calories && !slots.some((y) => y.meal_id === x.id)).sort((a, b) => Math.abs(a.calories - light.calories - (target - now)) - Math.abs(b.calories - light.calories - (target - now)))[0];
+      if (!denser) break;
+      Object.assign(light, { meal_id: denser.id, name_ar: denser.name_ar, name_en: denser.name_en, calories: denser.calories, protein_g: denser.protein_g });
+      rebalanceDay(slots, target);
+    }
     days.push({ date: addDays(opts.weekStart, d), slots, total_kcal: slots.reduce((s, x) => s + x.calories, 0) });
   }
   return { days, gaps, calorieTarget: target };
