@@ -6,7 +6,7 @@ import { TagChips } from "./MealCard";
 import { PricingGrid, type PriceItem } from "./Pricing";
 import { Spinner, DevLogin } from "./ui";
 import type { MealSeed } from "@/data/meals";
-import { DISH_PHOTOS, STRIP } from "@/data/dish-photos";
+import { DISH_PHOTOS, STRIP, photoForMeal } from "@/data/dish-photos";
 import type { ChallengeSeed } from "@/data/challenges";
 
 export function Landing({ items, trial, meal, challenge, ingredientsEn }: { items: PriceItem[]; trial: number; meal: MealSeed; challenge: ChallengeSeed; ingredientsEn?: { item: string }[] }) {
@@ -43,7 +43,11 @@ export function Landing({ items, trial, meal, challenge, ingredientsEn }: { item
               <div className="flex-1"><p className="text-xs font-extrabold text-ink-soft">{tr("مثال: تحدي اليوم", "Sample: today's challenge")}</p><p className="font-extrabold">{lang === "ar" ? challenge.title_ar : challenge.title_en}</p></div>
               <span className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-brand-300 text-brand-600"><Icon name="check" size={24} /></span>
             </div>
-            <div className="card !p-0">
+            <div className="card !p-0 overflow-hidden">
+              {photoForMeal(meal.id) && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photoForMeal(meal.id)!.src} alt="" width={640} height={400} loading="eager" decoding="async" className="aspect-[8/5] max-h-52 w-full object-cover" />
+              )}
               <div className="space-y-2 p-4">
                 <p className="text-xs font-extrabold text-ink-soft">{tr("مثال: وجبة اليوم", "Sample: meal of the day")}</p>
                 <p className="font-extrabold">{lang === "ar" ? meal.name_ar : meal.name_en}</p>

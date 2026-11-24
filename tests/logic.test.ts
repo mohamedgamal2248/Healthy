@@ -828,3 +828,19 @@ test("Arabic UI: diary meals keep both names; progress average is over logged da
   assert.match(pricing, /planLoaded/);
   assert.match(readFileSync("src/app/api/pricing/route.ts", "utf8"), /cdnJson\(body, 30, 300\)/);
 });
+
+test("food photos: every photo file exists, is small, is credited with an accepted licence, and meals map to the right dish", async () => {
+  const { existsSync, statSync } = await import("node:fs");
+  const { DISH_PHOTOS, photoForMeal } = await import("../src/data/dish-photos");
+  assert.ok(Object.keys(DISH_PHOTOS).length >= 10);
+  for (const [k, p] of Object.entries(DISH_PHOTOS)) {
+    assert.ok(existsSync(`public${p.src}`), k);
+    assert.ok(statSync(`public${p.src}`).size < 150_000, `${k} is optimised`);
+    assert.match(p.license, /^(CC0|Public domain|CC BY(-SA)? [0-9.]+)$/, k);
+    assert.ok(p.author.length > 1 && p.url.startsWith("https://commons.wikimedia.org/"), k);
+  }
+  assert.equal(photoForMeal("foul-balady")?.src, "/food/foul.webp");
+  assert.equal(photoForMeal("koshari-baked")?.src, "/food/koshari.webp");
+  assert.equal(photoForMeal("shakshuka")?.src, "/food/shakshuka.webp");
+  assert.equal(photoForMeal("some-unknown-dish"), null);
+});
