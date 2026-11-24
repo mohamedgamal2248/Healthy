@@ -144,9 +144,10 @@ export function buildWeekPlan(opts: { meals: PlanMealRef[]; calorieTarget: numbe
       const gap = Math.max(150, (target * 1.02 - reach) / (MAX_SNACKS - k));
       const pick = snackPool
         .filter((x) => !slots.some((y) => y.meal_id === x.id))
-        .map((x) => ({ x, score: Math.abs(x.calories - gap) + Math.max(0, x.protein_g - 10) * 4 + (hash(`${opts.seed}:${d}:${x.id}`) % 40) }))
+        .map((x) => ({ x, score: Math.abs(x.calories - gap) + Math.max(0, x.protein_g - 10) * 4 + (used.get(x.id) ?? 0) * 25 + (hash(`${opts.seed}:${d}:${x.id}`) % 40) }))
         .sort((a, b) => a.score - b.score)[0];
       if (!pick) break;
+      used.set(pick.x.id, (used.get(pick.x.id) ?? 0) + 1);
       slots.push({ type: "snack", source: "catalogue", meal_id: pick.x.id, name_ar: pick.x.name_ar, name_en: pick.x.name_en, servings: 1, calories: pick.x.calories, protein_g: pick.x.protein_g });
     }
     rebalanceDay(slots, target);
