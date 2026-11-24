@@ -24,9 +24,9 @@ export type PricedItem = {
 };
 
 export const PRICING: Record<ItemKey, PricedItem> = {
-  plan_monthly: { key: "plan_monthly", kind: "plan", usd: num(process.env.PRICE_PLAN_USD, 2), fixedPi: num(process.env.PRICE_PLAN_PI, 3), credits: 40, days: 30 },
-  pack_small: { key: "pack_small", kind: "pack", usd: num(process.env.PRICE_PACK_SMALL_USD, 0.6), fixedPi: num(process.env.PRICE_PACK_SMALL_PI, 1), credits: 10, days: 0 },
-  pack_large: { key: "pack_large", kind: "pack", usd: num(process.env.PRICE_PACK_LARGE_USD, 1.5), fixedPi: num(process.env.PRICE_PACK_LARGE_PI, 2.5), credits: 30, days: 0 },
+  plan_monthly: { key: "plan_monthly", kind: "plan", usd: num(process.env.PRICE_PLAN_USD, 2), fixedPi: num(process.env.PRICE_PLAN_PI, 3), credits: 60, days: 30 },
+  pack_small: { key: "pack_small", kind: "pack", usd: num(process.env.PRICE_PACK_SMALL_USD, 0.5), fixedPi: num(process.env.PRICE_PACK_SMALL_PI, 1), credits: 10, days: 0 },
+  pack_large: { key: "pack_large", kind: "pack", usd: num(process.env.PRICE_PACK_LARGE_USD, 1.25), fixedPi: num(process.env.PRICE_PACK_LARGE_PI, 2.5), credits: 30, days: 0 },
 };
 
 /** Credits earned once by finishing the 7-day starter challenge (no free credits at sign-up). */
