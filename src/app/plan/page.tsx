@@ -7,7 +7,6 @@ import { useApp, type Balances } from "@/components/AppProvider";
 import { EmptyState, Gate, Notice, PageHeader, PageSkeleton, Spinner } from "@/components/ui";
 import { DisclaimerBanner, PaySheet } from "@/components/Domain";
 import { PricingGrid, type PriceItem } from "@/components/Pricing";
-import { usdLabel } from "@/lib/money";
 import { Icon } from "@/components/Icon";
 import { EatTabs } from "@/components/EatTabs";
 import type { StoredPlan } from "@/server/plan";
@@ -84,7 +83,7 @@ function Inner() {
           <ul className="space-y-2 font-semibold">
             {[tr("سعرات يومية وهدف مياه حسب وزنك وطولك وعمرك وهدفك", "Daily calorie and water targets from your weight, height, age and goal"), tr("فطار وغدا وعشا لـ ٧ أيام من كتالوج الوجبات الرخيصة", "Breakfast, lunch and dinner for 7 days from the budget catalogue"), tr("تتجدد كل أسبوع عند تسجيل وزنك الجديد", "Refreshes every week when you log a new weight"), tr("تقرير أسبوعي بتقدمك ونصيحة عملية", "A weekly report with your progress and a practical tip")].map((b) => (<li key={b} className="flex gap-2"><Icon name="check" size={18} className="mt-1 shrink-0 text-brand-600" />{b}</li>))}
           </ul>
-          {plan && <p className="text-2xl font-extrabold">{plan.pricePi} Pi <span className="text-base font-bold text-ink-soft">{usdLabel(plan.usd) && <bdi dir="ltr">{usdLabel(plan.usd)} </bdi>}/ {tr("٣٠ يومًا، دفعة واحدة", "30 days, one payment")}</span></p>}
+          {plan && <p className="text-2xl font-extrabold">{plan.pricePi} Pi <span className="text-base font-bold text-ink-soft">/ {tr("٣٠ يومًا، دفعة واحدة", "30 days, one payment")}</span></p>}
           {plan && <button className="btn-primary w-full sm:w-auto" onClick={() => setBuy(plan)} disabled={!me?.profile.kyc_verified}><Icon name="pi" />{tr("اشترك في الخطة الشهرية", "Subscribe to the monthly plan")}</button>}
           {!me?.profile.kyc_verified && <Notice tone="warn" icon="shieldCheck">{tr("الاشتراك متاح لحسابات Pi الموثقة (KYC) فقط.", "Subscribing needs a KYC-verified Pi account.")}</Notice>}
         </div>

@@ -9,7 +9,6 @@ import { useApp, type Balances } from "./AppProvider";
 import { Notice, Sheet, Spinner } from "./ui";
 import { DISCLAIMER_AR, DISCLAIMER_EN } from "@/lib/texts";
 import { payWithPi } from "@/lib/pi-client";
-import { usdLabel } from "@/lib/money";
 
 export function DisclaimerBanner({ conditions = [], compact }: { conditions?: string[]; compact?: boolean }) {
   const { tr } = useApp();
@@ -353,7 +352,7 @@ export function PaySheet({ item: itemIn, onClose, onPaid }: { item: PriceItem | 
         <div className="flex items-center gap-3 rounded-2xl bg-brand-50 p-4">
           <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-600 text-white"><Icon name={copy.icon} size={24} /></span>
           <div className="flex-1"><p className="font-extrabold">{tr(copy.ar, copy.en)}</p><p className="text-sm text-ink-soft">@{me?.profile.username}</p></div>
-          <p className="text-2xl font-extrabold tabular-nums text-brand-800">{item.pricePi} <span className="text-base">Pi</span>{usdLabel(item.usd) && <span className="ms-2 text-sm font-bold text-ink-soft"><bdi dir="ltr">{usdLabel(item.usd)}</bdi></span>}</p>
+          <p className="text-2xl font-extrabold tabular-nums text-brand-800">{item.pricePi} <span className="text-base">Pi</span></p>
         </div>
         <ul className="space-y-1.5 text-sm font-semibold">
           {itemBenefits(item, tr).map((b) => (<li key={b} className="flex items-center gap-2"><Icon name="check" size={16} className="text-brand-600" />{b}</li>))}

@@ -153,7 +153,7 @@ Verification (`src/server/payment-verify.ts`) checks, against the **purchase row
 
 The grant is a single SQL transaction (`hl_complete_purchase`) that takes a per-purchase lock, so concurrent completions cannot grant twice. Recovery is built in: `reconcileOne` for stuck payments, `/api/payments/incomplete` for payments left open by the SDK, and a daily cron job.
 
-Items are a monthly plan (30 days, no auto-renewal) and two credit packs. Prices are set in US dollars, converted to Pi by the server at purchase time (live rate, rounded up to a whole Pi), shown in the app **with the dollar equivalent** before the Pioneer confirms, and locked for 30 minutes. Definitions live in `src/config/pricing.ts`; `PRICING_MODE=fixed` uses fixed Pi amounts (useful on a Testnet staging copy, where Test-Pi has no market price).
+Items are a monthly plan (30 days, no auto-renewal) and two credit packs. Prices are set in US dollars, converted to Pi by the server at purchase time (live rate, rounded up to a whole Pi), shown in the app in Pi before the Pioneer confirms, and locked for 30 minutes. Definitions live in `src/config/pricing.ts`; `PRICING_MODE=fixed` uses fixed Pi amounts (useful on a Testnet staging copy, where Test-Pi has no market price).
 
 ## Reminders at your own hour
 
@@ -337,7 +337,7 @@ To list the project in the official PiOS App List, open a pull request on `pi-ap
 - The CSP requires `unsafe-inline` for Next.js hydration.
 - Photo analysis and recipe generation are **estimates**, not medical advice.
 - The legal pages are templates and have not been reviewed by a lawyer.
-- Planned: more meals (with photos) and challenges, a dedicated production Supabase project with backups, and a load test before wide launch.
+- Planned: more meals and challenges, a dedicated production Supabase project with backups, and a load test before wide launch.
 
 ---
 

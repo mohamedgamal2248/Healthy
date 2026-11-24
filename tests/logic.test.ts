@@ -731,12 +731,8 @@ test("AI challenge rows never block the normal daily picks, and can't be swapped
   assert.match(chef, /ctxKey\(prefs, day\)/);
 });
 
-test("docs match the code: Mainnet by default, no stale Testnet claims, no price table; USD shown beside Pi prices", async () => {
+test("docs match the code: Mainnet by default, no stale Testnet claims, no price table; no dollar figures in the UI", async () => {
   const { readFileSync, existsSync } = await import("node:fs");
-  const { usdLabel } = await import("../src/lib/money");
-  assert.equal(usdLabel(2), "≈ $2.00");
-  assert.equal(usdLabel(0.6), "≈ $0.60");
-  assert.equal(usdLabel(undefined), "");
   const env = readFileSync(".env.example", "utf8");
   assert.match(env, /^NEXT_PUBLIC_PI_NETWORK=mainnet$/m);
   assert.doesNotMatch(env, /out of scope/i);
@@ -744,8 +740,7 @@ test("docs match the code: Mainnet by default, no stale Testnet claims, no price
   assert.doesNotMatch(readme, /out of scope|runs on \*\*Pi Testnet\*\*/i);
   assert.match(readme, /Pi Mainnet/);
   assert.doesNotMatch(readme, /\| Small pack \||\| Monthly plan \||\| Large pack \|/);
-  const pricing = readFileSync("src/components/Pricing.tsx", "utf8");
-  assert.match(pricing, /usdLabel\(i\.usd\)/);
+  assert.doesNotMatch(readFileSync("src/components/Pricing.tsx", "utf8"), /usdLabel/);
   assert.equal(existsSync("public/logo-options"), false, "unused logo variants are not shipped");
 });
 
@@ -829,18 +824,3 @@ test("Arabic UI: diary meals keep both names; progress average is over logged da
   assert.match(readFileSync("src/app/api/pricing/route.ts", "utf8"), /cdnJson\(body, 30, 300\)/);
 });
 
-test("food photos: every photo file exists, is small, is credited with an accepted licence, and meals map to the right dish", async () => {
-  const { existsSync, statSync } = await import("node:fs");
-  const { DISH_PHOTOS, photoForMeal } = await import("../src/data/dish-photos");
-  assert.ok(Object.keys(DISH_PHOTOS).length >= 10);
-  for (const [k, p] of Object.entries(DISH_PHOTOS)) {
-    assert.ok(existsSync(`public${p.src}`), k);
-    assert.ok(statSync(`public${p.src}`).size < 150_000, `${k} is optimised`);
-    assert.match(p.license, /^(CC0|Public domain|CC BY(-SA)? [0-9.]+)$/, k);
-    assert.ok(p.author.length > 1 && p.url.startsWith("https://commons.wikimedia.org/"), k);
-  }
-  assert.equal(photoForMeal("foul-balady")?.src, "/food/foul.webp");
-  assert.equal(photoForMeal("koshari-baked")?.src, "/food/koshari.webp");
-  assert.equal(photoForMeal("shakshuka")?.src, "/food/shakshuka.webp");
-  assert.equal(photoForMeal("some-unknown-dish"), null);
-});

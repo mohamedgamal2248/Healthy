@@ -4,7 +4,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { useApp } from "@/components/AppProvider";
 import { Gate, PageSkeleton } from "@/components/ui";
-import { DishImage, TagChips } from "@/components/MealCard";
+import { TagChips } from "@/components/MealCard";
 import { Icon } from "@/components/Icon";
 import type { MealRow } from "@/server/meals";
 
@@ -24,8 +24,7 @@ function Inner({ id }: { id: string }) {
   return (
     <div className="mx-auto max-w-3xl space-y-5 py-5">
       <Link href="/meals" className="inline-flex items-center gap-1 text-sm font-extrabold text-brand-700"><Icon name={lang === "ar" ? "arrowR" : "arrowL"} size={18} />{tr("كل الوجبات", "All meals")}</Link>
-      <div className="card !p-0 overflow-hidden">
-        <DishImage id={meal.id} className="max-h-72" />
+      <div className="card !p-0">
         <div className="space-y-3 p-5">
           <div className="flex items-start justify-between gap-3">
             <h1 className="h1">{lang === "ar" ? meal.name_ar : meal.name_en}</h1>
