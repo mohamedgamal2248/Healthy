@@ -102,13 +102,15 @@ export function Logo({ size = 36 }: { size?: number }) {
       <defs>
         <linearGradient id={`${id}bg`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#34d399" /><stop offset="1" stopColor="#065f46" /></linearGradient>
         <linearGradient id={`${id}gold`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#fde68a" /><stop offset="1" stopColor="#f59e0b" /></linearGradient>
-        <linearGradient id={`${id}arc`} gradientUnits="userSpaceOnUse" x1="250" y1="100" x2="385" y2="150"><stop offset="0" stopColor="#fde68a" /><stop offset="1" stopColor="#f59e0b" /></linearGradient>
       </defs>
       <rect width="512" height="512" rx="112" fill={`url(#${id}bg)`} />
-      <circle cx="256" cy="256" r="150" fill="none" stroke="#fff" strokeOpacity=".22" strokeWidth="34" />
-      <circle cx="256" cy="256" r="150" fill="none" stroke="#fff" strokeWidth="34" strokeLinecap="round" strokeDasharray="707 943" transform="rotate(-90 256 256)" />
-      <path d="M256 186c6 42 28 64 70 70-42 6-64 28-70 70-6-42-28-64-70-70 42-6 64-28 70-70z" fill={`url(#${id}gold)`} />
-      <path d="M256 106A150 150 0 0 1 337.4 130.0" fill="none" stroke={`url(#${id}arc)`} strokeWidth="34" strokeLinecap="round" />
+      <g transform="rotate(-90 256 256)" fill="none" strokeWidth="40" strokeLinecap="round">
+        <circle cx="256" cy="256" r="150" stroke="#fff" strokeOpacity=".2" />
+        <circle cx="256" cy="256" r="150" stroke="#fff" strokeDasharray="290 943" />
+        <circle cx="256" cy="256" r="150" stroke={`url(#${id}gold)`} strokeDasharray="200 943" strokeDashoffset="-380" />
+        <circle cx="256" cy="256" r="150" stroke="#7dd3fc" strokeDasharray="180 943" strokeDashoffset="-670" />
+      </g>
+      <path d="M256 178c7 48 30 72 78 78-48 6-71 30-78 78-7-48-30-72-78-78 48-6 71-30 78-78z" fill="#fff" />
     </svg>
   );
 }
