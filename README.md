@@ -12,6 +12,16 @@ Healthy turns healthy living into a small daily habit: three short challenges a 
 
 > Pi, Pi Network and the Pi logo are trademarks of the Pi Community Company.
 
+## At a glance (Pi Next)
+
+| | |
+|---|---|
+| **What it is** | A bilingual (Arabic / English) health-habit app: three small daily challenges, a food diary, affordable Egyptian meals, a weekly diet plan and five AI tools. |
+| **Who it is for** | Pi Pioneers in Egypt and the Arab world who want to eat better and build one small habit a day, on a normal budget. |
+| **The problem** | Diet plans are expensive, foreign apps don't know Egyptian food, and counting calories takes real effort. |
+| **How Pi is used** | Sign-in with Pi only (no email or password), verified on the server. AI credits and a monthly plan are paid in Pi (user-to-app), verified with the Pi API before anything is granted. Community features use badges and rankings only, never Pi prizes or fees. |
+| **Open it** | In Pi Browser: <https://healthai4171.pinet.com> |
+
 ---
 
 ## Table of contents
@@ -21,17 +31,18 @@ Healthy turns healthy living into a small daily habit: three short challenges a 
 3. [Pi Network integration](#pi-network-integration)
    - [Sign-in with Pi](#sign-in-with-pi)
    - [Payments with Pi](#payments-with-pi)
-4. [Healthy AI](#healthy-ai)
-5. [Data model and credits](#data-model-and-credits)
-6. [Security](#security)
-7. [Performance and scalability](#performance-and-scalability)
-8. [Project structure](#project-structure)
-9. [Getting started](#getting-started)
-10. [Configuration](#configuration)
-11. [Testing and CI](#testing-and-ci)
-12. [Deployment](#deployment)
-13. [Open source (PiOS)](#open-source-pios)
-14. [Roadmap and known limitations](#roadmap-and-known-limitations)
+4. [Reminders and notifications](#reminders-at-your-own-hour)
+5. [Healthy AI](#healthy-ai)
+6. [Data model and credits](#data-model-and-credits)
+7. [Security](#security)
+8. [Performance and scalability](#performance-and-scalability)
+9. [Project structure](#project-structure)
+10. [Getting started](#getting-started)
+11. [Configuration](#configuration)
+12. [Testing, monitoring and CI](#testing-monitoring-and-ci)
+13. [Deployment](#deployment)
+14. [Open source (PiOS)](#open-source-pios)
+15. [Roadmap and known limitations](#roadmap-and-known-limitations)
 
 ---
 
@@ -46,9 +57,9 @@ Healthy turns healthy living into a small daily habit: three short challenges a 
 | **"I have these ingredients"** | Pick what is in the kitchen and see meals that are ready now, then meals missing one or two items. Free, no credits. |
 | **Healthy AI** | Meal, workout, 7-day challenge, **"from my fridge"** (photo or typed ingredients, three meal ideas) and **photo analysis** (calorie, protein, carbs and fat estimate with ranges). One credit per request, refunded automatically on failure. Free one-tap changes after a result (cheaper, no meat, fewer calories, more protein, quicker, swap an ingredient; easier / harder / shorter workouts). |
 | **AI preferences** | Allergies and disliked foods (enforced again on the output), people cooked for, fitness level, equipment and joints to go easy on. Sent with every request. |
-| **Diet plan** | Weekly plan from weight, height, age, goal, activity and declared conditions. Weekly adjustment from logged weight. Water and shopping list. |
-| **Progress** | Weight log, habit log, weekly report with a short AI-written insight (plan subscribers, no credit), and a shareable weekly card drawn on the device (no health data on it). |
-| **Community** | 7-day challenge with a friend (invite link), weekly group challenge, weekly and monthly leaderboards, two teams, shared recipes with likes and saves, referrals. Reputation and badges only. |
+| **Diet plan** | Weekly plan from weight, height, age, goal, activity and declared conditions, built from affordable Egyptian meals by default. Every day lands within ±5% of the calorie target with realistic portions (¾ to 1½ servings); high targets are completed with simple Egyptian snacks instead of oversized plates, and protein is kept near 1.4-1.8 g per kg. Weekly adjustment from logged weight. Water target and shopping list. |
+| **Progress** | Weight log, habit log, calorie average over fully logged days, weekly report with a short AI-written insight (plan subscribers, no credit), and a shareable weekly card drawn on the device (no health data on it). |
+| **Community** | 7-day challenge with a friend (invite link), weekly group challenge, weekly and monthly leaderboards, two teams, shared recipes with likes and saves, referrals. Reputation and badges only; member counts and ranks stay hidden until a group has five members. |
 | **Wallet** | Credit balance, plan expiry, purchase history. |
 | **Admin** | Statistics, AI cost per request type, challenge and meal management, audit log. |
 
@@ -161,7 +172,7 @@ Each person chooses a reminder hour in their profile (default 17:00 local time).
 
 ## Installable app and reminders (PWA)
 
-Healthy is an installable web app (manifest, icons, service worker). In a regular browser users can add it to the home screen and turn on a **daily reminder** (Web Push, VAPID): a daily cron (`/api/cron/reminders`) sends one notification only to people who have not completed a challenge that day in their own timezone. Subscriptions are stored per device in `hl_push_subscriptions` (deleted with the account); the service worker caches nothing. Pi Browser may not support Web Push; the feature simply stays off there.
+Healthy is an installable web app (manifest, icons, service worker). In a regular browser users can add it to the home screen and turn on a **daily reminder** (Web Push, VAPID): the reminder job above (`/api/cron/reminders`) sends one notification only to people who have not completed a challenge that day in their own timezone. Subscriptions are stored per device in `hl_push_subscriptions` (deleted with the account); the service worker caches nothing. Pi Browser may not support Web Push; the feature simply stays off there.
 
 ### Pi Notification Center (in-app notifications)
 
@@ -206,7 +217,7 @@ All objects are prefixed `hl_`. Migrations are in [`supabase/migrations`](./supa
 | `hl_group_challenges`, `hl_group_challenge_members`, `hl_group_challenge_checks`, `hl_referrals` | Community |
 | `hl_rate_limits`, `hl_admin_audit` | Rate limiter and admin audit trail |
 
-Credits are a **ledger, not a counter**: UPDATE and DELETE on the ledger are blocked by a trigger, spending/refunding run inside functions under a per-user advisory lock, balances can never go negative, and refunds are idempotent. A starter grant of 3 credits is given once per user (unique index).
+Credits are a **ledger, not a counter**: UPDATE and DELETE on the ledger are blocked by a trigger, spending/refunding run inside functions under a per-user advisory lock, balances can never go negative, and refunds are idempotent. There are no free credits at sign-up: 3 free AI requests are granted once, after the 7-day starter challenge (unique index).
 
 ## Security
 
@@ -251,7 +262,9 @@ src/
   config/pricing.ts    Prices, credits, AI limits
 supabase/migrations/   Database schema and functions
 tests/                 Logic tests and SQL tests (PGlite)
-scripts/               Seed scripts
+scripts/               Seed script (npm run seed)
+e2e/ loadtest/         Playwright smoke tests and k6 load test
+docs/brand/            Logo files
 ```
 
 ## Getting started
@@ -297,7 +310,14 @@ Server secrets are never exposed to the browser. See [`.env.example`](./.env.exa
 | `CRON_SECRET` | Authenticates the Vercel Cron jobs |
 | `SCHEDULER_SECRET` | Authenticates the hourly database scheduler |
 
-## Testing, monitoring and load
+## Testing, monitoring and CI
+
+```bash
+npm run typecheck   # TypeScript
+npm test            # logic tests + SQL tests (credit ledger on PGlite)
+npm run build       # production build
+```
+
 
 - **Unit and SQL tests** (`npm test`, PGlite) cover logic, credits, reminders, streak freeze, diary rules and the security contract of public routes.
 - **E2E smoke tests** (`npm run e2e`, Playwright): read-only checks of the live site (pages, manifest, public API, anonymous 401s, security headers) on a phone and a desktop viewport. A daily workflow runs them.
@@ -306,15 +326,7 @@ Server secrets are never exposed to the browser. See [`.env.example`](./.env.exa
 - **Supply chain**: Dependabot, CodeQL and [`SECURITY.md`](./SECURITY.md).
 - Fonts are self-hosted at build time (`next/font`), so no third-party font requests.
 
-## Testing and CI
-
-```bash
-npm run typecheck   # TypeScript
-npm test            # logic tests + SQL tests (credit ledger on PGlite)
-npm run build       # production build
-```
-
-The suite covers streaks and timezones, planner and nutrition math, payment verification (wrong amount, payer, memo, direction, cancelled, quote age), the credit ledger (spend order, refunds, idempotency, referral rules, team and leaderboard SQL), AI safety filters, photo validation and the public-API contract (no auth, no per-user fields). GitHub Actions runs typecheck, tests and build on every push and pull request.
+The suite covers streaks and timezones, planner and nutrition math (daily target, portion limits, protein range), payment verification (wrong amount, payer, memo, direction, cancelled, quote age), the credit ledger (spend order, refunds, idempotency, referral rules, team and leaderboard SQL), AI safety filters, photo validation and the public-API contract (no auth, no per-user fields). GitHub Actions runs typecheck, tests and build on every push and pull request.
 
 ## Deployment
 
