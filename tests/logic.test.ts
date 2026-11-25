@@ -558,9 +558,10 @@ test("eligibility: Pi exposes no KYC flag, so every Pi user is eligible; strict 
 
 test("weekly card has a fallback when the browser cannot share files; no 'chef' wording in user-facing Arabic text", async () => {
   const { readFileSync, readdirSync, statSync } = await import("node:fs");
-  const card = readFileSync("src/components/WeeklyCard.tsx", "utf8");
+  const card = readFileSync("src/components/ShareCard.tsx", "utf8"); // shared by the weekly and plan cards
   assert.match(card, /setPreview/); // image preview (long-press to save) when share/download is unavailable
   assert.match(card, /AbortError/); // closing the share sheet is not an error
+  assert.match(readFileSync("src/components/WeeklyCard.tsx", "utf8"), /ShareCard/);
   const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(`${d}/${f}`).isDirectory() ? walk(`${d}/${f}`) : [`${d}/${f}`]));
   for (const f of walk("src").filter((x) => /\.(tsx?|json)$/.test(x))) assert.doesNotMatch(readFileSync(f, "utf8"), /شيف/, f);
 });
@@ -835,3 +836,35 @@ test("Arabic UI: diary meals keep both names; progress average is over logged da
   assert.match(readFileSync("src/app/api/pricing/route.ts", "utf8"), /cdnJson\(body, 30, 300\)/);
 });
 
+
+
+test("smart reminder: built from the real day, never shames, falls back to the plain challenge text", async () => {
+  const { smartReminderText, reminderText } = await import("../src/lib/reminder");
+  const day = (eatenKcal: number, eatenProtein: number, entries = 1) => ({ target: 2830, proteinTarget: 177, eatenKcal, eatenProtein, entries });
+  // calories and protein left
+  const a = smartReminderText({ streak: 3, lang: "en", day: day(2230, 100) });
+  assert.match(a.title, /600 kcal left today/);
+  assert.match(a.body, /77 g of protein/);
+  const ar = smartReminderText({ streak: 3, lang: "ar", day: day(2230, 100) });
+  assert.match(ar.title, /فاضلك/);
+  assert.match(ar.body, /بروتين/);
+  // calories left, protein already covered
+  assert.doesNotMatch(smartReminderText({ streak: 0, lang: "en", day: day(1500, 170) }).body, /protein to go/);
+  // nothing logged yet: nudge to log the first meal
+  assert.match(smartReminderText({ streak: 0, lang: "en", day: day(0, 0, 0) }).title, /haven't logged/);
+  // at or over the goal, or no data: the plain challenge reminder, with no calorie numbers
+  for (const d of [day(2800, 160), day(3300, 200), null, { target: null, proteinTarget: null, eatenKcal: 0, eatenProtein: 0, entries: 0 }]) {
+    assert.deepEqual(smartReminderText({ streak: 2, lang: "en", day: d }), reminderText({ streak: 2, lang: "en" }));
+  }
+});
+
+test("share cards: drawing is pure and card text carries no health data; share buttons use the PiNet link", async () => {
+  const { readFileSync } = await import("node:fs");
+  const cards = readFileSync("src/lib/cards.ts", "utf8");
+  assert.doesNotMatch(cards, /calories|protein|weight|kcal/i, "cards must not draw health numbers");
+  const share = readFileSync("src/components/ShareCard.tsx", "utf8");
+  assert.match(share, /PINET_URL/);
+  assert.match(share, /twitter\.com\/intent\/tweet/);
+  assert.match(share, /wa\.me/);
+  assert.match(share, /noopener/);
+});

@@ -3,7 +3,8 @@ import { ok, route } from "@/server/http";
 import { requireCron } from "@/server/cron-auth";
 import { dropSubscription, pushConfigured, sendPush, type Sub } from "@/server/push";
 import { NOTIFY_BATCH, sendPiNotifications, type PiNotification } from "@/server/pi-notify";
-import { expiryText, reminderText } from "@/lib/reminder";
+import { expiryText, smartReminderText } from "@/lib/reminder";
+import { daySnapshots } from "@/server/reminder-context";
 import { addDays } from "@/lib/dates";
 
 export const maxDuration = 120;
@@ -48,9 +49,12 @@ export const GET = route(async (req) => {
     const rows = must(await db().rpc("hl_claim_reminders", { p_limit: BATCH })) as { username: string; pi_uid: string | null; language: string | null; current_streak: number; last_completed_date: string | null; local_date: string; notify_pi: boolean }[];
     if (!rows.length) break;
     out.due += rows.length;
+    // The text is built from each person's real day (calories and protein left, or "log your first meal"). If that lookup
+    // fails the plain challenge reminder still goes out.
+    const days = await daySnapshots(rows.map((r) => ({ username: r.username, local_date: r.local_date }))).catch((e) => { console.error("[reminders] day snapshot", e instanceof Error ? e.message : e); return new Map(); });
     await deliver(rows.map((r) => {
       const alive = !!r.last_completed_date && r.last_completed_date >= addDays(r.local_date, -1); // a stale streak number would mislead
-      const t = reminderText({ streak: alive ? r.current_streak : 0, lang: r.language === "ar" ? "ar" : "en" });
+      const t = smartReminderText({ streak: alive ? r.current_streak : 0, lang: r.language === "ar" ? "ar" : "en", day: days.get(r.username) ?? null });
       return { username: r.username, pi_uid: r.pi_uid, language: r.language, notify_pi: r.notify_pi, ...t };
     }), out);
     if (rows.length < BATCH) break;
