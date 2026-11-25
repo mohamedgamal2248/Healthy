@@ -9,7 +9,7 @@ import { DisclaimerBanner, PaySheet } from "@/components/Domain";
 import { PricingGrid, type PriceItem } from "@/components/Pricing";
 import { Icon } from "@/components/Icon";
 import { EatTabs } from "@/components/EatTabs";
-import { PlanCard } from "@/components/PlanCard";
+import { ShareLink } from "@/components/ShareLink";
 import type { StoredPlan } from "@/server/plan";
 
 type Report = { week_start: string; weight_change: number | null; current_weight: number | null; streak: number; challenges_completed: number; favourite_meal: { name_ar: string; name_en: string } | null; avg_water: number | null; tip_ar: string; tip_en: string; insight?: string };
@@ -140,7 +140,7 @@ function Inner() {
               </section>
             ))}
           </div>
-          <div className="card"><PlanCard days={plan.plan.days} /></div>
+          <div className="card"><ShareLink label={tr("شارك رابط التطبيق", "Share the app link")} text={tr("خطتي الأسبوعية على Healthy: أكل مصري اقتصادي وذكاء اصطناعي، لبايونيرز Pi. افتحه من Pi Browser:", "My weekly plan on Healthy: affordable Egyptian meals and AI, for Pi Pioneers. Open it in Pi Browser:")} /></div>
           <div className="card flex flex-wrap items-center gap-3">
             <p className="muted flex-1">{tr("تتجدد خطتك تلقائيًا كل أسبوع عند تسجيل وزن جديد (مجانًا). غيّرت هدفك في منتصف الأسبوع؟", "Your plan refreshes weekly when you log a new weight (free). Changed your goal mid-week?")}</p>
             <button className="btn-soft btn-sm" onClick={() => generate("regenerate")} disabled={busy || (d.balances?.total ?? 0) < 1}><Icon name="refresh" size={18} />{tr(`إعادة التوليد — ${d.regenerateCost} كريدت`, `Regenerate — ${d.regenerateCost} request`)}</button>

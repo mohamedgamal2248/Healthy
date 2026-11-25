@@ -492,7 +492,7 @@ test("hourly reminders: both cron secrets accepted, others refused; plan-expiry 
   assert.match(route, /hl_claim_reminders/); assert.match(route, /hl_claim_expiry_notices/); // SQL claims = no double sends
 });
 
-test("duo challenge: verified-only, rate limited, single-use invites, no health data; share card is drawn on the device", async () => {
+test("duo challenge: verified-only, rate limited, single-use invites, no health data; sharing is a link only", async () => {
   const { readFileSync } = await import("node:fs");
   const d = readFileSync("src/server/duo.ts", "utf8");
   assert.match(d, /is\("invitee", null\)/); // an invite can be accepted only once (atomic)
@@ -503,7 +503,7 @@ test("duo challenge: verified-only, rate limited, single-use invites, no health 
   assert.match(readFileSync("src/app/api/duo/route.ts", "utf8"), /requireVerified/);
   const card = readFileSync("src/components/WeeklyCard.tsx", "utf8");
   assert.doesNotMatch(card, /fetch\(|api\(/); // nothing is uploaded
-  assert.doesNotMatch(card, /weight|kg|condition/i); // no health data on the shared image
+  assert.doesNotMatch(card, /weight|kg|condition/i); // no health data in the shared text
 });
 
 test("operations tooling exists: health probe, uptime/e2e/codeql workflows, load test, security policy, self-hosted fonts", async () => {
@@ -556,12 +556,15 @@ test("eligibility: Pi exposes no KYC flag, so every Pi user is eligible; strict 
   }
 });
 
-test("weekly card has a fallback when the browser cannot share files; no 'chef' wording in user-facing Arabic text", async () => {
-  const { readFileSync, readdirSync, statSync } = await import("node:fs");
-  const card = readFileSync("src/components/ShareCard.tsx", "utf8"); // shared by the weekly and plan cards
-  assert.match(card, /setPreview/); // image preview (long-press to save) when share/download is unavailable
-  assert.match(card, /AbortError/); // closing the share sheet is not an error
-  assert.match(readFileSync("src/components/WeeklyCard.tsx", "utf8"), /ShareCard/);
+test("sharing is a link only: native share or copy, no images, no X / WhatsApp buttons; no 'chef' wording in user-facing Arabic text", async () => {
+  const { readFileSync, readdirSync, statSync, existsSync } = await import("node:fs");
+  const share = readFileSync("src/components/ShareLink.tsx", "utf8");
+  assert.match(share, /PINET_URL/);
+  assert.match(share, /AbortError/); // closing the share sheet is not an error
+  assert.match(share, /clipboard\.writeText/); // fallback: copy the link
+  assert.doesNotMatch(share, /canvas|toBlob|twitter\.com|x\.com|wa\.me|window\.open/);
+  assert.ok(!existsSync("src/lib/cards.ts") && !existsSync("src/components/ShareCard.tsx"));
+  assert.match(readFileSync("src/components/WeeklyCard.tsx", "utf8"), /ShareLink/);
   const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(`${d}/${f}`).isDirectory() ? walk(`${d}/${f}`) : [`${d}/${f}`]));
   for (const f of walk("src").filter((x) => /\.(tsx?|json)$/.test(x))) assert.doesNotMatch(readFileSync(f, "utf8"), /شيف/, f);
 });
@@ -856,15 +859,4 @@ test("smart reminder: built from the real day, never shames, falls back to the p
   for (const d of [day(2800, 160), day(3300, 200), null, { target: null, proteinTarget: null, eatenKcal: 0, eatenProtein: 0, entries: 0 }]) {
     assert.deepEqual(smartReminderText({ streak: 2, lang: "en", day: d }), reminderText({ streak: 2, lang: "en" }));
   }
-});
-
-test("share cards: drawing is pure and card text carries no health data; share buttons use the PiNet link", async () => {
-  const { readFileSync } = await import("node:fs");
-  const cards = readFileSync("src/lib/cards.ts", "utf8");
-  assert.doesNotMatch(cards, /calories|protein|weight|kcal/i, "cards must not draw health numbers");
-  const share = readFileSync("src/components/ShareCard.tsx", "utf8");
-  assert.match(share, /PINET_URL/);
-  assert.match(share, /twitter\.com\/intent\/tweet/);
-  assert.match(share, /wa\.me/);
-  assert.match(share, /noopener/);
 });

@@ -95,7 +95,7 @@ function Inner() {
         </div>
       </div>
 
-      <WeeklyCard today={d.today} weekDays={d.weekDays ?? []} streak={d.streak.current} total={d.streak.total} username={me?.profile.username ?? ""} />
+      <WeeklyCard today={d.today} weekDays={d.weekDays ?? []} />
 
       <section id="weight" className="card scroll-mt-24 space-y-3">
         <div className="flex items-center justify-between"><h2 className="h2">{tr("الوزن", "Weight")}</h2>{last && first && pts.length > 1 && <span className="rounded-full bg-brand-50 px-3 py-1 text-sm font-extrabold text-brand-800 tabular-nums">{last.kg - first.kg > 0 ? "+" : ""}{(last.kg - first.kg).toFixed(1)} kg</span>}</div>
