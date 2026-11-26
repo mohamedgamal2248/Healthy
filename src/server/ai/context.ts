@@ -53,7 +53,7 @@ export function dayLines(d: DayCtx | null | undefined): string {
   const parts = [`سياق اليوم (للاستئناس ولا تكرره حرفيًا): الوقت المحلي يناسب ${slot}.`];
   if (d.target) parts.push(`هدف المستخدم ${d.target} سعرة يوميًا.`);
   if (d.logged) parts.push(`أكل حتى الآن ${d.kcal} سعرة و${d.protein_g} جم بروتين${d.remaining !== null ? d.remaining > 0 ? `، والمتبقي حوالي ${d.remaining} سعرة` : "، وقد بلغ هدفه أو تجاوزه" : ""}.`);
-  if (d.logged && d.remaining !== null) parts.push(d.remaining > 0 ? "لو الطلب لا يحدد حجمًا فاجعل الوجبة تناسب المتبقي ولا تتجاوزه." : "اجعل الوجبة خفيفة جدًا (سناك صغير) ما لم يطلب غير ذلك.");
+  if (d.logged && d.remaining !== null) parts.push(d.remaining > 0 ? "لو الطلب لا يحدد حجمًا فاجعل الوجبة حصة معتدلة لشخص واحد (حوالي ٣٠٠–٦٠٠ سعرة لوجبة رئيسية) ولا تتجاوز المتبقي. لا تكبّر الحصة لتملأ المتبقي." : "اجعل الوجبة خفيفة جدًا (سناك صغير) ما لم يطلب غير ذلك.");
   return parts.join(" ");
 }
 

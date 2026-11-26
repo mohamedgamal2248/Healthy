@@ -1,13 +1,14 @@
 import { z } from "zod";
 import { AiNotConfigured, callModel, extractJson, type AiMessage, timeLeftMs } from "./provider";
-import { outputIsSafe, REFUSAL_AR, safeRefusalText, MAX_SINGLE_MEAL_KCAL, asksForBulk } from "./safety";
+import { outputIsSafe, REFUSAL_AR, safeRefusalText, MAX_SINGLE_MEAL_KCAL, asksForBulk, normalizeText } from "./safety";
 import { MIN_DAILY_KCAL } from "@/config/pricing";
+import { matchFoodRef } from "@/config/egypt-foods";
 import { langInstruction, type Lang } from "./lang";
 import { dayLines, prefsLines, violatesPrefs, type AiPrefs, type DayCtx } from "./context";
 
 export const RecipeSchema = z.object({
   name: z.string().trim().min(2).max(120),
-  ingredients: z.array(z.object({ item: z.string().trim().min(1).max(80), quantity: z.string().trim().min(1).max(60) })).min(2).max(25),
+  ingredients: z.array(z.object({ item: z.string().trim().min(1).max(80), quantity: z.string().trim().min(1).max(60), grams: z.number().min(0).max(2000).optional(), kcal: z.number().min(0).max(2500).optional() })).min(2).max(25),
   steps: z.array(z.string().trim().min(3).max(400)).min(2).max(15),
   calories: z.number().min(50).max(1500),
   protein: z.number().min(0).max(150),
@@ -28,7 +29,7 @@ export type ProfileContext = { goal: string | null; conditions: string[]; lang?:
 
 const SHAPE = `{
   "name": "اسم الوصفة",
-  "ingredients": [{"item": "المكوّن", "quantity": "الكمية"}],
+  "ingredients": [{"item": "المكوّن", "quantity": "الكمية", "grams": 120, "kcal": 180}],
   "steps": ["الخطوة الأولى", "الخطوة الثانية"],
   "calories": 350,
   "protein": 25,
@@ -42,7 +43,8 @@ export const RULES = `قواعد صارمة:
 - أنت تقدّم إرشادات غذائية عامة فقط. ممنوع التشخيص أو العلاج أو ذكر أي دواء أو مكمل غذائي أو جرعة، وممنوع التوصية بالصيام. ممنوع ادعاء أن الأكل يعالج أو يشفي مرضًا.
 - إذا طلب المستخدم تشخيصًا أو علاجًا أو نظامًا غذائيًا لطفل، أرجع فقط: {"refusal": "${REFUSAL_AR}"}
 - نطاقك الأكل الصحي فقط في هذا الطلب؛ أي طلب خارج الأكل والصحة العامة (برمجة، سياسة، ترجمة…) أرجع فيه فقط: {"refusal": "أنا كوتش للصحة فقط: أكل صحي، تمارين بسيطة، وتحديات وعادات يومية."}
-- السعرات والبروتين لحصة واحدة، أرقام واقعية.
+- المقادير لشخص واحد (حصة واحدة) ما لم يُذكر عدد أشخاص، والسعرات والبروتين لهذه الحصة بأرقام واقعية. لا تكبّر الحصة بلا سبب.
+- لكل مكوّن اكتب grams (وزنه بالجرام كما يُقدَّم) و kcal (سعراته). مجموع kcal للمكوّنات يساوي calories.
 - لو الطلب عن طبق أو مكوّن غير مألوف ولا تعرف طريقة تحضيره المعتادة، استخدم أداة البحث على الويب للتأكد من الطريقة، ثم اكتب وصفتك الخاصة بصياغتك (لا تنسخ نصًا من أي موقع).
 - أرجع كائن JSON واحدًا فقط بدون أي نص قبله أو بعده.`;
 
@@ -76,6 +78,26 @@ export function recipeNumbersProblem(r: { calories: number; protein: number }, a
   return null;
 }
 
+/**
+ * Makes the totals follow the ingredients. An ingredient whose kcal strays more than 30% from grams x the reference table
+ * (src/config/egypt-foods.ts) is pulled back to it; when every ingredient has a kcal value the total becomes their sum
+ * (rounded to 10) if the model's own total is more than 12% away. Recipes without per-ingredient numbers are left as they are.
+ */
+export function reconcileRecipe(r: Recipe): Recipe {
+  if (!r.ingredients.every((i) => typeof i.kcal === "number")) return r;
+  let sum = 0;
+  const ingredients = r.ingredients.map((i) => {
+    const ref = (i.grams ?? 0) >= 5 ? matchFoodRef(normalizeText(i.item)) : null;
+    const exp = ref ? Math.round(((i.grams ?? 0) * ref.kcal) / 100) : 0;
+    const kcal = ref && exp > 0 && Math.abs((i.kcal as number) - exp) / exp > 0.3 ? exp : (i.kcal as number);
+    sum += kcal;
+    return { ...i, kcal };
+  });
+  if (sum <= 0) return r;
+  const off = Math.abs(sum - r.calories) / r.calories > 0.12;
+  return { ...r, ingredients, calories: off ? Math.max(50, Math.min(1500, Math.round(sum / 10) * 10)) : r.calories };
+}
+
 export function validateRecipe(raw: unknown, prefs?: AiPrefs, allowBulk = false): Recipe {
   if (raw && typeof raw === "object" && "refusal" in raw) {
     throw new AiRefused(safeRefusalText((raw as { refusal: unknown }).refusal, REFUSAL_AR));
@@ -85,9 +107,10 @@ export function validateRecipe(raw: unknown, prefs?: AiPrefs, allowBulk = false)
   if (!outputIsSafe(JSON.stringify(parsed.data))) throw new AiUnusable("unsafe_content");
   const bad = recipeViolation(parsed.data, prefs);
   if (bad) throw new AiUnusable(`prefs:${bad}`);
-  const num = recipeNumbersProblem(parsed.data, allowBulk);
+  const recipe = reconcileRecipe(parsed.data);
+  const num = recipeNumbersProblem(recipe, allowBulk);
   if (num) throw new AiUnusable(num);
-  return parsed.data;
+  return recipe;
 }
 
 /** One generation attempt plus one retry. Throws AiUnusable when both fail (caller refunds the credit). */

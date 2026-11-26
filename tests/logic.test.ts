@@ -860,3 +860,33 @@ test("smart reminder: built from the real day, never shames, falls back to the p
     assert.deepEqual(smartReminderText({ streak: 2, lang: "en", day: d }), reminderText({ streak: 2, lang: "en" }));
   }
 });
+
+test("AI recipe totals follow the ingredients: reference table pulls a wrong ingredient back, a total far from the sum is corrected", async () => {
+  const { reconcileRecipe } = await import("../src/server/ai/recipe");
+  const base = { name: "x", steps: ["a b c", "d e f"], protein: 30, benefits: [{ ingredient: "بيض", benefit: "بروتين جيد" }], substitutions: [], suitable_for: [] };
+  // 6 eggs (330 g, ~510 kcal by the table) + yogurt + oil sum to ~800; the model's 850 is within 12%, so it stays
+  const ok = reconcileRecipe({ ...base, calories: 850, ingredients: [
+    { item: "بيض بلدي", quantity: "6 بيضات", grams: 330, kcal: 500 }, { item: "زبادي", quantity: "300 جم", grams: 300, kcal: 180 }, { item: "زيت زيتون", quantity: "ملعقة", grams: 14, kcal: 124 },
+  ] });
+  assert.equal(ok.calories, 850);
+  // a total 40% below its ingredients is corrected to the sum (rounded to 10)
+  const fixed = reconcileRecipe({ ...base, calories: 500, ingredients: [
+    { item: "بيض", quantity: "4", grams: 220, kcal: 340 }, { item: "عيش بلدي", quantity: "رغيف", grams: 100, kcal: 270 }, { item: "زيت", quantity: "ملعقة", grams: 14, kcal: 124 },
+  ] });
+  assert.equal(fixed.calories, 730);
+  // an invented ingredient value (oil 14 g at 30 kcal) is replaced by grams x reference (14 g x 884/100 = 124)
+  const ref = reconcileRecipe({ ...base, calories: 200, ingredients: [{ item: "زيت زيتون", quantity: "ملعقة", grams: 14, kcal: 30 }, { item: "خيار", quantity: "حبة", grams: 100, kcal: 25 }] });
+  assert.equal(ref.ingredients[0].kcal, 124);
+  // no per-ingredient numbers: untouched
+  const same = { ...base, calories: 400, ingredients: [{ item: "عدس", quantity: "كوب" }, { item: "أرز", quantity: "نصف كوب" }] };
+  assert.deepEqual(reconcileRecipe(same), same);
+});
+
+test("diary entries open their details: catalogue meals and saved results link, manual entries do not", async () => {
+  const { readFileSync } = await import("node:fs");
+  const page = readFileSync("src/app/diary/page.tsx", "utf8");
+  assert.match(page, /`\/meals\/\$\{e\.source_id\}`/);
+  assert.match(page, /`\/chef\?recipe=\$\{e\.source_id\}`/);
+  const { toEntry } = await import("../src/server/food");
+  assert.equal(toEntry({ id: "1", name: "x", calories: 1, protein_g: 0, carbs_g: null, fat_g: null, source: "meal", source_id: "foul-egg" }).source_id, "foul-egg");
+});

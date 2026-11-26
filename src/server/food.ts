@@ -7,7 +7,7 @@ import { getMeal } from "./meals";
 import { MEAL_SEEDS } from "@/data/meals";
 import { adjustScan, type ScanIng, type ScanTotals, type Swap } from "@/lib/scanmath";
 
-export type FoodEntry = { id: string; name: string; name_ar?: string; name_en?: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; source: "meal" | "scan" | "manual"; estimated: boolean };
+export type FoodEntry = { id: string; name: string; name_ar?: string; name_en?: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; source: "meal" | "scan" | "manual"; estimated: boolean; /** Catalogue meal id (source "meal") or saved result id (source "scan"): opens the details page. */ source_id?: string | null };
 export const MAX_ENTRIES_PER_DAY = 40;
 /** Daily macro split of the calorie target (energy share): protein 25%, carbs 50%, fat 25%. */
 export const MACRO_SPLIT = { protein: 0.25, carbs: 0.5, fat: 0.25 } as const;
@@ -48,7 +48,7 @@ export function toEntry(r: Row): FoodEntry {
   const known = r.carbs_g !== null && r.fat_g !== null;
   const est = known ? { carbs_g: Number(r.carbs_g), fat_g: Number(r.fat_g) } : estimateCarbsFat(r.calories, protein);
   const names = r.source === "meal" && r.source_id ? MEAL_NAMES.get(r.source_id) : undefined;
-  return { id: r.id, name: r.name, ...(names ? { name_ar: names.ar, name_en: names.en } : {}), calories: r.calories, protein_g: protein, ...est, source: r.source, estimated: !known };
+  return { id: r.id, name: r.name, ...(names ? { name_ar: names.ar, name_en: names.en } : {}), calories: r.calories, protein_g: protein, ...est, source: r.source, estimated: !known, source_id: r.source_id ?? null };
 }
 
 export async function foodDay(a: Auth) {
