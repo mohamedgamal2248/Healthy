@@ -11,3 +11,8 @@ export async function memo<T>(key: string, ttlMs: number, fn: () => Promise<T>):
   inflight.set(key, p);
   return p;
 }
+
+/** Drop cached entries whose key starts with `prefix` (this instance only; others expire by TTL). */
+export function forget(prefix: string): void {
+  for (const k of [...store.keys()]) if (k.startsWith(prefix)) store.delete(k);
+}

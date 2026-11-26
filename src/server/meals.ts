@@ -1,6 +1,6 @@
 import { db, must } from "./supabase";
 import { ensureSeeded } from "./seed";
-import { memo } from "./memo";
+import { forget, memo } from "./memo";
 import { dayNumber } from "@/lib/dates";
 import type { MealIngredient } from "@/data/meals";
 
@@ -15,7 +15,7 @@ export type MealRow = {
 let mealsCache: { at: number; rows: MealRow[] } | null = null;
 const CATALOGUE_TTL_MS = 60_000;
 let mealsLoading: Promise<MealRow[]> | null = null;
-export const invalidateCatalogueCache = () => { mealsCache = null; };
+export const invalidateCatalogueCache = () => { mealsCache = null; forget("motd:"); forget("meal-index"); };
 
 /** The whole active catalogue (~110 rows) cached in memory for a minute: every list / daily pick reads this. */
 async function activeMeals(): Promise<MealRow[]> {
@@ -71,16 +71,31 @@ export async function getMeal(id: string): Promise<MealRow | null> {
   return must(await db().from("hl_meals").select("*").eq("id", id).maybeSingle()) as MealRow | null;
 }
 
-/** Breakfast / lunch / dinner of the day: admin override first, otherwise a daily rotation. */
-export async function mealsOfTheDay(date: string): Promise<Record<"breakfast" | "lunch" | "dinner", MealRow | null>> {
-  // Overrides are the same for every user on a date: cached briefly so each Today view does not re-read them.
-  const [meals, overrides] = await Promise.all([activeMeals(), memo(`ov:${date}`, 60_000, async () => must(await db().from("hl_meal_overrides").select("meal_type, meal_id").eq("date", date)) as { meal_type: string; meal_id: string }[])]);
-  const ov = new Map(overrides.map((o) => [o.meal_type, o.meal_id]));
-  const pick = (type: "breakfast" | "lunch" | "dinner") => {
-    const ofType = [...meals].filter((m) => m.meal_type === type).sort((x, y) => (x.id < y.id ? -1 : 1));
-    const forced = ov.get(type) ? ofType.find((m) => m.id === ov.get(type)) : undefined;
-    if (forced) return forced;
-    return ofType.length ? ofType[dayNumber(date) % ofType.length] : null;
-  };
-  return { breakfast: pick("breakfast"), lunch: pick("lunch"), dinner: pick("dinner") };
+/**
+ * Breakfast / lunch / dinner of the day: admin override first, otherwise a daily rotation.
+ * The answer is the same for every user on a date, so it is cached per instance: a cold instance reads a small
+ * id index and the three chosen rows instead of downloading the whole catalogue.
+ */
+export function mealsOfTheDay(date: string): Promise<Record<"breakfast" | "lunch" | "dinner", MealRow | null>> {
+  return memo(`motd:${date}`, 60_000, async () => {
+    const [index, overrides] = await Promise.all([
+      memo("meal-index", 5 * 60_000, async () => {
+        await ensureSeeded();
+        return must(await db().from("hl_meals").select("id,meal_type").eq("active", true)) as { id: string; meal_type: string }[];
+      }),
+      must(await db().from("hl_meal_overrides").select("meal_type, meal_id").eq("date", date)) as { meal_type: string; meal_id: string }[],
+    ]);
+    const ov = new Map(overrides.map((o) => [o.meal_type, o.meal_id]));
+    const pickId = (type: "breakfast" | "lunch" | "dinner") => {
+      const ofType = index.filter((m) => m.meal_type === type).map((m) => m.id).sort();
+      const forced = ov.get(type);
+      if (forced && ofType.includes(forced)) return forced;
+      return ofType.length ? ofType[dayNumber(date) % ofType.length] : null;
+    };
+    const ids = { breakfast: pickId("breakfast"), lunch: pickId("lunch"), dinner: pickId("dinner") };
+    const wanted = Object.values(ids).filter((x): x is string => !!x);
+    const rows = wanted.length ? (must(await db().from("hl_meals").select("*").in("id", wanted)) as MealRow[]) : [];
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    return { breakfast: byId.get(ids.breakfast ?? "") ?? null, lunch: byId.get(ids.lunch ?? "") ?? null, dinner: byId.get(ids.dinner ?? "") ?? null };
+  });
 }

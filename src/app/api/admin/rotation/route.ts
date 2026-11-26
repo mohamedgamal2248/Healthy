@@ -2,6 +2,7 @@ import { db, must } from "@/server/supabase";
 import { ok, readJson, route, E } from "@/server/http";
 import { requireAdmin } from "@/server/auth";
 import { audit } from "@/server/audit";
+import { forget } from "@/server/memo";
 
 export const GET = route(async (req) => {
   await requireAdmin(req);
@@ -19,6 +20,7 @@ export const POST = route(async (req) => {
     if (!m || m.meal_type !== meal_type) throw E.bad("الوجبة غير موجودة أو من نوع آخر.", "Meal not found or wrong type.");
     must(await db().from("hl_meal_overrides").upsert({ date, meal_type, meal_id }, { onConflict: "date,meal_type" }));
   }
+  forget(`motd:${date}`);
   await audit(adm.username, "rotation.set", `${date}:${meal_type}`, { meal_id });
   return ok({ ok: true });
 });
