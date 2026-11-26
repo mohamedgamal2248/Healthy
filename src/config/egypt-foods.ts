@@ -33,7 +33,7 @@ export const FOOD_REFS: FoodRef[] = [
   { id: "bread", kcal: 270, en: "baladi bread / pita", re: r("عيش|خبز|رغيف|baladi|bread|pita|toast") },
   { id: "egg_fried", kcal: 196, en: "fried egg / omelette", re: r("(?:بيض|عجه|egg|omelet+e?)[^,]{0,14}(?:مقلي|مقليه|fried|scrambled)|عجه|omelet+e?") },
   { id: "egg", kcal: 155, en: "boiled egg", re: r("بيض|بيضه|eggs?") },
-  { id: "cottage", kcal: 98, en: "cottage cheese (qarish)", re: r("جبنه قريش|قريش|cottage") },
+  { id: "cottage", kcal: 98, en: "cottage cheese (qarish)", re: r("جبنه قريش|قريش|cottage|q[a]?ree?sh|qariesh|qarish|kareesh|kariesh|areesh|ricotta") },
   { id: "roumi", kcal: 380, en: "roumi cheese", re: r("رومي|roumi|romy|hard cheese") },
   { id: "white_cheese", kcal: 260, en: "white cheese (domiati / feta)", re: r("جبنه بيضاء|جبنه|دمياطي|white cheese|feta|domiati|cheese") },
   { id: "yogurt", kcal: 60, en: "plain yogurt", re: r("زبادي|yogh?urt") },

@@ -98,6 +98,10 @@ export async function monthlyBoard(today: string) {
   return rows.map((r, i) => ({ rank: i + 1, username: r.username, verified: true, days: Number(r.days), streak: 0 }));
 }
 
+/** Group-wide counters (shared by everyone, cached 30 s per instance). */
+export const groupCounts = (g: Group, today: string) =>
+  memo(`gc:${g.id}:${today}`, 30_000, async () => (must(await db().rpc("hl_group_counts", { p_group: g.id, p_date: today })) as { members: number; checked: number }[])[0] ?? { members: 0, checked: 0 });
+
 /** Light counters for the engagement cards (no personal data). */
 export async function groupSnapshot(username: string, today: string) {
   const g = await currentGroup(today);

@@ -164,6 +164,12 @@ async function lastActivityFrom(username: string, s: StreakState): Promise<strin
   return dates.sort().pop() ?? null;
 }
 
+/** Pure version for callers that already have the streak and the last habit date. */
+export function reminderFrom(today: string, streakLast: string | null, lastHabit: string | null): "none" | "morning" | "inactive" {
+  const last = [streakLast, lastHabit].filter(Boolean).sort().pop() as string | undefined;
+  return last && dayDiff(today, last) >= 2 ? "inactive" : "morning";
+}
+
 export async function reminderState(a: Auth, streak?: StreakState): Promise<"none" | "morning" | "inactive"> {
   const last = streak ? await lastActivityFrom(a.username, streak) : await lastActivityDate(a.username);
   if (last && dayDiff(a.today, last) >= 2) return "inactive";

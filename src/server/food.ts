@@ -31,13 +31,17 @@ export function macroTargets(kcal: number | null): { protein: number; carbs: num
 /** Daily calorie target: this week's plan if there is one, otherwise computed from the profile (never below the safe floor). */
 export async function dailyTarget(a: Auth): Promise<number | null> {
   const plan = must(await db().from("hl_diet_plans").select("daily_calorie_target").eq("username", a.username).eq("week_start", weekStart(a.today)).maybeSingle()) as { daily_calorie_target: number } | null;
-  if (plan?.daily_calorie_target) return plan.daily_calorie_target;
+  return targetFrom(a, plan?.daily_calorie_target ?? null);
+}
+/** The plan's target when there is one, otherwise the profile-based one (pure: no database). */
+export function targetFrom(a: Auth, planTarget: number | null): number | null {
+  if (planTarget) return planTarget;
   const p = a.profile;
   if (!p.age || !p.sex || !p.weight_kg || !p.height_cm || !p.goal || !p.activity) return null;
   return dailyCalories({ weightKg: Number(p.weight_kg), heightCm: Number(p.height_cm), age: p.age, sex: p.sex as Sex, goal: p.goal as Goal, activity: p.activity as Activity, conditions: p.conditions });
 }
 
-type Row = { id: string; name: string; calories: number; protein_g: number | string; carbs_g: number | string | null; fat_g: number | string | null; source: FoodEntry["source"]; source_id?: string | null; created_at?: string; date?: string };
+export type Row = { id: string; name: string; calories: number; protein_g: number | string; carbs_g: number | string | null; fat_g: number | string | null; source: FoodEntry["source"]; source_id?: string | null; created_at?: string; date?: string };
 const COLS = "id,name,calories,protein_g,carbs_g,fat_g,source,source_id,created_at,date";
 
 // Catalogue names in both languages: a meal logged in English still reads in Arabic after the language is switched.
@@ -82,7 +86,11 @@ export async function todayFood(a: Auth, recentLimit = 3) {
     db().from("hl_food_log").select(COLS).eq("username", a.username).gte("date", addDays(a.today, -14)).lte("date", a.today).order("created_at", { ascending: false }).limit(600),
     dailyTarget(a),
   ]);
-  const rows = must(rowsRes) as Row[];
+  return foodFromRows(a, must(rowsRes) as Row[], target, recentLimit);
+}
+
+/** Today's diary, the week's food days and recent foods from the last 14 days of rows (newest first). */
+export function foodFromRows(a: Auth, rows: Row[], target: number | null, recentLimit = 3) {
   const todayRows = rows.filter((r) => r.date === a.today).reverse().slice(0, MAX_ENTRIES_PER_DAY);
   const entries = todayRows.map(toEntry);
   const sum = (k: "calories" | "protein_g" | "carbs_g" | "fat_g") => r1(entries.reduce((n, e) => n + Number(e[k]), 0));

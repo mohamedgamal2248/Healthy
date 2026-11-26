@@ -967,3 +967,9 @@ test("AI day context: pregnancy / under 18 never shrink a meal to fit the day", 
   const { profileLines } = await import("../src/server/ai/recipe");
   assert.doesNotMatch(profileLines({ goal: "lose", conditions: ["pregnancy"] }), /تخسيس/);
 });
+
+test("food reference: English spellings of qareesh are cottage cheese, not white cheese", async () => {
+  const { matchFoodRef } = await import("../src/config/egypt-foods");
+  for (const t of ["Qareesh cheese", "qarish cheese", "kareesh cheese", "areesh cheese"]) assert.equal(matchFoodRef(normalizeText(t))?.id, "cottage", t);
+  assert.equal(matchFoodRef(normalizeText("feta cheese"))?.id, "white_cheese");
+});

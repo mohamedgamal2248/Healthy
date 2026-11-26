@@ -6,7 +6,11 @@ export type Balances = { plan: number; pack: number; trial: number; total: numbe
 /** Balances are derived from the append-only ledger (expired plan credits are settled first). */
 export async function getBalances(username: string): Promise<Balances> {
   const rows = must(await db().rpc("hl_credit_balances", { p_user: username })) as { plan: number; pack: number; trial: number; plan_expires_at: string | null }[];
-  const r = rows?.[0] ?? { plan: 0, pack: 0, trial: 0, plan_expires_at: null };
+  return balancesFrom(rows?.[0] ?? null);
+}
+/** Shapes a hl_credit_balances row (also returned inside hl_today_bundle). */
+export function balancesFrom(row: { plan: number; pack: number; trial: number; plan_expires_at: string | null } | null): Balances {
+  const r = row ?? { plan: 0, pack: 0, trial: 0, plan_expires_at: null };
   const exp = r.plan_expires_at;
   return { plan: r.plan, pack: r.pack, trial: r.trial, total: r.plan + r.pack + r.trial, planExpiresAt: exp, planActive: !!exp && new Date(exp).getTime() > Date.now() };
 }
