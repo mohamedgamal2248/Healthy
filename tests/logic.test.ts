@@ -953,3 +953,17 @@ test("a malformed id in the URL is a 404, not a 500", async () => {
   assert.equal(r.status, 404);
   assert.equal(errorResponse(new Error("boom")).status, 500);
 });
+
+test("AI day context: pregnancy / under 18 never shrink a meal to fit the day", async () => {
+  const { dayCtxFrom, dayLines, ctxKey, prefsFromProfile } = await import("../src/server/ai/context");
+  const over = dayCtxFrom({ calories: 2600, protein_g: 90 }, 2000, 6, 13);
+  assert.match(dayLines(over), /خفيفة جدًا/);
+  const prot = dayCtxFrom({ calories: 2600, protein_g: 90 }, 2000, 6, 13, true);
+  const line = dayLines(prot);
+  assert.doesNotMatch(line, /خفيفة جدًا/);
+  assert.match(line, /٤٠٠–٦٥٠/);
+  const p = prefsFromProfile({});
+  assert.equal(ctxKey(p, prot), ctxKey(p, dayCtxFrom({ calories: 100, protein_g: 5 }, 2000, 1, 13, true)));
+  const { profileLines } = await import("../src/server/ai/recipe");
+  assert.doesNotMatch(profileLines({ goal: "lose", conditions: ["pregnancy"] }), /تخسيس/);
+});

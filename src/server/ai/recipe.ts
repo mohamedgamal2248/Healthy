@@ -50,7 +50,7 @@ export const RULES = `قواعد صارمة:
 
 export function profileLines(p: ProfileContext): string {
   const lines: string[] = [];
-  if (p.goal === "lose") lines.push("هدف المستخدم: تخسيس، فاجعل الوصفة منخفضة السعرات (حوالي ٢٥٠–٤٥٠ سعرة) وعالية الألياف.");
+  if (p.goal === "lose" && !p.conditions.includes("pregnancy")) lines.push("هدف المستخدم: تخسيس، فاجعل الوصفة منخفضة السعرات (حوالي ٢٥٠–٤٥٠ سعرة) وعالية الألياف.");
   if (p.goal === "gain") lines.push("هدف المستخدم: بناء عضلات، فاجعل البروتين مرتفعًا.");
   if (p.conditions.includes("diabetes")) lines.push("المستخدم أعلن إصابته بالسكري: تجنب السكريات المضافة والنشويات المكررة الكثيرة.");
   if (p.conditions.includes("hypertension")) lines.push("المستخدم أعلن إصابته بالضغط: قلّل الملح وتجنب المخللات والأجبان المالحة.");

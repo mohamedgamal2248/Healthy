@@ -7,34 +7,34 @@ import { mealsOfTheDay } from "@/server/meals";
 import { getBalances } from "@/server/credits";
 import { groupSnapshot } from "@/server/community";
 import { TRIAL_CREDITS } from "@/config/pricing";
-import { foodDay, recentFoods } from "@/server/food";
+import { todayFood } from "@/server/food";
 import { addDays } from "@/lib/dates";
 
 export const GET = route(async (req) => {
   const a = await requireUser(req);
-  const [{ rows, swapUsed }, streak, meals, badges, favs, reminder, balances, community, rewarded, coachUsed, food] = await Promise.all([
+  // One parallel round (auth already done): every query below is independent, so the screen costs one round trip
+  // of database latency instead of three, and the diary is read once for the day, the week strip and "recent".
+  const from = addDays(a.today, -6);
+  const streakP = loadStreak(a.username);
+  const [{ rows, swapUsed }, streak, meals, badges, favs, reminder, balances, community, rewarded, coachUsed, tf, doneDays] = await Promise.all([
     ensureToday(a),
-    loadStreak(a.username),
+    streakP,
     mealsOfTheDay(a.today),
     db().from("hl_badges").select("badge_key, earned_at").eq("username", a.username),
     db().from("hl_favourites").select("source_id").eq("username", a.username).eq("source_type", "meal"),
-    reminderState(a),
+    streakP.then((s) => reminderState(a, s)),
     a.profile.kyc_verified ? getBalances(a.username) : Promise.resolve(null),
     a.profile.kyc_verified ? groupSnapshot(a.username, a.today).catch(() => null) : Promise.resolve(null),
     db().from("hl_credit_ledger").select("id", { count: "exact", head: true }).eq("username", a.username).eq("reason", "trial_grant"),
     db().from("hl_recipes").select("id", { count: "exact", head: true }).eq("username", a.username).eq("hidden", false),
-    foodDay(a),
-  ]);
-  // Week strip: the last 7 local days with whether a challenge was done and whether food was logged.
-  const from = addDays(a.today, -6);
-  const [doneDays, foodDays, recent] = await Promise.all([
+    todayFood(a, 3),
     db().from("hl_user_challenges").select("date").eq("username", a.username).eq("status", "completed").gte("date", from).lte("date", a.today),
-    db().from("hl_food_log").select("date").eq("username", a.username).gte("date", from).lte("date", a.today).limit(300),
-    recentFoods(a, 3),
   ]);
+  const food = tf.day;
+  const recent = tf.recent;
+  // Week strip: the last 7 local days with whether a challenge was done and whether food was logged.
   const doneSet = new Set((must(doneDays) as { date: string }[]).map((r) => r.date));
-  const foodSet = new Set((must(foodDays) as { date: string }[]).map((r) => r.date));
-  const week = Array.from({ length: 7 }, (_, i) => { const d = addDays(from, i); return { date: d, challenge: doneSet.has(d), food: foodSet.has(d) }; });
+  const week = Array.from({ length: 7 }, (_, i) => { const d = addDays(from, i); return { date: d, challenge: doneSet.has(d), food: tf.foodDates.has(d) }; });
   return ok({
     date: a.today,
     challenges: rows,

@@ -59,19 +59,43 @@ export async function foodDay(a: Auth) {
   return { date: a.today, entries, totals: { calories: Math.round(sum("calories")), protein_g: sum("protein_g"), carbs_g: sum("carbs_g"), fat_g: sum("fat_g") }, target, targets: macroTargets(target) };
 }
 
-/** The user's recent distinct foods (last 14 days, newest first) for one-tap "repeat". */
-export async function recentFoods(a: Auth, limit = 6): Promise<(FoodEntry & { date: string })[]> {
-  const rows = must(await db().from("hl_food_log").select(COLS).eq("username", a.username).gte("date", addDays(a.today, -14)).order("created_at", { ascending: false }).limit(60)) as Row[];
+/** Distinct foods, newest first, from rows already ordered newest first. */
+function distinctRecent(rows: Row[], today: string, limit: number): (FoodEntry & { date: string })[] {
   const seen = new Set<string>();
   const out: (FoodEntry & { date: string })[] = [];
   for (const r of rows) {
     const key = r.name.trim().toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ ...toEntry(r), date: r.date ?? a.today });
+    out.push({ ...toEntry(r), date: r.date ?? today });
     if (out.length >= limit) break;
   }
   return out;
+}
+
+/**
+ * Everything the Today screen needs from the diary in two parallel queries (was five): today's entries and totals,
+ * which of the last 7 days have food, and the recent distinct foods for "repeat".
+ */
+export async function todayFood(a: Auth, recentLimit = 3) {
+  const [rowsRes, target] = await Promise.all([
+    db().from("hl_food_log").select(COLS).eq("username", a.username).gte("date", addDays(a.today, -14)).lte("date", a.today).order("created_at", { ascending: false }).limit(600),
+    dailyTarget(a),
+  ]);
+  const rows = must(rowsRes) as Row[];
+  const todayRows = rows.filter((r) => r.date === a.today).reverse().slice(0, MAX_ENTRIES_PER_DAY);
+  const entries = todayRows.map(toEntry);
+  const sum = (k: "calories" | "protein_g" | "carbs_g" | "fat_g") => r1(entries.reduce((n, e) => n + Number(e[k]), 0));
+  const day = { date: a.today, entries, totals: { calories: Math.round(sum("calories")), protein_g: sum("protein_g"), carbs_g: sum("carbs_g"), fat_g: sum("fat_g") }, target, targets: macroTargets(target) };
+  const from = addDays(a.today, -6);
+  const foodDates = new Set(rows.filter((r) => r.date && r.date >= from).map((r) => r.date as string));
+  return { day, foodDates, recent: distinctRecent(rows.slice(0, 60), a.today, recentLimit) };
+}
+
+/** The user's recent distinct foods (last 14 days, newest first) for one-tap "repeat". */
+export async function recentFoods(a: Auth, limit = 6): Promise<(FoodEntry & { date: string })[]> {
+  const rows = must(await db().from("hl_food_log").select(COLS).eq("username", a.username).gte("date", addDays(a.today, -14)).order("created_at", { ascending: false }).limit(60)) as Row[];
+  return distinctRecent(rows, a.today, limit);
 }
 
 type Add = { name: string; calories: number; protein_g: number; carbs_g: number | null; fat_g: number | null; source: FoodEntry["source"]; source_id: string | null };

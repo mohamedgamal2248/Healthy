@@ -100,7 +100,8 @@ async function dayContext(a: Auth): Promise<DayCtx | null> {
   try {
     const d = await foodDay(a);
     const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: a.tz }).format(new Date()));
-    return dayCtxFrom(d.totals, d.target, d.entries.length, Number.isFinite(hour) ? hour : 12);
+    const protect = (a.profile.age != null && a.profile.age < 18) || (a.profile.conditions ?? []).includes("pregnancy");
+    return dayCtxFrom(d.totals, d.target, d.entries.length, Number.isFinite(hour) ? hour : 12, protect);
   } catch { return null; }
 }
 

@@ -4,7 +4,7 @@ import { normalizeText } from "./safety";
 import { ALLERGENS, EQUIPMENT, JOINTS, LEVELS, cleanDislikes } from "@/lib/ai-prefs";
 
 export type AiPrefs = { allergies: string[]; dislikes: string; equipment: string[]; level: string | null; avoid: string[]; household: number | null };
-export type DayCtx = { kcal: number; protein_g: number; target: number | null; remaining: number | null; slot: "breakfast" | "lunch" | "dinner" | "snack"; logged: boolean };
+export type DayCtx = { kcal: number; protein_g: number; target: number | null; remaining: number | null; slot: "breakfast" | "lunch" | "dinner" | "snack"; logged: boolean; /** Pregnancy or under 18: meals are never shrunk to fit the remaining calories. */ protect?: boolean };
 
 type ProfileLike = { allergies?: string[] | null; dislikes?: string | null; equipment?: string[] | null; fitness_level?: string | null; avoid_joints?: string[] | null; household?: number | null };
 const pick = <T extends string>(v: unknown, allowed: readonly T[]): T[] => (Array.isArray(v) ? [...new Set(v.filter((x): x is T => (allowed as readonly string[]).includes(x as string)))] : []);
@@ -53,6 +53,10 @@ export function dayLines(d: DayCtx | null | undefined): string {
   const parts = [`سياق اليوم (للاستئناس ولا تكرره حرفيًا): الوقت المحلي يناسب ${slot}.`];
   if (d.target) parts.push(`هدف المستخدم ${d.target} سعرة يوميًا.`);
   if (d.logged) parts.push(`أكل حتى الآن ${d.kcal} سعرة و${d.protein_g} جم بروتين${d.remaining !== null ? d.remaining > 0 ? `، والمتبقي حوالي ${d.remaining} سعرة` : "، وقد بلغ هدفه أو تجاوزه" : ""}.`);
+  if (d.protect) {
+    parts.push("هذا المستخدم (حمل أو أقل من ١٨ سنة) لا تُصغَّر وجباته: لو الطلب لا يحدد حجمًا فاجعل الوجبة الرئيسية حصة طبيعية مشبعة (حوالي ٤٠٠–٦٥٠ سعرة) والسناك لا يقل عن ٢٠٠ سعرة، حتى لو بلغ هدف اليوم. لا تكتب كلمة خفيف في الاسم إلا إذا طلبها.");
+    return parts.join(" ");
+  }
   if (d.logged && d.remaining !== null) parts.push(d.remaining > 0 ? "لو الطلب لا يحدد حجمًا فاجعل الوجبة حصة معتدلة لشخص واحد (حوالي ٣٠٠–٦٠٠ سعرة لوجبة رئيسية) ولا تتجاوز المتبقي. لا تكبّر الحصة لتملأ المتبقي." : "اجعل الوجبة خفيفة جدًا (سناك صغير) ما لم يطلب غير ذلك.");
   return parts.join(" ");
 }
@@ -65,15 +69,16 @@ export function mealSlot(hour: number): DayCtx["slot"] {
   return "snack";
 }
 
-export function dayCtxFrom(t: { calories: number; protein_g: number }, target: number | null, entries: number, hour: number): DayCtx {
+export function dayCtxFrom(t: { calories: number; protein_g: number }, target: number | null, entries: number, hour: number, protect = false): DayCtx {
   const remaining = target ? Math.round((target - t.calories) / 10) * 10 : null;
-  return { kcal: Math.round(t.calories), protein_g: Math.round(t.protein_g), target, remaining, slot: mealSlot(hour), logged: entries > 0 };
+  return { kcal: Math.round(t.calories), protein_g: Math.round(t.protein_g), target, remaining, slot: mealSlot(hour), logged: entries > 0, ...(protect ? { protect: true } : {}) };
 }
 
 /** Distinct per-user inputs that change an answer: part of the cache key so personal answers never leak across users. */
 export function ctxKey(p: AiPrefs, d?: DayCtx | null): string {
   const base = `${[...p.allergies].sort().join("+")}|${normalizeText(p.dislikes)}|${[...p.equipment].sort().join("+")}|${p.level ?? ""}|${[...p.avoid].sort().join("+")}|${p.household ?? ""}`;
   if (!d) return base;
+  if (d.protect) return `${base}|${d.slot}|p`; // protected users get the same normal-size answer whatever was logged
   return `${base}|${d.slot}|${d.logged ? Math.round((d.remaining ?? 0) / 150) : "x"}`;
 }
 

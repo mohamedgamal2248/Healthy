@@ -152,14 +152,16 @@ export async function completeChallenge(a: Auth, userChallengeId: string) {
 }
 
 export async function lastActivityDate(username: string): Promise<string | null> {
-  const s = await loadStreak(username);
+  return lastActivityFrom(username, await loadStreak(username));
+}
+async function lastActivityFrom(username: string, s: StreakState): Promise<string | null> {
   const h = must(await db().from("hl_habit_logs").select("date").eq("username", username).order("date", { ascending: false }).limit(1)) as { date: string }[];
   const dates = [s.last, h[0]?.date].filter(Boolean) as string[];
   return dates.sort().pop() ?? null;
 }
 
-export async function reminderState(a: Auth): Promise<"none" | "morning" | "inactive"> {
-  const last = await lastActivityDate(a.username);
+export async function reminderState(a: Auth, streak?: StreakState): Promise<"none" | "morning" | "inactive"> {
+  const last = streak ? await lastActivityFrom(a.username, streak) : await lastActivityDate(a.username);
   if (last && dayDiff(a.today, last) >= 2) return "inactive";
   return "morning";
 }

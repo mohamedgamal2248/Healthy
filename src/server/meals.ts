@@ -1,5 +1,6 @@
 import { db, must } from "./supabase";
 import { ensureSeeded } from "./seed";
+import { memo } from "./memo";
 import { dayNumber } from "@/lib/dates";
 import type { MealIngredient } from "@/data/meals";
 
@@ -67,8 +68,9 @@ export async function getMeal(id: string): Promise<MealRow | null> {
 
 /** Breakfast / lunch / dinner of the day: admin override first, otherwise a daily rotation. */
 export async function mealsOfTheDay(date: string): Promise<Record<"breakfast" | "lunch" | "dinner", MealRow | null>> {
-  const [meals, overrides] = await Promise.all([activeMeals(), db().from("hl_meal_overrides").select("meal_type, meal_id").eq("date", date)]);
-  const ov = new Map((must(overrides) as { meal_type: string; meal_id: string }[]).map((o) => [o.meal_type, o.meal_id]));
+  // Overrides are the same for every user on a date: cached briefly so each Today view does not re-read them.
+  const [meals, overrides] = await Promise.all([activeMeals(), memo(`ov:${date}`, 60_000, async () => must(await db().from("hl_meal_overrides").select("meal_type, meal_id").eq("date", date)) as { meal_type: string; meal_id: string }[])]);
+  const ov = new Map(overrides.map((o) => [o.meal_type, o.meal_id]));
   const pick = (type: "breakfast" | "lunch" | "dinner") => {
     const ofType = [...meals].filter((m) => m.meal_type === type).sort((x, y) => (x.id < y.id ? -1 : 1));
     const forced = ov.get(type) ? ofType.find((m) => m.id === ov.get(type)) : undefined;
