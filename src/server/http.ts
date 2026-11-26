@@ -29,6 +29,10 @@ export function errorResponse(e: unknown) {
   if (e instanceof HttpError) {
     return NextResponse.json({ error: { code: e.code, ar: e.ar, en: e.en, ...(e.extra ?? {}) } }, { status: e.status });
   }
+  // A malformed id in the URL (not a uuid) is the caller's mistake, not a server fault.
+  if (e instanceof Error && /invalid input syntax for type (uuid|integer|bigint)/i.test(e.message)) {
+    return NextResponse.json({ error: { code: "not_found", ar: "غير موجود.", en: "Not found." } }, { status: 404 });
+  }
   console.error("[api] unhandled", e);
   return NextResponse.json(
     { error: { code: "server_error", ar: "حدث خطأ غير متوقع. حاول مرة أخرى.", en: "Unexpected error. Please try again." } },

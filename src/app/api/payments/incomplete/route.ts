@@ -7,6 +7,6 @@ export const POST = route(async (req) => {
   const a = await requireVerified(req);
   await rateLimit("pay", a.username, 60, 3600);
   const { paymentId } = await readJson<{ paymentId?: string }>(req);
-  if (!paymentId) throw E.bad();
+  if (!paymentId || !/^[A-Za-z0-9_-]{8,80}$/.test(paymentId)) throw E.bad();
   return ok(await handleIncomplete(a, paymentId));
 });

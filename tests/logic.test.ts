@@ -946,3 +946,10 @@ test("plan: allergies and dislikes are excluded and diabetic + low-salt users st
   const both = SNACKS.filter((s) => s.tags.includes("diabetes_friendly") && s.tags.includes("low_salt"));
   assert.ok(both.length >= 4);
 });
+
+test("a malformed id in the URL is a 404, not a 500", async () => {
+  const { errorResponse } = await import("../src/server/http");
+  const r = errorResponse(new Error('invalid input syntax for type uuid: "not-a-uuid"'));
+  assert.equal(r.status, 404);
+  assert.equal(errorResponse(new Error("boom")).status, 500);
+});

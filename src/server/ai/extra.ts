@@ -78,6 +78,7 @@ export async function generateFridge(text: string, image: string | null, profile
       if (e instanceof AiRefused || e instanceof AiNotConfigured) throw e;
       last = e;
       if (e instanceof AiUnusable && e.message.startsWith("prefs:")) content = `${base}\n\n(ملاحظة: ردك السابق تضمّن «${e.message.slice(6)}» وهو ممنوع على هذا المستخدم. أعد الكتابة بدونه تمامًا.)`;
+      else if (e instanceof AiUnusable && e.message === "schema") content = `${base}\n\n(ملاحظة: ردك السابق لم يطابق الصيغة. أرجع JSON واحدًا بالصيغة المطلوبة بالضبط مع فكرتين إلى ثلاث أفكار كاملة، وفكّر في أفكار تناسب المكونات والقيود الغذائية.)`;
     }
   }
   throw new AiUnusable(last instanceof Error ? last.message : "unusable");
