@@ -901,6 +901,6 @@ test("food reference matching ignores negated foods ('without sugar' is not suga
   const { reconcileRecipe } = await import("../src/server/ai/recipe");
   const r = reconcileRecipe({ name: "x", steps: ["a b c", "d e f"], protein: 20, benefits: [{ ingredient: "طماطم", benefit: "فيتامينات" }], substitutions: [], suitable_for: [], calories: 370, ingredients: [
     { item: "أرز مطبوخ", quantity: "كوب", grams: 150, kcal: 195 }, { item: "طماطم مقطعة مطبوخة بدون سكر", quantity: "نصف كوب", grams: 80, kcal: 30 }, { item: "عدس مطبوخ", quantity: "نصف كوب", grams: 100, kcal: 116 }, { item: "بصل", quantity: "نصف", grams: 50, kcal: 20 } ] });
-  assert.equal(r.ingredients[1].kcal, 30); // not pulled up to a sugar-sized number
+  assert.equal(r.ingredients[1].kcal, 20); // 80 g x 25 kcal/100 g (tomato), not a sugar-sized 310
   assert.equal(r.calories, 370);
 });
