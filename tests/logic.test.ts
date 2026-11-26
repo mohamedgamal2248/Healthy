@@ -973,3 +973,20 @@ test("food reference: English spellings of qareesh are cottage cheese, not white
   for (const t of ["Qareesh cheese", "qarish cheese", "kareesh cheese", "areesh cheese"]) assert.equal(matchFoodRef(normalizeText(t))?.id, "cottage", t);
   assert.equal(matchFoodRef(normalizeText("feta cheese"))?.id, "white_cheese");
 });
+
+test("food reference: oil named first is oil, fried onions and tomato sauce have their own rows", async () => {
+  const { matchFoodRef } = await import("../src/config/egypt-foods");
+  const id = (t: string) => matchFoodRef(normalizeText(t))?.id;
+  assert.equal(id("Cooking oil absorbed in pasta and onions"), "oil");
+  assert.equal(id("زيت ممتص في البصل"), "oil");
+  assert.equal(id("tuna in oil"), "tuna");
+  assert.equal(id("Crispy fried onions"), "fried_onion");
+  assert.equal(id("بصل محمر"), "fried_onion");
+  assert.equal(id("Tomato sauce"), "tomato_sauce");
+  assert.equal(id("Tomato"), "salad");
+  const { calibrateScan } = await import("../src/server/ai/scan");
+  const ing = ([[160, 253, "Cooked macaroni pasta"], [100, 130, "Cooked white rice"], [70, 81, "Cooked lentils"], [60, 98, "Cooked chickpeas"], [100, 25, "Tomato sauce"], [35, 105, "Fried onions"], [12, 19, "Cooking oil absorbed in pasta and onions"]] as const).map(([grams, kcal, name]) => ({ name, grams, kcal, certainty: "seen" as const }));
+  const koshari = { is_food: true, dish_name: "Koshari", confidence: "medium", setting: "restaurant", portion: "", estimated_total_g: 537, ingredients: ing, totals: { calories: { low: 597, mid: 711, high: 854 }, protein_g: { low: 15, mid: 20, high: 24 }, carbs_g: 102, fat_g: 24 }, notes: [], assumptions: [] };
+  const c = calibrateScan(koshari as unknown as Parameters<typeof calibrateScan>[0], "en");
+  assert.ok(c.totals.calories.mid >= 780 && c.totals.calories.mid <= 880, String(c.totals.calories.mid)); // 12 g oil is ~106 kcal, not 19
+});

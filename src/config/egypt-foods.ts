@@ -25,6 +25,8 @@ export const FOOD_REFS: FoodRef[] = [
   { id: "tuna", kcal: 116, en: "canned tuna in water", re: r("تونه|tuna") },
   { id: "beef", kcal: 250, en: "cooked beef / lamb", re: r("لحمه|لحم|beef|lamb|steak|meat") },
   { id: "liver", kcal: 165, en: "liver", re: r("كبده|كبد|liver") },
+  { id: "fried_onion", kcal: 400, en: "crispy fried onions (tasha)", re: r("بصل (?:محمر|مقلي|مقرمش)|بصل محمص|تقليه|(?:fried|crispy|caramel?ized) onions?") },
+  { id: "tomato_sauce", kcal: 50, en: "tomato sauce (with a little oil)", re: r("صلصه|صوص طماطم|صلصة طماطم|tomato sauce|marinara|salsa") },
   { id: "lentil_soup", kcal: 70, en: "lentil soup", re: r("شوربه عدس|lentil soup") },
   { id: "lentils", kcal: 116, en: "cooked lentils", re: r("عدس|lentils?") },
   { id: "chickpeas", kcal: 164, en: "cooked chickpeas", re: r("حمص|chickpeas?|hummus") },
@@ -56,8 +58,17 @@ export const FOOD_REFS: FoodRef[] = [
 /** "without sugar", "بدون سكر", "من غير زيت": the named food is absent, so it must not match its own reference row. */
 const NEGATED = /(?:بدون|من غير|بلا|خالي من|without|no|free of)\s+(?:(?:added|extra|اضافه|زياده)\s+)?[\p{L}]+(?:\s+(?:مضاف|مضافه|added))?/gu;
 
+/** A name that starts with a fat ("cooking oil absorbed in pasta", "زيت للقلي") is that fat, whatever it was cooked into. */
+const FAT_FIRST = /^(?:(?:ال)?(زيت|سمن|زبده)|(?:(?:cooking|olive|vegetable|sunflower|corn|frying)\s+)?(oil|ghee|butter))(?![\p{L}])/u;
+
 export function matchFoodRef(normalizedName: string): FoodRef | null {
   const name = normalizedName.replace(NEGATED, " ");
+  const fat = FAT_FIRST.exec(name.trim());
+  if (fat) {
+    const w = fat[1] ?? fat[2];
+    const id = w === "سمن" || w === "ghee" ? "ghee" : w === "زبده" || w === "butter" ? "butter" : "oil";
+    return FOOD_REFS.find((f) => f.id === id) ?? null;
+  }
   for (const f of FOOD_REFS) if (f.re.test(name)) return f;
   return null;
 }
