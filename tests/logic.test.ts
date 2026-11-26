@@ -910,3 +910,16 @@ test("cached recipes are reconciled when served, so old cache entries cannot sho
   const chef = readFileSync("src/server/chef.ts", "utf8");
   assert.match(chef, /reconcileRecipe\(parsed\.data as Recipe\)/);
 });
+
+test("Arabic week strip is the Egyptian calendar week (Saturday first, right to left); English keeps the last seven days", async () => {
+  const { readFileSync } = await import("node:fs");
+  const rings = readFileSync("src/components/Rings.tsx", "utf8");
+  assert.match(rings, /lang === "ar"/);
+  assert.match(rings, /addDays\(weekStart\(today\), i\)/);
+  const { weekStart, addDays } = await import("../src/lib/dates");
+  // Thursday 2026-11-26: the Arabic week runs Saturday 21 .. Friday 27, with the 27th still to come
+  assert.equal(weekStart("2026-11-26"), "2026-11-21");
+  assert.equal(addDays(weekStart("2026-11-26"), 6), "2026-11-27");
+  // a Friday: Saturday is six days back, so the seven-day data always covers it
+  assert.equal(weekStart("2026-11-27"), "2026-11-21");
+});

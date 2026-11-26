@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { Icon } from "./Icon";
 import { useApp } from "./AppProvider";
+import { addDays, weekStart } from "@/lib/dates";
 
 /** Progress ring (SVG). `value/max` is clamped to 0..1; the track and colour follow the site palette. */
 export function Ring({ value, max, size = 80, stroke = 9, color = "#059669", track = "#d1fae5", children, label }: { value: number; max: number; size?: number; stroke?: number; color?: string; track?: string; children?: ReactNode; label?: string }) {
@@ -94,6 +95,11 @@ export function WeekStrip({ week, today, streak, frozen, freezeReady }: { week: 
   const { tr, lang } = useApp();
   const loc = lang === "ar" ? "ar-EG" : "en-GB";
   const fmt = (d: string, o: Intl.DateTimeFormatOptions) => new Date(`${d}T12:00:00Z`).toLocaleDateString(loc, { ...o, timeZone: "UTC" });
+  // Arabic shows the Egyptian calendar week: Saturday on the right through Friday on the left, today highlighted, days still to come
+  // dimmed. English keeps the last seven days ending today. The data always covers at least Saturday..today (Saturday is 0-6 days back).
+  const days: { date: string; challenge: boolean; food: boolean; future?: boolean }[] = lang === "ar"
+    ? Array.from({ length: 7 }, (_, i) => { const date = addDays(weekStart(today), i); return date > today ? { date, challenge: false, food: false, future: true } : week.find((w) => w.date === date) ?? { date, challenge: false, food: false }; })
+    : week;
   return (
     <section className="card !p-3.5">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -104,9 +110,9 @@ export function WeekStrip({ week, today, streak, frozen, freezeReady }: { week: 
         {!frozen && freezeReady && streak >= 3 && <span className="flex items-center gap-1 text-xs font-bold text-brand-700"><Icon name="shieldCheck" size={15} />{tr("السلسلة محمية", "Streak protected")}</span>}
       </div>
       <ol className="grid grid-cols-7 gap-1">
-        {week.map((d) => {
+        {days.map((d) => {
           const isToday = d.date === today;
-          const tone = d.challenge ? "border-sun-500 bg-sun-50 text-sun-600" : d.food ? "border-brand-500 bg-brand-50 text-brand-700" : isToday ? "border-ink/70 text-ink" : "border-dashed border-line text-ink-soft";
+          const tone = d.future ? "border-line/60 text-ink-soft/50" : d.challenge ? "border-sun-500 bg-sun-50 text-sun-600" : d.food ? "border-brand-500 bg-brand-50 text-brand-700" : isToday ? "border-ink/70 text-ink" : "border-dashed border-line text-ink-soft";
           return (
             <li key={d.date} className="flex flex-col items-center gap-1">
               <span className="text-[11px] font-bold text-ink-soft">{fmt(d.date, { weekday: "narrow" })}</span>
