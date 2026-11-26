@@ -18,15 +18,19 @@ type Bundle = {
 };
 
 export const GET = route(async (req) => {
+  const t0 = Date.now();
   const a = await requireUser(req);
+  const t1 = Date.now();
+  const timed = <T,>(p: Promise<T>, k: string, m: Record<string, number>) => p.then((v) => { m[k] = Date.now() - t1; return v; });
+  const tm: Record<string, number> = {};
   // Three parallel calls in total: today's challenges (may insert today's picks), the cached catalogue, and ONE
   // database function that returns everything else per user (streak, badges, diary, balances, group...).
   const kyc = !!a.profile.kyc_verified;
   const [{ rows, swapUsed }, meals, bundle, group] = await Promise.all([
-    ensureToday(a),
-    mealsOfTheDay(a.today),
-    db().rpc("hl_today_bundle", { p_user: a.username, p_today: a.today, p_week: weekStart(a.today), p_kyc: kyc }).then((r) => must(r) as Bundle),
-    kyc ? currentGroup(a.today).then(async (g) => ({ g, counts: await groupCounts(g, a.today) })).catch(() => null) : Promise.resolve(null),
+    timed(ensureToday(a), "challenges", tm),
+    timed(mealsOfTheDay(a.today), "meals", tm),
+    timed(Promise.resolve(db().rpc("hl_today_bundle", { p_user: a.username, p_today: a.today, p_week: weekStart(a.today), p_kyc: kyc })).then((r) => must(r) as Bundle), "bundle", tm),
+    timed(kyc ? currentGroup(a.today).then(async (g) => ({ g, counts: await groupCounts(g, a.today) })).catch(() => null) : Promise.resolve(null), "group", tm),
   ]);
   const st = bundle.streak;
   const streak = { current: st?.current_streak ?? 0, longest: st?.longest_streak ?? 0, last: st?.last_completed_date ?? null, total: st?.total_completed ?? 0, freezeUsed: st?.freeze_used_on ?? null };
@@ -59,5 +63,5 @@ export const GET = route(async (req) => {
     food: { totals: food.totals, calories: food.totals.calories, target: food.target, targets: food.targets, entries: food.entries.length, recent },
     week,
     profileReady: !!a.profile.disclaimer_accepted_at,
-  });
+  }, { headers: { "Server-Timing": [`auth;dur=${t1 - t0}`, ...Object.entries(tm).map(([k, v]) => `${k};dur=${v}`), `total;dur=${Date.now() - t0}`].join(", ") } });
 });
