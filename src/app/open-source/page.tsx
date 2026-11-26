@@ -20,8 +20,8 @@ export default function OpenSource() {
         <h2 className="h2 flex items-center gap-2"><Icon name="book" size={20} />{tr("الرخصة", "The license")}</h2>
         <p className="muted !text-base leading-relaxed">{tr("الكود يُنشر برخصة PiOS التي تسمح بالنسخ والتعديل وبناء أعمال مشتقة، بشرط استخدامها لتطوير وتشغيل وتسويق تطبيقات لشبكة Pi الرسمية فقط. الرخصة موجودة كما هي في ملف LICENSE.", "The code is published under the PiOS license. It allows copying, modification and derivative works, solely to develop, use and market applications for the official Pi Network. The license is included unchanged in the LICENSE file.")}</p>
         <ul className="space-y-1 pt-1 text-sm" dir="ltr">
-          <li className="chip select-all">{REPO}</li>
-          <li className="chip select-all">https://github.com/pi-apps/PiOS</li>
+          <li className="chip select-all break-all">{REPO}</li>
+          <li className="chip select-all break-all">https://github.com/pi-apps/PiOS</li>
         </ul>
       </section>
 
