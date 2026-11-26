@@ -14,13 +14,17 @@ export type TodayChallenge = { id: string; challenge_id: string; status: "assign
 const DAILY_COUNT = 3;
 
 let poolCache: { at: number; rows: ChallengeRow[] } | null = null;
+let poolLoading: Promise<ChallengeRow[]> | null = null;
 export const invalidatePoolCache = () => { poolCache = null; };
 async function activePool(): Promise<ChallengeRow[]> {
   if (poolCache && Date.now() - poolCache.at < 60_000) return poolCache.rows;
-  await ensureSeeded();
-  const rows = must(await db().from("hl_challenges").select("*").eq("active", true).order("id")) as ChallengeRow[];
-  poolCache = { at: Date.now(), rows };
-  return rows;
+  poolLoading ??= (async () => {
+    await ensureSeeded();
+    const rows = must(await db().from("hl_challenges").select("*").eq("active", true).order("id")) as ChallengeRow[];
+    poolCache = { at: Date.now(), rows };
+    return rows;
+  })().finally(() => { poolLoading = null; });
+  return poolLoading;
 }
 
 /** Deterministic pick of N challenges with distinct types where possible. */

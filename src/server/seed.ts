@@ -4,10 +4,16 @@ import { MEAL_SEEDS } from "@/data/meals";
 import { MEALS_EN } from "@/data/meals-en";
 
 let done = false;
+let running: Promise<void> | null = null;
 
-/** Inserts the seed challenges and meals when those tables are empty. Never overwrites admin edits. */
-export async function ensureSeeded(): Promise<void> {
-  if (done) return;
+/** Inserts the seed challenges and meals when those tables are empty. Never overwrites admin edits. Runs once per instance. */
+export function ensureSeeded(): Promise<void> {
+  if (done) return Promise.resolve();
+  running ??= seedOnce().finally(() => { running = null; });
+  return running;
+}
+
+async function seedOnce(): Promise<void> {
   const c = await db().from("hl_challenges").select("id", { count: "exact", head: true });
   if ((c.count ?? 0) === 0) {
     must(await db().from("hl_challenges").upsert(CHALLENGE_SEEDS.map((x) => ({ ...x, active: true })), { onConflict: "id", ignoreDuplicates: true }));

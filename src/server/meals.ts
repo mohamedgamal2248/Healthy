@@ -14,15 +14,20 @@ export type MealRow = {
 
 let mealsCache: { at: number; rows: MealRow[] } | null = null;
 const CATALOGUE_TTL_MS = 60_000;
+let mealsLoading: Promise<MealRow[]> | null = null;
 export const invalidateCatalogueCache = () => { mealsCache = null; };
 
 /** The whole active catalogue (~110 rows) cached in memory for a minute: every list / daily pick reads this. */
 async function activeMeals(): Promise<MealRow[]> {
   if (mealsCache && Date.now() - mealsCache.at < CATALOGUE_TTL_MS) return mealsCache.rows;
-  await ensureSeeded();
-  const rows = must(await db().from("hl_meals").select("*").eq("active", true).order("meal_type").order("id")) as MealRow[];
-  mealsCache = { at: Date.now(), rows };
-  return rows;
+  // Concurrent requests on a cold instance share ONE catalogue read instead of each downloading the full table.
+  mealsLoading ??= (async () => {
+    await ensureSeeded();
+    const rows = must(await db().from("hl_meals").select("*").eq("active", true).order("meal_type").order("id")) as MealRow[];
+    mealsCache = { at: Date.now(), rows };
+    return rows;
+  })().finally(() => { mealsLoading = null; });
+  return mealsLoading;
 }
 
 /** Pantry basics assumed to be at home when matching "I have these ingredients". */

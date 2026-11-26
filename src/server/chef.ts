@@ -29,9 +29,11 @@ export type RecipeContent = CoachContent;
 
 const CACHE_DAYS = 30;
 /** Same kind + request text + goal + declared conditions => same cached answer (saves provider cost). */
+/** Bump when the prompts change so answers made under old rules are not served from the cache. */
+export const PROMPT_VERSION = "p2026-11-26";
 export function recipeCacheKey(text: string, goal: string | null, conditions: string[], kind: CoachKind = "recipe", lang: "ar" | "en" = "ar", extra = ""): string {
   const norm = text.toLowerCase().replace(/[\p{P}\s]+/gu, " ").trim();
-  return createHash("sha256").update(`${kind}|${lang}|${norm}|${goal ?? ""}|${[...conditions].sort().join(",")}${extra ? `|${extra}` : ""}`).digest("hex");
+  return createHash("sha256").update(`${PROMPT_VERSION}|${kind}|${lang}|${norm}|${goal ?? ""}|${[...conditions].sort().join(",")}${extra ? `|${extra}` : ""}`).digest("hex");
 }
 
 /** A cached answer is checked again with today's rules, so an old entry can never bring back something we now refuse. */
