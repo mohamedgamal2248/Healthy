@@ -890,3 +890,17 @@ test("diary entries open their details: catalogue meals and saved results link, 
   const { toEntry } = await import("../src/server/food");
   assert.equal(toEntry({ id: "1", name: "x", calories: 1, protein_g: 0, carbs_g: null, fat_g: null, source: "meal", source_id: "foul-egg" }).source_id, "foul-egg");
 });
+
+test("food reference matching ignores negated foods ('without sugar' is not sugar)", async () => {
+  const { matchFoodRef } = await import("../src/config/egypt-foods");
+  const { normalizeText } = await import("../src/server/ai/safety");
+  assert.equal(matchFoodRef(normalizeText("طماطم مقطعة مطبوخة بدون سكر"))?.id, "salad");
+  assert.equal(matchFoodRef(normalizeText("Chopped tomato, no added sugar"))?.id, "salad");
+  assert.equal(matchFoodRef(normalizeText("شاي من غير سكر")), null);
+  assert.equal(matchFoodRef(normalizeText("سكر"))?.id, "sugar");
+  const { reconcileRecipe } = await import("../src/server/ai/recipe");
+  const r = reconcileRecipe({ name: "x", steps: ["a b c", "d e f"], protein: 20, benefits: [{ ingredient: "طماطم", benefit: "فيتامينات" }], substitutions: [], suitable_for: [], calories: 370, ingredients: [
+    { item: "أرز مطبوخ", quantity: "كوب", grams: 150, kcal: 195 }, { item: "طماطم مقطعة مطبوخة بدون سكر", quantity: "نصف كوب", grams: 80, kcal: 30 }, { item: "عدس مطبوخ", quantity: "نصف كوب", grams: 100, kcal: 116 }, { item: "بصل", quantity: "نصف", grams: 50, kcal: 20 } ] });
+  assert.equal(r.ingredients[1].kcal, 30); // not pulled up to a sugar-sized number
+  assert.equal(r.calories, 370);
+});

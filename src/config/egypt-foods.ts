@@ -53,8 +53,12 @@ export const FOOD_REFS: FoodRef[] = [
   { id: "salad", kcal: 25, en: "vegetable salad", re: r("سلطه|salad|خيار|طماطم|cucumber|tomato") },
 ];
 
+/** "without sugar", "بدون سكر", "من غير زيت": the named food is absent, so it must not match its own reference row. */
+const NEGATED = /(?:بدون|من غير|بلا|خالي من|without|no|free of)\s+(?:(?:added|extra|اضافه|زياده)\s+)?[\p{L}]+(?:\s+(?:مضاف|مضافه|added))?/gu;
+
 export function matchFoodRef(normalizedName: string): FoodRef | null {
-  for (const f of FOOD_REFS) if (f.re.test(normalizedName)) return f;
+  const name = normalizedName.replace(NEGATED, " ");
+  for (const f of FOOD_REFS) if (f.re.test(name)) return f;
   return null;
 }
 
