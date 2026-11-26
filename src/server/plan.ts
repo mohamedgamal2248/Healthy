@@ -10,6 +10,7 @@ import { MEAL_SEEDS } from "@/data/meals";
 import { hasActivePlan, refundCredit, spendCredit } from "./credits";
 import { aiConfigured, trackUsage, estimateCostUsd, type Usage } from "./ai/provider";
 import { generateRecipe } from "./ai/recipe";
+import { prefsFromProfile, violatesPrefs } from "./ai/context";
 import { cautionsFor, hasMedicalFlag, DOCTOR_NOTE_AR, DOCTOR_NOTE_EN } from "./ai/safety";
 import { AI_LIMITS, PLAN_REGENERATE_COST } from "@/config/pricing";
 import { effectiveStreak } from "@/lib/streak";
@@ -53,10 +54,14 @@ async function generate(a: Auth, week: string, kind: "first" | "refresh" | "rege
   const calorieTarget = dailyCalories(input); // never below 1,200 kcal
   const water = dailyWaterCups(input.weightKg);
 
-  const allMeals = must(await db().from("hl_meals").select("id,meal_type,name_ar,name_en,calories,protein_g,tags,cuisine,ingredients").eq("active", true)) as PlanMealRef[];
+  const allMeals = must(await db().from("hl_meals").select("id,meal_type,name_ar,name_en,calories,protein_g,tags,cuisine,ingredients,ingredient_keys").eq("active", true)) as PlanMealRef[];
   // Default plan: the affordable Egyptian set only. International / premium meals only when the user opted in.
-  const meals = planPool(allMeals, !!(p as { plan_premium?: boolean }).plan_premium);
-  const built = buildWeekPlan({ meals, calorieTarget, conditions: p.conditions, goal: p.goal, weekStart: week, seed: `${a.username}:${week}`, weightKg: input.weightKg });
+  // Allergies and disliked foods are honoured here too (same matcher the AI uses): a plan must never contain them.
+  const prefs = prefsFromProfile(p);
+  const exclude = (text: string) => !!violatesPrefs(text, prefs);
+  const mealText = (m: PlanMealRef) => `${m.name_ar} ${m.name_en} ${(m.ingredients ?? []).map((i) => i.item).join(" ")} ${(m.ingredient_keys ?? []).join(" ")}`;
+  const meals = planPool(allMeals, !!(p as { plan_premium?: boolean }).plan_premium).filter((m) => !exclude(mealText(m)));
+  const built = buildWeekPlan({ exclude, meals, calorieTarget, conditions: p.conditions, goal: p.goal, weekStart: week, seed: `${a.username}:${week}`, weightKg: input.weightKg });
 
   // Complete slots the catalogue cannot fill (e.g. no meal carries the required condition tags) with AI.
   let aiFilled = 0;
@@ -71,7 +76,7 @@ async function generate(a: Auth, week: string, kind: "first" | "refresh" | "rege
       const tracked = await trackUsage(
         () => Promise.allSettled(
           built.gaps.slice(0, 4).map((g) =>
-            generateRecipe(`وصفة ${typeAr[g.type]} بحوالي ${g.kcal} سعرة حرارية${need.includes("low_salt") ? "، قليلة الملح" : ""}${need.includes("diabetes_friendly") ? "، مناسبة لمريض السكر" : ""}`, { goal: p.goal, conditions: p.conditions, lang: p.language === "en" ? "en" : "ar" }),
+            generateRecipe(`وصفة ${typeAr[g.type]} بحوالي ${g.kcal} سعرة حرارية${need.includes("low_salt") ? "، قليلة الملح" : ""}${need.includes("diabetes_friendly") ? "، مناسبة لمريض السكر" : ""}`, { goal: p.goal, conditions: p.conditions, lang: p.language === "en" ? "en" : "ar", prefs }),
           ),
         ),
         budget,

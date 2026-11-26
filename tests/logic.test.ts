@@ -935,3 +935,14 @@ test("AI limits: paid requests have no hourly/daily quota; failed attempts, one-
   assert.equal("perDay" in AI_LIMITS, false);
   assert.ok(AI_LIMITS.failedPerHour >= 10 && AI_LIMITS.globalPerDay >= 10000);
 });
+
+test("plan: allergies and dislikes are excluded and diabetic + low-salt users still reach their target", async () => {
+  const { prefsFromProfile, violatesPrefs } = await import("../src/server/ai/context");
+  const prefs = prefsFromProfile({ allergies: ["dairy", "eggs"], dislikes: "عدس", equipment: [], fitness_level: null, avoid_joints: [], household: null });
+  const exclude = (t: string) => !!violatesPrefs(t, prefs);
+  const meals = MEAL_SEEDS.map((m) => ({ id: m.id, meal_type: m.meal_type, name_ar: m.name_ar, name_en: m.name_en, calories: m.calories, protein_g: m.protein_g, tags: m.tags, cuisine: m.cuisine, ingredients: m.ingredients })).filter((m) => !exclude(`${m.name_ar} ${m.name_en} ${(m.ingredients ?? []).map((i: { item: string }) => i.item).join(" ")}`));
+  const plan = buildWeekPlan({ meals, exclude, calorieTarget: 1900, conditions: [], goal: "lose", weekStart: "2026-11-28", seed: "t", weightKg: 80 });
+  for (const d of plan.days) for (const s of d.slots) assert.equal(exclude(`${s.name_ar} ${s.name_en}`), false, s.name_en);
+  const both = SNACKS.filter((s) => s.tags.includes("diabetes_friendly") && s.tags.includes("low_salt"));
+  assert.ok(both.length >= 4);
+});

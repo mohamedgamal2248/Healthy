@@ -79,7 +79,7 @@ export function ctxKey(p: AiPrefs, d?: DayCtx | null): string {
 
 const ALLERGEN_RE: Record<string, RegExp> = {
   nuts: /(?<![\p{L}])(?:ال|و|ب|ل)*(?:لوز|جوز|فستق|بندق|كاجو|مكسرات|سوداني|عين جمل|almonds?|walnuts?|pistachios?|hazelnuts?|cashews?|peanuts?|pecans?|nuts?)(?![\p{L}])/u,
-  dairy: /(?<![\p{L}])(?:ال|و|ب|ل)*(?:لبن|لبنه|حليب|جبن|جبنه|زبادي|قشطه|كريمه|زبده|قريش|رايب|موزاريلا|بارميزان|سمن|milk|cheese|yogh?urt|cream|butter|ghee|labneh|feta|mozzarella)(?![\p{L}])/u,
+  dairy: /(?<![\p{L}])(?:ال|و|ب|ل)*(?:لبن|لبنه|حليب|جبن|جبنه|زبادي|قشطه|كريمه|زبده|قريش|رايب|موزاريلا|بارميزان|سمن|milk|cheese|yogh?urt|cream|butter|ghee|labneh|feta|mozzarella|cottage)(?![\p{L}])/u,
   eggs: /(?<![\p{L}])(?:ال|و|ب|ل)*(?:بيض|بيضه|بيضات|مايونيز|eggs?|omelet+e?|mayo|mayonnaise)(?![\p{L}])/u,
   gluten: /(?<![\p{L}])(?:ال|و|ب|ل)*(?:قمح|عيش|خبز|مكرونه|دقيق|شعير|فريك|سميد|كسكسي|بقسماط|شعريه|فطير|رقاق|برغل|bread|wheat|pasta|flour|barley|couscous|semolina|noodles?|bulgur|freekeh|toast|crackers?|pita|macaroni|spaghetti)(?![\p{L}])/u,
   seafood: /(?<![\p{L}])(?:ال|و|ب|ل)*(?:سمك|سمكه|جمبري|روبيان|تونه|سلمون|كابوريا|سردين|بوري|بلطي|محار|حبار|كلماري|fish|shrimps?|prawns?|tuna|salmon|crab|squid|calamari|sardines?|lobster|oysters?|mussels?)(?![\p{L}])/u,

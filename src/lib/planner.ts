@@ -1,7 +1,7 @@
 import { SPLIT, clampCalories } from "./nutrition";
 import { addDays, hash } from "./dates";
 
-export type PlanMealRef = { id: string; meal_type: "breakfast" | "lunch" | "dinner"; name_ar: string; name_en: string; calories: number; protein_g: number; tags: string[]; cuisine?: string; ingredients?: { item: string }[] };
+export type PlanMealRef = { id: string; meal_type: "breakfast" | "lunch" | "dinner"; name_ar: string; name_en: string; calories: number; protein_g: number; tags: string[]; cuisine?: string; ingredients?: { item: string }[]; ingredient_keys?: string[] };
 
 /** Imported / expensive ingredients and dishes: kept out of the default plan, available only with "international / premium" on. */
 const PREMIUM = /shrimp|prawn|جمبري|avocado|افوكادو|أفوكادو|coconut|جوز الهند|bulgogi|بولجوجي|curry|كاري|salmon|سلمون|teriyaki|تيرياكي|tom-?yum|توم يام|taco|تاكو|prosciutto|truffle|ratatouille|burrito|bibimbap|bruschetta|minestrone|pesto/i;
@@ -54,6 +54,9 @@ export const SNACKS: Snack[] = [
   { id: "snack-dates-milk", name_ar: "بلح مع كوب لبن", name_en: "Dates with a glass of milk", calories: 320, protein_g: 9, tags: ["low_salt"] },
   { id: "snack-egg-potato-sandwich", name_ar: "ساندوتش بيض وبطاطس مسلوقة", name_en: "Egg and boiled potato sandwich", calories: 400, protein_g: 15, tags: [] },
   { id: "snack-oats-banana-honey", name_ar: "شوفان باللبن والموز والعسل", name_en: "Oats with milk, banana and honey", calories: 420, protein_g: 14, tags: ["low_salt"] },
+  { id: "snack-yogurt-cucumber", name_ar: "زبادي بالخيار والنعناع مع ربع رغيف بلدي", name_en: "Yogurt with cucumber and mint, quarter baladi loaf", calories: 190, protein_g: 9, tags: ["diabetes_friendly", "low_salt"] },
+  { id: "snack-eggs-veg", name_ar: "بيضتين مسلوقتين مع طماطم وخيار", name_en: "Two boiled eggs with tomato and cucumber", calories: 190, protein_g: 13, tags: ["diabetes_friendly", "low_salt"] },
+  { id: "snack-oats-yogurt", name_ar: "زبادي بالشوفان والقرفة بدون سكر", name_en: "Yogurt with oats and cinnamon, no added sugar", calories: 260, protein_g: 13, tags: ["diabetes_friendly", "low_salt"] },
   { id: "snack-foul-sandwich", name_ar: "ساندوتش فول صغير", name_en: "Small foul sandwich", calories: 300, protein_g: 12, tags: ["diabetes_friendly"] },
 ];
 /** At most this many snacks per day (more only for very high targets). */
@@ -100,7 +103,7 @@ export function rebalanceDay(slots: PlanSlot[], target: number): void {
  * near the target split (25 / 40 / 35 %) and then the whole day is balanced to the daily target (+-5%). Returns `gaps`: slots where no catalogue meal carries the
  * required condition tags, so the caller can complete them with AI (or leave them out when AI is off).
  */
-export function buildWeekPlan(opts: { meals: PlanMealRef[]; calorieTarget: number; conditions: string[]; goal: string; weekStart: string; seed: string; weightKg?: number }) {
+export function buildWeekPlan(opts: { meals: PlanMealRef[]; calorieTarget: number; conditions: string[]; goal: string; weekStart: string; seed: string; weightKg?: number; exclude?: (text: string) => boolean }) {
   const target = clampCalories(opts.calorieTarget);
   // Protein: aim for the realistic range, never far above it. Without a weight, assume ~1.6 g per 20 kcal of target / 25.
   const protTarget = opts.weightKg ? proteinTarget(opts.weightKg, opts.goal) : Math.round(target / 20);
@@ -137,7 +140,7 @@ export function buildWeekPlan(opts: { meals: PlanMealRef[]; calorieTarget: numbe
     }
     prevDay = today;
     // Fill what the capped portions cannot reach with simple snacks (closest fit first, never the same one twice a day).
-    const snackPool = SNACKS.filter((x) => req.every((t) => x.tags.includes(t)));
+    const snackPool = SNACKS.filter((x) => req.every((t) => x.tags.includes(t)) && !opts.exclude?.(`${x.name_ar} ${x.name_en}`));
     const MAX_SNACKS = maxSnacks(target);
     for (let k = 0; k < MAX_SNACKS; k++) {
       const reach = slots.reduce((n, x) => n + (x.type === "snack" ? x.calories : x.calories * (MAX_SERV / x.servings)), 0); // what this day could reach at most
