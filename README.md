@@ -184,7 +184,7 @@ The AI layer is a provider abstraction (`src/server/ai/provider.ts`). Provider, 
 
 How a request flows (`src/server/chef.ts`):
 
-1. **Guards before any cost:** authentication, health disclaimer accepted, prompt length, safety screening of the request (no diagnosis, treatment, medication, children's diet plans), rate limits (per hour, per day, global circuit breaker) and a single in-flight request per user.
+1. **Guards before any cost:** authentication, health disclaimer accepted, prompt length, safety screening of the request (no diagnosis, treatment, medication, children's diet plans), a single in-flight request per user, a cap on failed / refunded attempts (the only way to cost money without paying), and a very high global emergency brake. Paid requests have no hourly or daily quota: the credit balance is the limit.
 2. **Spend one credit atomically** (`hl_spend_credit`, per-user lock, order: plan, then trial, then pack).
 3. **Generate** with strict JSON schemas (zod), a time budget that actually cancels the provider call, web search for unfamiliar dishes (opt-in, `AI_WEB_SEARCH=on`) and a 30-day cache of identical requests.
 4. **Validate the output:** schema, forbidden-content filter (supplements, doses, fasting, cure claims), a **1,200 kcal/day floor**, and consistency checks (calories vs ingredients vs macros) for photo analysis. Text recipes are written for one person; each ingredient carries grams and kcal, an ingredient far from the reference table (`src/config/egypt-foods.ts`) is pulled back to it, and the recipe total follows the ingredient sum when the model's own total is more than 12% away.
@@ -227,7 +227,7 @@ Reviewed end to end (payments, AI, privacy, API, database). Highlights:
 - **Auth:** server-verified Pi tokens, revocable HMAC sessions, `uid` binding, constant-time secret comparisons, dev login disabled in production.
 - **Payments:** server-side quote, amount/payer/memo/direction verification, unique payment id, atomic idempotent grant, quote age enforced only when opening a payment so a paid payment is always recoverable.
 - **Privacy:** health notices (diabetes, hypertension, pregnancy cautions) are stripped from anything shown to other users; public leaderboards show only opted-in Pioneers; account deletion removes personal data while keeping the financial ledger and a minimal tombstone.
-- **Abuse and cost controls:** per-endpoint rate limits (Postgres, shared across instances), AI hourly/daily/global caps, in-flight guard, input caps, safe refusal text, image header validation.
+- **Abuse and cost controls:** per-endpoint rate limits (Postgres, shared across instances), a cap on failed AI attempts, a global emergency brake, an in-flight guard, input caps, safe refusal text, image header validation.
 - **Web hardening:** CSP, HSTS, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` (camera on the same origin only), `noindex` on shared pages and the API.
 - **Supply chain:** `npm audit` clean, no secrets in the repository, CI runs typecheck, tests and build on every push.
 
@@ -304,7 +304,7 @@ Server secrets are never exposed to the browser. See [`.env.example`](./.env.exa
 | `AI_PROVIDER`, `AI_MODEL`, `AI_API_KEY`, `AI_BASE_URL`, `AI_REASONING_EFFORT` | AI provider settings |
 | `AI_WEB_SEARCH` | `on` lets recipe requests search the web for unfamiliar dishes; off by default because it roughly doubles the wait |
 | `PRICING_MODE`, `PRICE_*` | Live or fixed pricing (see `src/config/pricing.ts`) |
-| `AI_LIMIT_PER_HOUR`, `AI_LIMIT_PER_DAY`, `AI_GLOBAL_DAILY_CAP` | AI abuse and cost limits |
+| `AI_LIMIT_FAILED_PER_HOUR`, `AI_GLOBAL_DAILY_CAP` | AI abuse guards: failed / refunded attempts per user per hour (default 15) and a global emergency brake (default 20,000/day). Paid requests have no per-hour or per-day quota |
 | `NEXT_PUBLIC_PI_CLIENT_ID` | Optional override of the public Pi Sign-In client id |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web Push (daily reminders) |
 | `CRON_SECRET` | Authenticates the Vercel Cron jobs |

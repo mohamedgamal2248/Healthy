@@ -45,11 +45,11 @@ export const AI_PRICES = { inputPerM: 0.1, outputPerM: 0.5, searchEach: 0.0025 }
 /** Abuse / cost controls for every AI request. */
 export const AI_LIMITS = {
   maxPromptChars: 400,          // user text per request
-  perHour: num(process.env.AI_LIMIT_PER_HOUR, 12),   // new generations per user per hour
-  perDay: num(process.env.AI_LIMIT_PER_DAY, 30),    // new generations per user per day, however many credits they hold
+  // No per-hour or per-day cap on paid generations: a credit is the limit, and the person paid for it.
+  failedPerHour: num(process.env.AI_LIMIT_FAILED_PER_HOUR, 15), // refunded / failed attempts per user per hour: the model costs money even when the credit is given back
   followUpsPerRecipePerDay: 8,
   followUpsPerDay: 20,
-  globalPerDay: num(process.env.AI_GLOBAL_DAILY_CAP, 2000), // circuit breaker across all users
+  globalPerDay: num(process.env.AI_GLOBAL_DAILY_CAP, 20000), // emergency brake across all users (a runaway bug), far above normal use
   timeoutMs: 60_000,            // longer than this = failed + automatic refund
   inFlightWindowMs: 90_000,     // a user can have only one generation running at a time
 } as const;

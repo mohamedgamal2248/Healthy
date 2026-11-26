@@ -923,3 +923,15 @@ test("Arabic week strip is the Egyptian calendar week (Saturday first, right to 
   // a Friday: Saturday is six days back, so the seven-day data always covers it
   assert.equal(weekStart("2026-11-27"), "2026-11-21");
 });
+
+test("AI limits: paid requests have no hourly/daily quota; failed attempts, one-at-a-time and a high global brake remain", async () => {
+  const { readFileSync } = await import("node:fs");
+  const lim = readFileSync("src/server/ai/limits.ts", "utf8");
+  assert.doesNotMatch(lim, /perHour|perDay|rate_limited_hour|rate_limited_day/);
+  assert.match(lim, /in_flight/);
+  assert.match(lim, /too_many_failed/);
+  const { AI_LIMITS } = await import("../src/config/pricing");
+  assert.equal("perHour" in AI_LIMITS, false);
+  assert.equal("perDay" in AI_LIMITS, false);
+  assert.ok(AI_LIMITS.failedPerHour >= 10 && AI_LIMITS.globalPerDay >= 10000);
+});
