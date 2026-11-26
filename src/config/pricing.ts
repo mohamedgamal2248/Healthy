@@ -45,7 +45,7 @@ export const AI_PRICES = { inputPerM: 0.1, outputPerM: 0.5, searchEach: 0.0025 }
 /** Abuse / cost controls for every AI request. */
 export const AI_LIMITS = {
   maxPromptChars: 400,          // user text per request
-  perHour: num(process.env.AI_LIMIT_PER_HOUR, 6),   // new generations per user per hour
+  perHour: num(process.env.AI_LIMIT_PER_HOUR, 12),   // new generations per user per hour
   perDay: num(process.env.AI_LIMIT_PER_DAY, 30),    // new generations per user per day, however many credits they hold
   followUpsPerRecipePerDay: 8,
   followUpsPerDay: 20,
