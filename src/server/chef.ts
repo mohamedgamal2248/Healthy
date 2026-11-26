@@ -4,7 +4,7 @@ import type { Auth } from "./auth";
 import { AI_LIMITS, RECIPE_COST } from "@/config/pricing";
 import { spendCredit, refundCredit } from "./credits";
 import { aiConfigured, AiNotConfigured, trackUsage, estimateCostUsd, type Usage } from "./ai/provider";
-import { generateRecipe, AiRefused, RecipeSchema, recipeNumbersProblem, type Recipe } from "./ai/recipe";
+import { generateRecipe, AiRefused, RecipeSchema, recipeNumbersProblem, reconcileRecipe, type Recipe } from "./ai/recipe";
 import { generateCard, CardSchema, isCoachKind, type Card, type CoachKind } from "./ai/coach";
 import { enforceGenerationLimits, withDeadline } from "./ai/limits";
 import { analyzeMealPhoto, validImage, type Scan } from "./ai/scan";
@@ -45,7 +45,8 @@ async function cachedOutput(key: string, kind: CoachKind, allowBulk = false): Pr
     return null;
   }
   await db().from("hl_ai_cache").update({ hits: row.hits + 1 }).eq("key", key);
-  return parsed.data;
+  // Entries cached before the ingredient check existed are reconciled on the way out, so they never show an old wrong total.
+  return kind === "recipe" ? reconcileRecipe(parsed.data as Recipe) : parsed.data;
 }
 
 

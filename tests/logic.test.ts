@@ -904,3 +904,9 @@ test("food reference matching ignores negated foods ('without sugar' is not suga
   assert.equal(r.ingredients[1].kcal, 20); // 80 g x 25 kcal/100 g (tomato), not a sugar-sized 310
   assert.equal(r.calories, 370);
 });
+
+test("cached recipes are reconciled when served, so old cache entries cannot show a wrong total", async () => {
+  const { readFileSync } = await import("node:fs");
+  const chef = readFileSync("src/server/chef.ts", "utf8");
+  assert.match(chef, /reconcileRecipe\(parsed\.data as Recipe\)/);
+});
