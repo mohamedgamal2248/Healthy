@@ -40,26 +40,6 @@ function NextStep({ d }: { d: Today }) {
   return step.href.startsWith("#") ? <a href={step.href} className="card flex items-center gap-3 !border-brand-200 !p-3.5">{inner}</a> : <Link href={step.href} className="card flex items-center gap-3 !border-brand-200 !p-3.5">{inner}</Link>;
 }
 
-/** Last meals with a one-tap "repeat" (copied on the server from the user's own entry). */
-function RecentMeals({ items, onRepeat, busy }: { items: RecentFood[]; onRepeat: (id: string) => void; busy: string | null }) {
-  const { tr, lang } = useApp();
-  if (!items.length) return null;
-  return (
-    <section aria-labelledby="rm">
-      <div className="mb-2.5 flex items-end justify-between"><h2 id="rm" className="h2">{tr("آخر وجباتك", "Recent meals")}</h2><Link href="/diary" className="text-sm font-extrabold text-brand-700">{tr("الكل", "All")}</Link></div>
-      <ul className="space-y-2">
-        {items.slice(0, 2).map((m) => (
-          <li key={m.id} className="card-row !min-h-16">
-            <FoodTile source={m.source} size={44} />
-            <div className="min-w-0 flex-1"><p className="truncate font-extrabold">{(lang === "ar" ? m.name_ar : m.name_en) ?? m.name}</p><p className="muted tabular-nums">{m.calories} {tr("سعرة", "kcal")} · {Math.round(m.protein_g)}{tr("ج بروتين", "g protein")}</p></div>
-            <button className="btn-soft btn-sm !min-h-9 !px-3" onClick={() => onRepeat(m.id)} disabled={busy !== null} aria-label={tr(`كرر ${m.name}`, `Repeat ${m.name}`)}>{busy === m.id ? <Spinner size={16} /> : <Icon name="refresh" size={16} />}{tr("كرر", "Repeat")}</button>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 function TodayInner() {
   const { tr, toast, errMsg, lang, me } = useApp();
   const { data: d, setData: setD, reload: load } = useGet<Today>("/today", (e) => toast(errMsg(e), "err"));
@@ -81,7 +61,6 @@ function TodayInner() {
     } catch (e) { toast(errMsg(e), "err"); } finally { setEatBusy(null); }
   };
   const [busy, setBusy] = useState(false);
-  const [repeating, setRepeating] = useState<string | null>(null);
   const router = useRouter();
 
   if (!d) return <PageSkeleton />;
@@ -107,11 +86,6 @@ function TodayInner() {
     setBusy(true);
     try { await api("/challenges/swap", { body: { id } }); await load(); toast(tr("تم تبديل التحدي", "Challenge swapped"), "ok"); }
     catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
-  };
-  const repeat = async (entryId: string) => {
-    setRepeating(entryId);
-    try { await api("/food", { body: { source: "repeat", entryId } }); toast(tr("تمت إضافتها ليومك", "Added to your day"), "ok"); await load(); }
-    catch (e) { toast(errMsg(e), "err"); } finally { setRepeating(null); }
   };
   const fav = async (id: string) => {
     const was = d.favourites.includes(id);
@@ -176,16 +150,8 @@ function TodayInner() {
         <p className="muted mt-2">{d.swapUsed ? tr("استخدمت تبديل اليوم.", "You used today's swap.") : tr("تقدر تبدّل تحديًا واحدًا اليوم.", "You can swap one challenge today.")}</p>
       </section>
 
-      {/* 4 · Recent meals with one-tap repeat */}
-      {d.food && <RecentMeals items={d.food.recent} onRepeat={repeat} busy={repeating} />}
-
-      {/* Everything else, one tap away */}
-      <details className="card group !p-0">
-        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between px-4 font-extrabold [&::-webkit-details-marker]:hidden">
-          <span>{tr("المزيد", "More")}</span>
-          <Icon name="chevronD" size={20} className="text-ink-soft transition group-open:rotate-180" />
-        </summary>
-        <div className="space-y-5 border-t border-line p-4">
+      {/* Today's plan meals and the rest, always visible at the bottom */}
+      <div className="space-y-5">
           <section aria-labelledby="ml">
             <div className="mb-3 flex items-end justify-between"><h2 id="ml" className="h2">{d.mealsFromPlan ? tr("وجبات خطتك اليوم", "Today's meals from your plan") : tr("وجبات اليوم", "Meals of the day")}</h2><Link href={d.mealsFromPlan ? "/plan" : "/meals"} className="text-sm font-extrabold text-brand-700">{d.mealsFromPlan ? tr("خطتي الأسبوعية", "My weekly plan") : tr("كل الوجبات", "All meals")}</Link></div>
             <div className="grid gap-4 md:grid-cols-3">
@@ -223,8 +189,7 @@ function TodayInner() {
           {me?.profile.kyc_verified && d.balances && <CreditBalance b={d.balances} />}
 
           <Link href="/progress" className="card-row"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sun-50 text-sun-600"><Icon name="trophy" size={22} /></span><span className="flex-1 font-extrabold">{tr(`شاراتك (${d.badges.length}/${BADGES.length})`, `Your badges (${d.badges.length}/${BADGES.length})`)}</span><Icon name={lang === "ar" ? "chevronL" : "chevronR"} size={20} className="text-ink-soft" /></Link>
-        </div>
-      </details>
+      </div>
     </div>
   );
 }
