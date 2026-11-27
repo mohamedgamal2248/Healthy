@@ -4,7 +4,7 @@ import { useGet } from "@/lib/useGet";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useApp, type Balances } from "@/components/AppProvider";
-import { EmptyState, Gate, Notice, PageHeader, PageSkeleton, Spinner } from "@/components/ui";
+import { EmptyState, Gate, Notice, PageHeader, PageSkeleton, Sheet, Spinner } from "@/components/ui";
 import { DisclaimerBanner, PaySheet } from "@/components/Domain";
 import { PricingGrid, type PriceItem } from "@/components/Pricing";
 import { Icon } from "@/components/Icon";
@@ -56,17 +56,19 @@ function Inner() {
   const [d, setD] = useState<PlanResp | null>(null);
   const [which, setWhich] = useState<"current" | "next">("current");
   const [busy, setBusy] = useState(false);
+  const [askRegen, setAskRegen] = useState(false);
   const [report, setReport] = useState<Report | null>(null);
   const [offer, setOffer] = useState<{ items: PriceItem[]; trialCredits: number } | null>(null);
   const [buy, setBuy] = useState<PriceItem | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<PlanResp | undefined> => {
     try {
       const r = await api<PlanResp>("/plan");
       setD(r);
       if (!r.subscribed) api<{ items: PriceItem[]; trialCredits: number }>("/pricing").then(setOffer).catch(() => {});
       else api<{ reports: { summary: Omit<Report, "tip_ar" | "tip_en"> & { tip_en: string }; tip: string; week_start: string }[] }>("/plan/report").then((x) => { const l = x.reports[0]; if (l) setReport({ ...l.summary, week_start: l.week_start, tip_ar: l.tip, tip_en: l.summary.tip_en }); }).catch(() => {});
-    } catch (e) { toast(errMsg(e), "err"); }
+      return r;
+    } catch (e) { toast(errMsg(e), "err"); return undefined; }
   }, [toast, errMsg]);
   useEffect(() => { load(); }, [load]);
 
@@ -96,10 +98,21 @@ function Inner() {
   }
 
   const plan = which === "next" ? d.next : d.current;
+  const mealIds = (p: StoredPlan | null | undefined) => (p ? p.plan.days.flatMap((x) => x.slots.filter((s) => s.type !== "snack").map((s) => s.meal_id ?? s.name_en)) : []);
   const generate = async (mode: "auto" | "regenerate") => {
-    if (mode === "regenerate" && !confirm(tr(`إعادة توليد الخطة تخصم ${d.regenerateCost} كريدت. متابعة؟`, `Regenerating costs ${d.regenerateCost} AI request. Continue?`))) return;
     setBusy(true);
-    try { await api("/plan", { body: { mode } }); await load(); await refresh(); toast(tr("تم تحديث خطتك", "Your plan is ready"), "ok"); }
+    const before = mealIds(d.current);
+    try {
+      await api("/plan", { body: { mode } });
+      const fresh = await load();
+      await refresh();
+      if (mode === "regenerate") {
+        const after = mealIds(fresh?.current);
+        const changed = after.filter((id, i) => id !== before[i]).length;
+        toast(changed > 0 ? tr(`تم تغيير ${changed} وجبة من ${after.length}`, `Changed ${changed} of ${after.length} meals`) : tr("تم تحديث الخطة", "Plan refreshed"), "ok");
+      } else toast(tr("تم تحديث خطتك", "Your plan is ready"), "ok");
+      setAskRegen(false);
+    }
     catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
   };
   const makeReport = async () => { setBusy(true); try { const r = await api<{ report: Report }>("/plan/report", { body: {} }); setReport(r.report); } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); } };
@@ -108,6 +121,24 @@ function Inner() {
   return (
     <div className="mx-auto max-w-4xl space-y-5 py-5">
       <EatTabs />
+      <Sheet open={askRegen} onClose={busy ? () => {} : () => setAskRegen(false)} title={tr("تغيير خطة هذا الأسبوع", "Change this week's plan")}>
+        <div className="space-y-4">
+          <p>{tr("هنبني خطة جديدة لهذا الأسبوع بوجبات مختلفة وتحل محل الخطة الحالية، مع الحفاظ على سعراتك اليومية.", "We will build a new plan for this week with different meals. It replaces the current plan and keeps your daily calories.")}</p>
+          <div className="flex items-center justify-between rounded-2xl bg-brand-50 px-4 py-3 text-sm font-bold">
+            <span>{tr("التكلفة", "Cost")}</span>
+            <span className="tabular-nums">{d.regenerateCost} {tr("كريدت", "credit")}</span>
+          </div>
+          <div className="flex items-center justify-between rounded-2xl bg-brand-50 px-4 py-3 text-sm font-bold">
+            <span>{tr("رصيدك بعد التغيير", "Your balance after")}</span>
+            <span className="tabular-nums" dir="ltr">{d.balances?.total ?? 0} → {Math.max(0, (d.balances?.total ?? 0) - (d.regenerateCost ?? 1))}</span>
+          </div>
+          <p className="muted">{tr("لو فشل التوليد يرجع لك الكريدت تلقائيًا.", "If generation fails, your credit is refunded automatically.")}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <button className="btn-ghost" onClick={() => setAskRegen(false)} disabled={busy}>{tr("إلغاء", "Cancel")}</button>
+            <button className="btn-primary" onClick={() => generate("regenerate")} disabled={busy}>{busy ? <Spinner /> : <Icon name="refresh" size={18} />}{tr("غيّر الخطة", "Change plan")}</button>
+          </div>
+        </div>
+      </Sheet>
       <PageHeader title={tr("نظامي الغذائي", "My diet plan")} sub={d.week ? tr(`أسبوع يبدأ ${fmt(d.week)}`, `Week starting ${fmt(d.week)}`) : undefined} />
       <DisclaimerBanner conditions={me?.profile.conditions} />
       {d.safety?.cautions.map((c, i) => (<Notice key={i} tone="warn">{lang === "ar" ? c.ar : c.en}</Notice>))}
@@ -143,7 +174,7 @@ function Inner() {
           <div className="card"><ShareLink label={tr("شارك رابط التطبيق", "Share the app link")} text={tr("خطتي الأسبوعية على Healthy: أكل مصري اقتصادي وذكاء اصطناعي، لبايونيرز Pi. افتحه من Pi Browser:", "My weekly plan on Healthy: affordable Egyptian meals and AI, for Pi Pioneers. Open it in Pi Browser:")} /></div>
           <div className="card flex flex-wrap items-center gap-3">
             <p className="muted flex-1">{tr("تتجدد خطتك تلقائيًا كل أسبوع عند تسجيل وزن جديد (مجانًا). غيّرت هدفك في منتصف الأسبوع؟", "Your plan refreshes weekly when you log a new weight (free). Changed your goal mid-week?")}</p>
-            <button className="btn-soft btn-sm" onClick={() => generate("regenerate")} disabled={busy || (d.balances?.total ?? 0) < 1}><Icon name="refresh" size={18} />{tr(`إعادة التوليد — ${d.regenerateCost} كريدت`, `Regenerate — ${d.regenerateCost} request`)}</button>
+            <button className="btn-soft btn-sm" onClick={() => setAskRegen(true)} disabled={busy || (d.balances?.total ?? 0) < 1}><Icon name="refresh" size={18} />{tr(`إعادة التوليد — ${d.regenerateCost} كريدت`, `Regenerate — ${d.regenerateCost} request`)}</button>
           </div>
         </>
       )}

@@ -18,7 +18,7 @@ import { loadStreak, recentCompletedCount } from "./challenges";
 
 export type StoredPlan = {
   id: string; week_start: string; daily_calorie_target: number; daily_water_target: number; adjustment_kcal: number; created_at: string;
-  plan: { days: PlanDay[]; notes: { gaps_unfilled: number; ai_filled: number; balanced?: boolean } };
+  plan: { days: PlanDay[]; notes: { gaps_unfilled: number; ai_filled: number; balanced?: boolean; version?: number } };
 };
 
 type Weight = { weight_kg: number; logged_date: string; is_official: boolean; created_at: string };
@@ -61,7 +61,10 @@ async function generate(a: Auth, week: string, kind: "first" | "refresh" | "rege
   const exclude = (text: string) => !!violatesPrefs(text, prefs);
   const mealText = (m: PlanMealRef) => `${m.name_ar} ${m.name_en} ${(m.ingredients ?? []).map((i) => i.item).join(" ")} ${(m.ingredient_keys ?? []).join(" ")}`;
   const meals = planPool(allMeals, !!(p as { plan_premium?: boolean }).plan_premium).filter((m) => !exclude(mealText(m)));
-  const built = buildWeekPlan({ exclude, meals, calorieTarget, conditions: p.conditions, goal: p.goal, weekStart: week, seed: `${a.username}:${week}`, weightKg: input.weightKg });
+  // "Regenerate" must give a genuinely different plan: a new seed (version + 1) and a preference for meals the current plan does not use.
+  const version = kind === "regenerate" && current ? (current.plan.notes?.version ?? 0) + 1 : 0;
+  const avoid = kind === "regenerate" && current ? current.plan.days.flatMap((d) => d.slots.filter((x) => x.type !== "snack" && x.meal_id).map((x) => x.meal_id as string)) : undefined;
+  const built = buildWeekPlan({ exclude, avoid, meals, calorieTarget, conditions: p.conditions, goal: p.goal, weekStart: week, seed: version ? `${a.username}:${week}:v${version}` : `${a.username}:${week}`, weightKg: input.weightKg });
 
   // Complete slots the catalogue cannot fill (e.g. no meal carries the required condition tags) with AI.
   let aiFilled = 0;
@@ -103,7 +106,7 @@ async function generate(a: Auth, week: string, kind: "first" | "refresh" | "rege
   const aiWasNeeded = built.gaps.length > 0 && aiConfigured();
   // A paid regenerate whose AI part produced nothing is not delivered work: the caller refunds it.
   if (requestId && aiWasNeeded && aiFilled === 0) throw new HttpError(502, "ai_failed", "تعذّر إكمال الخطة هذه المرة. أعدنا لك الكريدت تلقائيًا، حاول مرة أخرى.", "We couldn't complete the plan this time. Your credit was refunded automatically; please try again.");
-  const planJson = { days: built.days, notes: { gaps_unfilled: unfilled, ai_filled: aiFilled, balanced: true } };
+  const planJson = { days: built.days, notes: { gaps_unfilled: unfilled, ai_filled: aiFilled, balanced: true, version } };
 
   const row = must(
     await db().from("hl_diet_plans").upsert({ username: a.username, week_start: week, daily_calorie_target: calorieTarget, daily_water_target: water, adjustment_kcal: adjustment, plan: planJson, status: "active", created_at: new Date().toISOString() }, { onConflict: "username,week_start" }).select("*").single(),

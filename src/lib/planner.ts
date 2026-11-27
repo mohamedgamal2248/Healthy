@@ -103,13 +103,16 @@ export function rebalanceDay(slots: PlanSlot[], target: number): void {
  * near the target split (25 / 40 / 35 %) and then the whole day is balanced to the daily target (+-5%). Returns `gaps`: slots where no catalogue meal carries the
  * required condition tags, so the caller can complete them with AI (or leave them out when AI is off).
  */
-export function buildWeekPlan(opts: { meals: PlanMealRef[]; calorieTarget: number; conditions: string[]; goal: string; weekStart: string; seed: string; weightKg?: number; exclude?: (text: string) => boolean }) {
+export function buildWeekPlan(opts: { meals: PlanMealRef[]; calorieTarget: number; conditions: string[]; goal: string; weekStart: string; seed: string; weightKg?: number; exclude?: (text: string) => boolean; avoid?: string[] }) {
   const target = clampCalories(opts.calorieTarget);
   // Protein: aim for the realistic range, never far above it. Without a weight, assume ~1.6 g per 20 kcal of target / 25.
   const protTarget = opts.weightKg ? proteinTarget(opts.weightKg, opts.goal) : Math.round(target / 20);
   const req = requiredTags(opts.conditions);
   const prefer = opts.goal === "lose" ? "weight_loss" : opts.goal === "gain" ? "muscle_gain" : null;
   const used = new Map<string, number>();
+  // "Regenerate": meals of the plan being replaced start with a use count, so the new plan prefers different meals
+  // (they can still repeat when nothing else fits the calorie or condition needs).
+  for (const id of opts.avoid ?? []) used.set(id, (used.get(id) ?? 0) + 1);
   const days: PlanDay[] = [];
   const gaps: { dayIndex: number; type: (typeof TYPES)[number]; kcal: number }[] = [];
   let prevDay = new Set<string>();

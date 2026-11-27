@@ -1005,3 +1005,15 @@ test("telemetry: routes are normalised, counted in memory, and errors are de-dup
   t.recordRequest("/api/health", "GET", 200, 5);
   assert.doesNotThrow(() => t.track("/api/me", "GET", 200, 5));
 });
+
+test("plan: regenerating with a new seed and the old meals to avoid gives a different plan that still hits the target", () => {
+  const meals = MEAL_SEEDS.map((m) => ({ id: m.id, meal_type: m.meal_type, name_ar: m.name_ar, name_en: m.name_en, calories: m.calories, protein_g: m.protein_g, tags: m.tags, cuisine: m.cuisine, ingredients: m.ingredients })).filter((m) => m.cuisine === "egyptian");
+  const base = { meals, calorieTarget: 2200, conditions: [], goal: "maintain", weekStart: "2026-11-28", weightKg: 75 };
+  const ids = (p: ReturnType<typeof buildWeekPlan>) => p.days.flatMap((d) => d.slots.filter((s) => s.type !== "snack").map((s) => s.meal_id));
+  const a = buildWeekPlan({ ...base, seed: "u:w" });
+  assert.deepEqual(ids(a), ids(buildWeekPlan({ ...base, seed: "u:w" }))); // same inputs, same plan (stable)
+  const b = buildWeekPlan({ ...base, seed: "u:w:v1", avoid: ids(a) as string[] });
+  const same = ids(a).filter((x, i) => x === ids(b)[i]).length;
+  assert.ok(same <= 3, `only ${ids(a).length - same} of ${ids(a).length} meals changed`);
+  for (const d of b.days) assert.ok(Math.abs(d.total_kcal - 2200) <= 2200 * 0.08, `${d.date}: ${d.total_kcal}`);
+});
