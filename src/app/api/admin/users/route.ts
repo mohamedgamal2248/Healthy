@@ -12,5 +12,8 @@ export const GET = route(async (req) => {
   const a = await requireAdmin(req);
   const key = `admin-report:${a.today}`;
   if (new URL(req.url).searchParams.has("fresh")) forget(key);
-  return ok(await memo(key, 30_000, async () => must(await db().rpc("hl_admin_report", { p_today: a.today }))));
+  return ok(await memo(key, 30_000, async () => {
+    const [report, quickstart] = await Promise.all([db().rpc("hl_admin_report", { p_today: a.today }), db().rpc("hl_quickstart_funnel")]);
+    return { ...(must(report) as object), quickstart: must(quickstart) };
+  }));
 });

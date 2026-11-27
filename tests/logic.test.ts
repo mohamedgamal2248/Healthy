@@ -1110,3 +1110,22 @@ test("chat assistant: input limits, short replies, off-topic and unsafe answers 
   assert.equal(hist[0].role, "user"); assert.equal(hist[hist.length - 1].content, "q3"); assert.ok(hist.length <= CHAT.historyMessages + 1);
   assert.deepEqual(c.trimHistory([t("user", "solo")]), [t("user", "solo")]);
 });
+
+test("quick start: a complete profile is required, credits are small and fixed, each step is granted once in SQL", async () => {
+  const { profileComplete } = await import("../src/server/quickstart");
+  const { QUICKSTART, QUICKSTART_TOTAL } = await import("../src/config/pricing");
+  const ok = { age: 30, sex: "male", weight_kg: 80, height_cm: 175, goal: "lose", activity: "medium", disclaimer_accepted_at: "2026-11-27T00:00:00Z" };
+  assert.equal(profileComplete(ok), true);
+  assert.equal(profileComplete({ ...ok, weight_kg: "80.5" }), true); // numeric columns can arrive as strings
+  for (const bad of [{ age: null }, { sex: null }, { weight_kg: null }, { height_cm: 0 }, { goal: null }, { activity: null }, { disclaimer_accepted_at: null }, { weight_kg: "abc" }]) assert.equal(profileComplete({ ...ok, ...bad }), false, JSON.stringify(bad));
+  assert.deepEqual({ ...QUICKSTART }, { profile: 1, meal: 1, reminder: 1 });
+  assert.equal(QUICKSTART_TOTAL, 3);
+  const { readFileSync } = await import("node:fs");
+  const sql = readFileSync("supabase/migrations/0020_quickstart.sql", "utf8");
+  assert.match(sql, /primary key \(username, step\)/); // one row per account and step: a repeat can never pay twice
+  assert.match(sql, /on conflict do nothing/);
+  assert.match(sql, /'quickstart'/);
+  const src = readFileSync("src/server/quickstart.ts", "utf8");
+  assert.match(src, /p\.kyc_verified/); // credits only for verified accounts
+  assert.match(src, /calories\.gte\.100/); // a 1-kcal manual entry earns nothing
+});

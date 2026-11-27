@@ -398,6 +398,7 @@ function NotifyAdmin() {
 type UserRow = { username: string; created_at: string; last_login_at: string | null; login_count: number; kyc_verified: boolean; language: string; deleted: boolean; active_days: number; first_day: string | null; last_day: string | null; ai_requests: number; food_entries: number; challenges_done: number; plan_active: boolean; pi_paid: number; purchases: number; last_purchase: string | null; credits_left: number; country: string | null };
 type CountryRow = { code: string; users: number; active30: number; paying: number; pi: number | string; ai: number };
 type Report = {
+  quickstart?: { users: number; profile: number; meal: number; reminder: number; all_three: number; credits: number };
   users: UserRow[];
   daily: { day: string; active: number; new: number }[];
   countries: CountryRow[];
@@ -472,6 +473,17 @@ function UsersAdmin() {
         <div className="flex justify-between text-xs text-ink-soft tabular-nums" dir="ltr"><span>{r.daily[0]?.day.slice(5)}</span><span>{r.daily[r.daily.length - 1]?.day.slice(5)}</span></div>
         <p className="muted">{tr("يُحسب اليوم بتوقيت كل مستخدم. اليوم يُسجَّل عند فتح التطبيق أو الدخول بـ Pi. البيانات قبل هذه الميزة مأخوذة من نشاط المستخدمين المحفوظ (تحديات وأكل وعادات)، وآخر دخول لها تقريبي.", "A day is counted in each user's own time zone and is recorded when the app is opened or a user signs in with Pi. Older data comes from stored activity (challenges, food, habits), so their last sign-in is approximate.")}</p>
       </section>
+      {r.quickstart && (
+        <section className="card space-y-3">
+          <h2 className="h2">{tr("قمع البداية السريعة", "Quick-start funnel")}</h2>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+            {([[tr("ملف كامل", "Profile done"), r.quickstart.profile], [tr("أول وجبة", "First meal"), r.quickstart.meal], [tr("وقت التذكير", "Reminder set"), r.quickstart.reminder], [tr("أكملوا الثلاث", "All three"), r.quickstart.all_three], [tr("كريدت ممنوح", "Credits given"), r.quickstart.credits]] as [string, number][]).map(([l, v]) => (
+              <div key={l} className="rounded-2xl bg-brand-50 p-3"><p className="text-xl font-extrabold tabular-nums">{v}{l === tr("كريدت ممنوح", "Credits given") ? "" : <span className="text-sm font-bold text-ink-soft"> ({pct(v, r.quickstart!.users)})</span>}</p><p className="muted">{l}</p></div>
+            ))}
+          </div>
+          <p className="muted">{tr("النسبة من كل المستخدمين المسجلين. الخطوة تُحتسب عند منح كريدتها (لحسابات KYC فقط).", "Share of all registered users. A step counts when its credit is granted (KYC accounts only).")}</p>
+        </section>
+      )}
       <section className="card space-y-3">
         <h2 className="h2">{tr("المستخدمون حسب الدولة", "Users by country")}</h2>
         <div className="overflow-x-auto">

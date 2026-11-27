@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { after } from "next/server";
+import { quickstartState } from "@/server/quickstart";
 import { db, must } from "@/server/supabase";
 import { ok, readJson, route, E, countryOf } from "@/server/http";
 import { adminUsernames, requireUser } from "@/server/auth";
@@ -58,6 +60,7 @@ export const PATCH = route(async (req) => {
   delete (fields as { weight_kg?: unknown }).weight_kg;
   if (fields.dislikes !== undefined) fields.dislikes = cleanDislikes(fields.dislikes) || null;
   const update: Record<string, unknown> = { ...fields, updated_at: new Date().toISOString() };
+  if (fields.reminder_hour !== undefined) update.reminder_set_at = new Date().toISOString(); // an explicit choice counts for the quick start
   const merged = { ...a.profile, ...fields };
   if (fields.timezone !== undefined && fields.timezone !== a.profile.timezone) {
     const last = a.profile.timezone_changed_at ? new Date(a.profile.timezone_changed_at).getTime() : 0;
@@ -71,6 +74,7 @@ export const PATCH = route(async (req) => {
   }
   must(await db().from("hl_profiles").update(update).eq("username", a.username));
   if (typeof newWeight === "number" && Number(a.profile.weight_kg) !== newWeight) await logWeight(a, newWeight);
+  after(() => quickstartState(a.username).then(() => undefined, () => undefined)); // credit finished quick-start steps right away
   return ok({ ok: true });
 });
 

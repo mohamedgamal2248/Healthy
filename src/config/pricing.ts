@@ -54,6 +54,11 @@ export const AI_LIMITS = {
   inFlightWindowMs: 90_000,     // a user can have only one generation running at a time
 } as const;
 
+/** Free AI credits for the first useful actions, once per account per step (granted by hl_quickstart_claim). */
+export const QUICKSTART = { profile: 1, meal: 1, reminder: 1 } as const;
+export type QuickstartStep = keyof typeof QUICKSTART;
+export const QUICKSTART_TOTAL = Object.values(QUICKSTART).reduce((a, b) => a + b, 0);
+
 /** The short chat assistant: each message is one paid request, so its size is capped on both sides. */
 export const CHAT = {
   maxUserWords: 40,      // a question, not an essay

@@ -11,6 +11,7 @@ import { ChallengeCard, StreakHeader, type ChallengeItem } from "@/components/Ch
 import { MealCard } from "@/components/MealCard";
 import { CreditBalance } from "@/components/Domain";
 import { Icon } from "@/components/Icon";
+import { QuickStart } from "@/components/QuickStart";
 import { BADGES } from "@/data/badges";
 import type { MealRow } from "@/server/meals";
 
@@ -26,38 +27,6 @@ type Today = {
   checklist: { profile: boolean; challenge: boolean; coach: boolean };
   community: { title_ar: string; title_en: string; members: number; checkedToday: number; joined: boolean; myDays: number } | null;
 };
-
-function Checklist({ d }: { d: Today }) {
-  const { tr } = useApp();
-  const [hidden, setHidden] = useState(true);
-  useEffect(() => { try { setHidden(localStorage.getItem("healthy.checklist") === "1"); } catch { setHidden(false); } }, []);
-  const steps = [
-    { done: d.checklist.profile, ar: "أكمل ملفك الصحي", en: "Complete your health profile", href: "/profile" },
-    { done: d.checklist.challenge, ar: "أنجز أول تحدٍّ", en: "Complete your first challenge", href: "/today" },
-    { done: d.checklist.coach, ar: "جرّب Healthy AI", en: "Try Healthy AI", href: "/chef" },
-    { done: d.starter.rewarded, ar: "أكمل تحدي البداية (٧ أيام)", en: "Finish the 7-day starter challenge", href: "/today" },
-  ];
-  const left = steps.filter((x) => !x.done).length;
-  if (hidden || left === 0) return null;
-  return (
-    <section className="card">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="h2">{tr("ابدأ من هنا", "Get started")}</h2>
-        <button className="text-xs font-extrabold text-ink-soft underline" onClick={() => { setHidden(true); try { localStorage.setItem("healthy.checklist", "1"); } catch {} }}>{tr("إخفاء", "Hide")}</button>
-      </div>
-      <ul className="space-y-1.5">
-        {steps.map((s) => (
-          <li key={s.ar}>
-            <Link href={s.href} className="flex min-h-11 items-center gap-3 rounded-xl px-2 font-bold hover:bg-brand-50">
-              <span className={`flex h-6 w-6 items-center justify-center rounded-full border-2 ${s.done ? "border-brand-600 bg-brand-600 text-white" : "border-brand-300"}`}>{s.done && <Icon name="check" size={14} />}</span>
-              <span className={s.done ? "text-ink-soft line-through" : ""}>{tr(s.ar, s.en)}</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
 
 /** One clear next step. The first thing that applies wins, so the screen never feels like a to-do list. */
 function NextStep({ d }: { d: Today }) {
@@ -162,6 +131,8 @@ function TodayInner() {
       )}
 
 
+      <QuickStart />
+
       {!d.starter.rewarded && me?.profile.kyc_verified && (
         <section className="card-row !border-sun-100 !bg-sun-50/60">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sun-500 text-white"><Icon name="bolt" size={22} /></span>
@@ -198,8 +169,6 @@ function TodayInner() {
           <Icon name="chevronD" size={20} className="text-ink-soft transition group-open:rotate-180" />
         </summary>
         <div className="space-y-5 border-t border-line p-4">
-          <Checklist d={d} />
-
           <section aria-labelledby="ml">
             <div className="mb-3 flex items-end justify-between"><h2 id="ml" className="h2">{tr("وجبات اليوم", "Meals of the day")}</h2><Link href="/meals" className="text-sm font-extrabold text-brand-700">{tr("كل الوجبات", "All meals")}</Link></div>
             <div className="grid gap-4 md:grid-cols-3">

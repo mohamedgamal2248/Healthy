@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { after } from "next/server";
+import { quickstartState } from "@/server/quickstart";
 import { db, must } from "@/server/supabase";
 import { ok, readJson, route, E } from "@/server/http";
 import { requireUser } from "@/server/auth";
@@ -36,6 +38,7 @@ export const POST = route(async (req) => {
     ? { name: manual.data.name, calories: manual.data.calories, protein_g: manual.data.protein_g ?? 0, carbs_g: manual.data.carbs_g ?? null, fat_g: manual.data.fat_g ?? null, source: "manual" as const, source_id: null }
     : await (async () => { const r = Ref.safeParse(body); if (!r.success) throw E.bad(); return resolveEntry(a, r.data); })();
   must(await db().from("hl_food_log").insert({ username: a.username, date: a.today, ...row }));
+  after(() => quickstartState(a.username).then(() => undefined, () => undefined)); // credit the "first meal" quick-start step right away
   return ok(await dayWithRecent(a));
 });
 
