@@ -594,7 +594,7 @@ test("push endpoints: only real browser push services are accepted", async () =>
 
 test("invite rewards need a real 3-day streak and are capped at 5", async () => {
   const { REFERRAL_CAP, REFERRAL_MIN_STREAK } = await import("../src/server/referral");
-  assert.equal(REFERRAL_CAP, 5);
+  assert.equal(REFERRAL_CAP, 3);
   assert.equal(REFERRAL_MIN_STREAK, 3);
   const { readFileSync } = await import("node:fs");
   const ch = readFileSync("src/server/challenges.ts", "utf8");

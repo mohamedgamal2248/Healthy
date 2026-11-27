@@ -137,7 +137,7 @@ function TodayInner() {
         <section className="card-row !border-sun-100 !bg-sun-50/60">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sun-500 text-white"><Icon name="bolt" size={22} /></span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-extrabold leading-snug">{tr(`تحدي البداية: ${d.starter.reward} كريدت مجانًا`, `Starter challenge: ${d.starter.reward} free AI requests`)}</p>
+            <p className="text-sm font-extrabold leading-snug">{tr(`تحدي البداية: ${d.starter.reward} كريدت Healthy AI مجانًا`, `Starter challenge: ${d.starter.reward} free AI requests`)}</p>
             <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-sun-100"><div className="h-full rounded-full bg-sun-500 transition-all" style={{ width: `${Math.min(100, (d.streak.current / 7) * 100)}%` }} /></div>
           </div>
           <span className="text-sm font-extrabold tabular-nums">{Math.min(d.streak.current, 7)}/7</span>

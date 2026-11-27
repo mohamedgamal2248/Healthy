@@ -3,7 +3,7 @@ import { HttpError, E } from "./http";
 import type { Auth } from "./auth";
 
 export const REFERRAL_CREDITS = 1; // AI requests each, for the inviter and the invited
-export const REFERRAL_CAP = 5;     // rewarded invites per inviter
+export const REFERRAL_CAP = 3;     // rewarded invites per inviter
 /** The invited friend must be active this many days in a row before anyone is rewarded (stops throwaway-account farming). */
 export const REFERRAL_MIN_STREAK = 3;
 const NEW_USER_WINDOW_MS = 3 * 86400_000;

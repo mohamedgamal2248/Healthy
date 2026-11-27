@@ -67,7 +67,7 @@ function Inner() {
           <button className="btn mt-4 !bg-white !text-sun-600" disabled={busy} onClick={() => act("/community/join")}>{busy ? <Spinner size={18} /> : <Icon name="plus" />}{tr("انضم بضغطة واحدة", "Join with one tap")}</button>
         )}
         <button className="btn mt-3 w-full !bg-white/20 !text-white" onClick={invite}><Icon name="share" size={18} />{tr("ادعُ أصحابك للتحدي", "Invite friends to the challenge")}</button>
-        <p className="mt-2 text-xs font-bold text-sun-100">{tr("كل صديق جديد ينجز تحديات ٣ أيام متتالية: طلب AI مجاني لك وله (حتى ٥ دعوات).", "Each new friend who keeps a 3-day streak: a free AI request for you both (up to 5 invites).")}</p>
+        <p className="mt-2 text-xs font-bold text-sun-100">{tr("كل صديق جديد يكمل ملفه ويسجل أول وجبة: كريدت Healthy AI مجاني لك وله (حتى ٣ دعوات).", "Each new friend who completes their profile and logs a first meal: a free Healthy AI credit for you both (up to 3 invites).")}</p>
       </section>
       <DuoSection />
       {d.hidden && <Notice tone="info" icon="eyeOff">{tr("أنت مخفي من لوحة المتصدرين (من الملف الشخصي).", "You are hidden from the leaderboard (set in your profile).")}</Notice>}
