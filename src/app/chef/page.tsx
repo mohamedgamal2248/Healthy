@@ -103,6 +103,9 @@ function ChefInner() {
   const total = balances?.total ?? 0;
 
   useEffect(() => { setBalances(me?.balances ?? null); }, [me]);
+  useEffect(() => { refresh(); // the balance shown here must be the real one, e.g. right after a quick-start credit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openRecipe = useCallback(async (id: string) => {
     try {

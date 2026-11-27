@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { after } from "next/server";
 import { quickstartState } from "@/server/quickstart";
 import { db, must } from "@/server/supabase";
 import { ok, readJson, route, E, countryOf } from "@/server/http";
@@ -74,7 +73,8 @@ export const PATCH = route(async (req) => {
   }
   must(await db().from("hl_profiles").update(update).eq("username", a.username));
   if (typeof newWeight === "number" && Number(a.profile.weight_kg) !== newWeight) await logWeight(a, newWeight);
-  after(() => quickstartState(a.username).then(() => undefined, () => undefined)); // credit finished quick-start steps right away
+  // Credit finished quick-start steps before answering, so the app's balance is already right when it refreshes.
+  await quickstartState(a.username).catch(() => undefined);
   return ok({ ok: true });
 });
 

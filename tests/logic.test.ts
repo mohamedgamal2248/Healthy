@@ -778,6 +778,8 @@ test("failed or non-compliant output is refunded and never saved; cached answers
   const chef = readFileSync("src/server/chef.ts", "utf8");
   // every paid path refunds in its catch block, and the cache is re-validated before reuse
   assert.equal((chef.match(/await refundCredit\(req\.id\)/g) ?? []).length, 4); // recipe/workout/challenge, scan, fridge, chat
+  // ...and every one of them takes exactly one credit first: nothing that calls the model for the user is free
+  assert.equal((chef.match(/await spendCredit\(a\.username, req\.id\)/g) ?? []).length, 4);
   assert.match(chef, /!outputIsSafe\(JSON\.stringify\(parsed\.data\)\)/);
   assert.match(chef, /duplicateOr</);
   const { resultSignature } = await import("../src/server/chef");

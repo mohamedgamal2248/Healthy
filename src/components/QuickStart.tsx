@@ -48,7 +48,7 @@ export function QuickStart() {
 
   const setReminder = async () => {
     setBusy(true);
-    try { await api("/me", { method: "PATCH", body: { reminder_hour: hour } }); await refresh(); setTimeout(load, 600); } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
+    try { await api("/me", { method: "PATCH", body: { reminder_hour: hour } }); await refresh(); load(); } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
   };
 
   if (hidden || !s || s.allGranted) return null;
