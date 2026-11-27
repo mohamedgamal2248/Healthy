@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { track } from "./telemetry";
 
 export class HttpError extends Error {
   constructor(public status: number, public code: string, public ar: string, public en: string, public extra?: Record<string, unknown>) {
@@ -44,11 +45,17 @@ type Ctx<P> = { params: Promise<P> };
 /** Wrap a route handler so thrown HttpErrors become clean bilingual JSON errors. */
 export function route<P = Record<string, string>>(fn: (req: Request, ctx: Ctx<P>) => Promise<Response>) {
   return async (req: Request, ctx: Ctx<P>) => {
+    const t0 = Date.now();
+    let res: Response;
+    let err: unknown;
     try {
-      return await fn(req, ctx);
+      res = await fn(req, ctx);
     } catch (e) {
-      return errorResponse(e);
+      err = e;
+      res = errorResponse(e);
     }
+    track(req.url, req.method, res.status, Date.now() - t0, err);
+    return res;
   };
 }
 

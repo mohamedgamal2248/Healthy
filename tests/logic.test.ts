@@ -122,7 +122,7 @@ test("session tokens are signed and tamper-evident", () => {
   assert.equal(verifySession(t)?.u, "alice");
   const forged = Buffer.from(JSON.stringify({ u: "bobby", uid: "uid-a", exp: 9999999999 })).toString("base64url") + "." + t.split(".")[1];
   assert.equal(verifySession(forged), null);
-  assert.equal(verifySession(t.slice(0, -2) + "AA"), null);
+  assert.equal(verifySession(t.slice(0, -2) + (t.endsWith("AA") ? "BB" : "AA")), null); // never "tamper" with the value it already has
   assert.equal(verifySession(null), null);
 });
 
@@ -989,4 +989,19 @@ test("food reference: oil named first is oil, fried onions and tomato sauce have
   const koshari = { is_food: true, dish_name: "Koshari", confidence: "medium", setting: "restaurant", portion: "", estimated_total_g: 537, ingredients: ing, totals: { calories: { low: 597, mid: 711, high: 854 }, protein_g: { low: 15, mid: 20, high: 24 }, carbs_g: 102, fat_g: 24 }, notes: [], assumptions: [] };
   const c = calibrateScan(koshari as unknown as Parameters<typeof calibrateScan>[0], "en");
   assert.ok(c.totals.calories.mid >= 780 && c.totals.calories.mid <= 880, String(c.totals.calories.mid)); // 12 g oil is ~106 kcal, not 19
+});
+
+test("telemetry: routes are normalised, counted in memory, and errors are de-duplicated", async () => {
+  const t = await import("../src/server/telemetry");
+  assert.equal(t.normalizeRoute("https://x.app/api/recipes/3f2c1b9a-1111-4222-8333-444455556666/like?x=1"), "/api/recipes/:id/like");
+  assert.equal(t.normalizeRoute("/api/public/meals/foul-nabet"), "/api/public/meals/foul-nabet");
+  assert.equal(t.slowLimitMs("/api/chef"), 25_000);
+  assert.equal(t.slowLimitMs("POST /api/coach/fridge"), 2_500); // method-prefixed names are not AI routes by this rule
+  assert.equal(t.slowLimitMs("/api/today"), 2_500);
+  // recording must never throw and must not need a database
+  t.recordRequest("/api/today", "GET", 200, 120);
+  t.recordRequest("/api/today", "GET", 500, 3000, new Error("boom"));
+  t.recordRequest("/api/today", "GET", 500, 10, new Error("boom"));
+  t.recordRequest("/api/health", "GET", 200, 5);
+  assert.doesNotThrow(() => t.track("/api/me", "GET", 200, 5));
 });

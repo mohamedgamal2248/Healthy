@@ -10,7 +10,7 @@ export const maxDuration = 120;
 export const GET = route(async (req) => {
   requireCron(req);
   const now = Date.now();
-  const out = { reconciled: 0, expiredPurchases: 0, cacheDeleted: 0, limitsDeleted: 0, refundedHung: 0 };
+  const out = { reconciled: 0, expiredPurchases: 0, cacheDeleted: 0, limitsDeleted: 0, refundedHung: 0, statsDeleted: 0 };
 
   // 1. finish stuck payments
   const stuck = must(
@@ -33,5 +33,10 @@ export const GET = route(async (req) => {
   out.cacheDeleted = cache.length;
   const lim = must(await db().from("hl_rate_limits").delete().lt("window_start", new Date(now - 86400_000).toISOString()).select("key")) as { key: string }[];
   out.limitsDeleted = lim.length;
+  // 4. monitoring data older than 14 days (user activity days are kept: they are small and feed the retention numbers)
+  const cut = new Date(now - 14 * 86400_000).toISOString();
+  const st = must(await db().from("hl_api_stats").delete().lt("hour", cut).select("route")) as unknown[];
+  const er = must(await db().from("hl_api_errors").delete().lt("last_at", cut).select("key")) as unknown[];
+  out.statsDeleted = st.length + er.length;
   return ok(out);
 });

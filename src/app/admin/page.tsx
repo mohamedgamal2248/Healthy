@@ -13,7 +13,7 @@ type Stats = { aiByKind: KindCost[]; aiCostUsd: number; avgCostUsd: number; aiCa
 
 function Inner() {
   const { me, tr, toast, errMsg } = useApp();
-  const [tab, setTab] = useState<"stats" | "users" | "challenges" | "meals" | "rotation" | "group" | "notify">("stats");
+  const [tab, setTab] = useState<"stats" | "users" | "monitor" | "challenges" | "meals" | "rotation" | "group" | "notify">("stats");
   const [stats, setStats] = useState<Stats | null>(null);
   const [chs, setChs] = useState<Ch[]>([]);
   const [meals, setMeals] = useState<Meal[]>([]);
@@ -33,7 +33,7 @@ function Inner() {
   return (
     <div className="mx-auto max-w-4xl space-y-5 py-5">
       <PageHeader title={tr("لوحة الإدارة", "Admin")} sub={tr("أدوات المحتوى والإجماليات وإحصاءات الاستخدام. لا تُعرض ملفات صحية فردية.", "Content tools, totals and usage statistics. No individual health profiles are shown.")} />
-      <div className="flex flex-wrap gap-2">{([["stats", tr("الإجماليات", "Totals")], ["users", tr("المستخدمون", "Users")], ["challenges", tr("التحديات", "Challenges")], ["meals", tr("الوجبات", "Meals")], ["rotation", tr("وجبات اليوم", "Daily rotation")], ["group", tr("تحدي الأسبوع", "Weekly challenge")], ["notify", tr("الإشعارات", "Notifications")]] as const).map(([k, l]) => (<button key={k} className="chip" aria-pressed={tab === k} onClick={() => setTab(k)}>{l}</button>))}</div>
+      <div className="flex flex-wrap gap-2">{([["stats", tr("الإجماليات", "Totals")], ["users", tr("المستخدمون", "Users")], ["monitor", tr("المراقبة", "Monitor")], ["challenges", tr("التحديات", "Challenges")], ["meals", tr("الوجبات", "Meals")], ["rotation", tr("وجبات اليوم", "Daily rotation")], ["group", tr("تحدي الأسبوع", "Weekly challenge")], ["notify", tr("الإشعارات", "Notifications")]] as const).map(([k, l]) => (<button key={k} className="chip" aria-pressed={tab === k} onClick={() => setTab(k)}>{l}</button>))}</div>
 
       {tab === "stats" && (
         <>
@@ -82,6 +82,7 @@ function Inner() {
         </>
       )}
       {tab === "users" && <UsersAdmin />}
+      {tab === "monitor" && <MonitorAdmin />}
       {tab === "challenges" && <ChallengeAdmin items={chs} onSave={(c) => post("/admin/challenges", c)} busy={busy} />}
       {tab === "meals" && <MealAdmin items={meals} onSave={(m) => post("/admin/meals", m)} busy={busy} />}
       {tab === "rotation" && <Rotation meals={meals} onSave={(b) => post("/admin/rotation", b)} busy={busy} />}
@@ -239,12 +240,13 @@ function NotifyAdmin() {
 }
 
 
-type UserRow = { username: string; created_at: string; last_login_at: string | null; login_count: number; kyc_verified: boolean; language: string; deleted: boolean; active_days: number; first_day: string | null; last_day: string | null; ai_requests: number; food_entries: number; challenges_done: number; plan_active: boolean };
+type UserRow = { username: string; created_at: string; last_login_at: string | null; login_count: number; kyc_verified: boolean; language: string; deleted: boolean; active_days: number; first_day: string | null; last_day: string | null; ai_requests: number; food_entries: number; challenges_done: number; plan_active: boolean; pi_paid: number; purchases: number; last_purchase: string | null; credits_left: number };
 type Report = {
   users: UserRow[];
   daily: { day: string; active: number; new: number }[];
-  summary: { total: number; dau: number; wau: number; mau: number; returned: number; never_returned: number; avg_active_days: number; avg_logins: number; d1_eligible: number; d1_returned: number; d7_eligible: number; d7_returned: number };
+  summary: { total: number; dau: number; wau: number; mau: number; returned: number; never_returned: number; avg_active_days: number; avg_logins: number; d1_eligible: number; d1_returned: number; d7_eligible: number; d7_returned: number; paying_users: number; pi_total: number; purchases_total: number; credits_outstanding: number; ai_total: number };
 };
+const fmtPi = (n: number | string) => { const v = Number(n); return Number.isInteger(v) ? String(v) : v.toFixed(2); };
 const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "-");
 const ago = (iso: string | null, tr: (a: string, e: string) => string) => {
   if (!iso) return "-";
@@ -261,15 +263,16 @@ function UsersAdmin() {
   const { tr, toast, errMsg } = useApp();
   const [r, setR] = useState<Report | null>(null);
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState<"login" | "created" | "days" | "ai">("login");
+  const [sort, setSort] = useState<"login" | "created" | "days" | "ai" | "pi">("login");
   const [page, setPage] = useState(0);
-  useEffect(() => { api<Report>("/admin/users").then(setR).catch((e) => toast(errMsg(e), "err")); }, [toast, errMsg]);
+  const load = useCallback((fresh = false) => { api<Report>(`/admin/users${fresh ? "?fresh=1" : ""}`).then(setR).catch((e) => toast(errMsg(e), "err")); }, [toast, errMsg]);
+  useEffect(() => { load(); }, [load]);
   if (!r) return <div className="card flex items-center gap-2 py-6"><Spinner /><span className="muted">{tr("جارٍ التحميل...", "Loading...")}</span></div>;
   const s = r.summary;
   const dt = (iso: string | null) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "-");
   const rows = r.users
     .filter((u) => !q.trim() || u.username.toLowerCase().includes(q.trim().toLowerCase()))
-    .sort((a, b) => sort === "created" ? +new Date(b.created_at) - +new Date(a.created_at) : sort === "days" ? b.active_days - a.active_days : sort === "ai" ? b.ai_requests - a.ai_requests : +new Date(b.last_login_at ?? b.created_at) - +new Date(a.last_login_at ?? a.created_at));
+    .sort((a, b) => sort === "created" ? +new Date(b.created_at) - +new Date(a.created_at) : sort === "days" ? b.active_days - a.active_days : sort === "ai" ? b.ai_requests - a.ai_requests : sort === "pi" ? Number(b.pi_paid) - Number(a.pi_paid) : +new Date(b.last_login_at ?? b.created_at) - +new Date(a.last_login_at ?? a.created_at));
   const PAGE = 50;
   const pages = Math.max(1, Math.ceil(rows.length / PAGE));
   const view = rows.slice(page * PAGE, page * PAGE + PAGE);
@@ -284,6 +287,11 @@ function UsersAdmin() {
     [tr("متوسط مرات الدخول", "Avg sign-ins per user"), String(s.avg_logins)],
     [tr("عودة في اليوم التالي", "Back the next day"), `${pct(s.d1_returned, s.d1_eligible)} (${s.d1_returned}/${s.d1_eligible})`],
     [tr("عودة خلال 7 أيام", "Back within 7 days"), `${pct(s.d7_returned, s.d7_eligible)} (${s.d7_returned}/${s.d7_eligible})`],
+    [tr("إجمالي Pi المدفوعة", "Total Pi paid"), `${fmtPi(s.pi_total)} Pi`],
+    [tr("مستخدمون دفعوا", "Paying users"), `${s.paying_users} (${pct(s.paying_users, s.total)})`],
+    [tr("متوسط الدفع لكل دافع", "Avg Pi per payer"), s.paying_users ? `${fmtPi(s.pi_total / s.paying_users)} Pi` : "-"],
+    [tr("كريدت غير مستهلك", "Credits not yet used"), String(s.credits_outstanding)],
+    [tr("طلبات AI منجزة", "AI requests completed"), String(s.ai_total)],
   ];
   return (
     <div className="space-y-4">
@@ -291,7 +299,7 @@ function UsersAdmin() {
         {kpis.map(([l, v]) => (<div key={l} className="card"><p className="text-2xl font-extrabold tabular-nums">{v}</p><p className="muted">{l}</p></div>))}
       </div>
       <section className="card space-y-3">
-        <div className="flex items-center justify-between gap-3"><h2 className="h2">{tr("النشاط اليومي (آخر 30 يومًا)", "Daily activity (last 30 days)")}</h2><span className="muted">{tr("نشطون / جدد", "active / new")}</span></div>
+        <div className="flex items-center justify-between gap-3"><h2 className="h2">{tr("النشاط اليومي (آخر 30 يومًا)", "Daily activity (last 30 days)")}</h2><button className="chip" onClick={() => load(true)}>{tr("تحديث", "Refresh")}</button></div>
         <div className="flex h-32 items-end gap-[3px]" dir="ltr" role="img" aria-label={tr("رسم النشاط اليومي", "Daily activity chart")}>
           {r.daily.map((d) => (
             <div key={d.day} className="group relative flex h-full flex-1 flex-col justify-end" title={`${d.day}: ${d.active} ${tr("نشط", "active")}, ${d.new} ${tr("جديد", "new")}`}>
@@ -311,11 +319,12 @@ function UsersAdmin() {
             <option value="created">{tr("تاريخ التسجيل", "Registered")}</option>
             <option value="days">{tr("أيام الاستخدام", "Days of use")}</option>
             <option value="ai">{tr("طلبات AI", "AI requests")}</option>
+            <option value="pi">{tr("Pi المدفوعة", "Pi paid")}</option>
           </select>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
-            <thead><tr className="text-xs font-extrabold text-ink-soft"><th className="py-2 text-start">Pi username</th><th className="text-start">{tr("سجّل في", "Registered")}</th><th className="text-start">{tr("آخر دخول", "Last sign-in")}</th><th>{tr("مرات الدخول", "Sign-ins")}</th><th>{tr("أيام الاستخدام", "Days used")}</th><th>{tr("AI", "AI")}</th><th>{tr("أكل", "Food")}</th><th>{tr("تحديات", "Challenges")}</th><th>{tr("خطة", "Plan")}</th></tr></thead>
+          <table className="w-full min-w-[900px] text-sm">
+            <thead><tr className="text-xs font-extrabold text-ink-soft"><th className="py-2 text-start">Pi username</th><th className="text-start">{tr("سجّل في", "Registered")}</th><th className="text-start">{tr("آخر دخول", "Last sign-in")}</th><th>{tr("مرات الدخول", "Sign-ins")}</th><th>{tr("أيام الاستخدام", "Days used")}</th><th>{tr("Pi مدفوعة", "Pi paid")}</th><th>{tr("كريدت متبقٍّ", "Credits left")}</th><th>{tr("AI", "AI")}</th><th>{tr("أكل", "Food")}</th><th>{tr("تحديات", "Challenges")}</th><th>{tr("خطة", "Plan")}</th></tr></thead>
             <tbody>
               {view.map((u) => (
                 <tr key={u.username} className="border-t border-line text-center align-top">
@@ -324,13 +333,15 @@ function UsersAdmin() {
                   <td className="text-start"><span className="block">{dt(u.last_login_at)}</span><span className="text-xs text-ink-soft">{ago(u.last_login_at, tr)}</span></td>
                   <td className="tabular-nums">{u.login_count}</td>
                   <td className="tabular-nums">{u.active_days}</td>
+                  <td className="tabular-nums">{Number(u.pi_paid) > 0 ? <span className="font-extrabold text-brand-700">{fmtPi(u.pi_paid)}<span className="block text-[11px] font-normal text-ink-soft">{u.purchases} {tr("عملية", "orders")}</span></span> : "-"}</td>
+                  <td className="tabular-nums">{u.credits_left}</td>
                   <td className="tabular-nums">{u.ai_requests}</td>
                   <td className="tabular-nums">{u.food_entries}</td>
                   <td className="tabular-nums">{u.challenges_done}</td>
                   <td>{u.plan_active ? tr("نعم", "Yes") : "-"}</td>
                 </tr>
               ))}
-              {view.length === 0 && <tr><td colSpan={9} className="py-6 text-center muted">{tr("لا يوجد مستخدمون مطابقون.", "No matching users.")}</td></tr>}
+              {view.length === 0 && <tr><td colSpan={11} className="py-6 text-center muted">{tr("لا يوجد مستخدمون مطابقون.", "No matching users.")}</td></tr>}
             </tbody>
           </table>
         </div>
@@ -342,6 +353,135 @@ function UsersAdmin() {
           </div>
         )}
         <p className="muted">{tr("أسماء Pi وتواريخ وعدّادات فقط. لا تُعرض بيانات صحية.", "Pi usernames, dates and counters only. No health data is shown.")}</p>
+      </section>
+    </div>
+  );
+}
+
+
+type Monitor = {
+  routes: { route: string; n: number; avg_ms: number | null; max_ms: number; e5xx: number; e4xx: number; slow: number }[];
+  hourly: { hour: string; n: number; e5xx: number; e4xx: number; slow: number; avg_ms: number | null }[];
+  errors: { route: string; status: number; message: string; n: number; first_at: string; last_at: string }[];
+  ai24: { completed: number; refunded: number; failed: number; pending_stuck: number; reasons: { error: string; n: number }[] };
+  ai_daily: { day: string; completed: number; refunded: number; failed: number }[];
+  money_daily: { day: string; purchases: number; pi: number | string }[];
+  purchases_open: number;
+  db: { total_bytes: number; healthy_bytes: number; connections: number; active_connections: number; top_tables: { name: string; bytes: number; rows: number }[] };
+};
+const mb = (b: number) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.round(b / 1024)} KB`);
+const DB_LIMIT = 500 * 1048576; // Supabase free plan
+
+/** Owner-only: errors, slow routes, AI outcomes, revenue and database health, read from small pre-aggregated tables. */
+function MonitorAdmin() {
+  const { tr, toast, errMsg } = useApp();
+  const [m, setM] = useState<Monitor | null>(null);
+  const [auto, setAuto] = useState(false);
+  const load = useCallback((fresh = false) => { api<Monitor>(`/admin/monitor${fresh ? "?fresh=1" : ""}`).then(setM).catch((e) => toast(errMsg(e), "err")); }, [toast, errMsg]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (!auto) return; const t = setInterval(() => load(true), 60_000); return () => clearInterval(t); }, [auto, load]);
+  if (!m) return <div className="card flex items-center gap-2 py-6"><Spinner /><span className="muted">{tr("جارٍ التحميل...", "Loading...")}</span></div>;
+  const tot = m.routes.reduce((a, r) => ({ n: a.n + r.n, e5: a.e5 + r.e5xx, e4: a.e4 + r.e4xx, slow: a.slow + r.slow, ms: a.ms + (r.avg_ms ?? 0) * r.n }), { n: 0, e5: 0, e4: 0, slow: 0, ms: 0 });
+  const lastHour = m.hourly[m.hourly.length - 1];
+  const aiTotal = m.ai24.completed + m.ai24.refunded + m.ai24.failed;
+  const aiFailRate = aiTotal ? (m.ai24.refunded + m.ai24.failed) / aiTotal : 0;
+  const dbPct = (m.db.total_bytes / DB_LIMIT) * 100;
+  const problems: string[] = [];
+  if (lastHour && lastHour.e5xx > 0) problems.push(tr(`أخطاء سيرفر (5xx) في آخر ساعة: ${lastHour.e5xx}`, `Server errors (5xx) in the last hour: ${lastHour.e5xx}`));
+  if (m.ai24.pending_stuck > 0) problems.push(tr(`طلبات AI عالقة: ${m.ai24.pending_stuck}`, `Stuck AI requests: ${m.ai24.pending_stuck}`));
+  if (aiTotal >= 10 && aiFailRate > 0.2) problems.push(tr(`فشل AI مرتفع: ${Math.round(aiFailRate * 100)}%`, `High AI failure rate: ${Math.round(aiFailRate * 100)}%`));
+  if (tot.n > 50 && tot.slow / tot.n > 0.05) problems.push(tr("أكثر من 5% من الطلبات بطيئة", "More than 5% of requests are slow"));
+  if (dbPct > 70) problems.push(tr(`قاعدة البيانات ${dbPct.toFixed(0)}% من الحد`, `Database is ${dbPct.toFixed(0)}% of its limit`));
+  if (m.db.connections > 40) problems.push(tr(`اتصالات قاعدة البيانات كثيرة: ${m.db.connections}`, `Many database connections: ${m.db.connections}`));
+  const maxN = Math.max(1, ...m.hourly.map((h) => h.n));
+  const cards: [string, string, boolean?][] = [
+    [tr("طلبات (24 س)", "Requests (24 h)"), String(tot.n)],
+    [tr("أخطاء سيرفر 5xx", "Server errors 5xx"), String(tot.e5), tot.e5 > 0],
+    [tr("أخطاء عميل 4xx", "Client errors 4xx"), String(tot.e4)],
+    [tr("طلبات بطيئة", "Slow requests"), String(tot.slow), tot.slow > 0 && tot.n > 0 && tot.slow / tot.n > 0.05],
+    [tr("متوسط الاستجابة", "Avg response"), tot.n ? `${Math.round(tot.ms / tot.n)} ms` : "-"],
+    [tr("AI منجز / مُسترد / فاشل (24 س)", "AI done / refunded / failed (24 h)"), `${m.ai24.completed} / ${m.ai24.refunded} / ${m.ai24.failed}`, aiTotal >= 10 && aiFailRate > 0.2],
+    [tr("طلبات AI عالقة", "Stuck AI requests"), String(m.ai24.pending_stuck), m.ai24.pending_stuck > 0],
+    [tr("مشتريات مفتوحة (24 س)", "Open purchases (24 h)"), String(m.purchases_open)],
+    [tr("حجم قاعدة البيانات", "Database size"), `${mb(m.db.total_bytes)} (${dbPct.toFixed(1)}%)`, dbPct > 70],
+    [tr("منها Healthy", "of which Healthy"), mb(m.db.healthy_bytes)],
+    [tr("اتصالات القاعدة (نشطة / كلها)", "DB connections (active / all)"), `${m.db.active_connections} / ${m.db.connections}`, m.db.connections > 40],
+  ];
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Notice tone={problems.length ? "bad" : "ok"}>{problems.length ? problems.join(" · ") : tr("لا توجد مشاكل ظاهرة الآن.", "No visible problems right now.")}</Notice>
+        <span className="ms-auto flex items-center gap-2">
+          <label className="flex items-center gap-1 text-sm"><input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />{tr("تحديث تلقائي كل دقيقة", "Auto-refresh every minute")}</label>
+          <button className="chip" onClick={() => load(true)}>{tr("تحديث", "Refresh")}</button>
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        {cards.map(([l, v, bad]) => (<div key={l} className="card"><p className={`text-2xl font-extrabold tabular-nums ${bad ? "text-rose-600" : ""}`}>{v}</p><p className="muted">{l}</p></div>))}
+      </div>
+      <section className="card space-y-3">
+        <h2 className="h2">{tr("الطلبات في الساعة (آخر 24 ساعة)", "Requests per hour (last 24 h)")}</h2>
+        <div className="flex h-28 items-end gap-[3px]" dir="ltr" role="img" aria-label={tr("رسم الطلبات", "Requests chart")}>
+          {m.hourly.map((h) => (
+            <div key={h.hour} className="flex h-full flex-1 flex-col justify-end" title={`${new Date(h.hour).toLocaleString()}: ${h.n} req, ${h.e5xx} 5xx, ${h.slow} slow, avg ${h.avg_ms ?? 0} ms`}>
+              <div className={`w-full rounded-t ${h.e5xx ? "bg-rose-500" : h.slow ? "bg-sun-500" : "bg-brand-500"}`} style={{ height: `${(h.n / maxN) * 100}%`, minHeight: h.n ? 3 : 0 }} />
+            </div>
+          ))}
+        </div>
+        <p className="muted">{tr("أخضر: سليم، برتقالي: فيه طلبات بطيئة، أحمر: فيه أخطاء سيرفر. الأرقام من عدّاد داخل التطبيق يُكتب على دفعات (كل 15 ثانية كحد أقصى لكل نسخة)، فهي تقريبية وتُحفظ 14 يومًا.", "Green: healthy, orange: has slow requests, red: has server errors. Numbers come from an in-app counter written in batches (at most every 15 s per server instance), so they are approximate and kept 14 days.")}</p>
+      </section>
+      <section className="card space-y-3">
+        <h2 className="h2">{tr("أحدث الأخطاء", "Recent errors")}</h2>
+        {m.errors.length === 0 ? <p className="muted">{tr("لا أخطاء مسجّلة.", "No errors recorded.")}</p> : (
+          <ul className="divide-y divide-line text-sm">{m.errors.map((e, i) => (
+            <li key={i} className="space-y-0.5 py-2">
+              <div className="flex flex-wrap items-center gap-x-3"><span className="font-extrabold text-rose-600">{e.status}</span><span dir="ltr" className="font-bold">{e.route}</span><span className="muted tabular-nums">x{e.n}</span><span className="ms-auto text-xs text-ink-soft" dir="ltr">{ago(e.last_at, tr)}</span></div>
+              <p className="break-words text-ink-soft" dir="ltr">{e.message}</p>
+            </li>))}
+          </ul>
+        )}
+      </section>
+      <section className="card space-y-3">
+        <h2 className="h2">{tr("المسارات (آخر 24 ساعة)", "Routes (last 24 h)")}</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] text-sm">
+            <thead><tr className="text-xs font-extrabold text-ink-soft"><th className="py-2 text-start">{tr("المسار", "Route")}</th><th>{tr("طلبات", "Requests")}</th><th>5xx</th><th>4xx</th><th>{tr("بطيء", "Slow")}</th><th>{tr("متوسط", "Avg")}</th><th>{tr("أقصى", "Max")}</th></tr></thead>
+            <tbody>
+              {m.routes.map((r) => (
+                <tr key={r.route} className="border-t border-line text-center">
+                  <td className="py-2 text-start font-bold" dir="ltr">{r.route}</td>
+                  <td className="tabular-nums">{r.n}</td>
+                  <td className={`tabular-nums ${r.e5xx ? "font-extrabold text-rose-600" : ""}`}>{r.e5xx}</td>
+                  <td className="tabular-nums">{r.e4xx}</td>
+                  <td className={`tabular-nums ${r.slow ? "font-extrabold text-sun-600" : ""}`}>{r.slow}</td>
+                  <td className="tabular-nums">{r.avg_ms ?? "-"} ms</td>
+                  <td className="tabular-nums text-ink-soft">{r.max_ms} ms</td>
+                </tr>
+              ))}
+              {m.routes.length === 0 && <tr><td colSpan={7} className="py-6 text-center muted">{tr("لا بيانات بعد: ستظهر بعد أول طلبات.", "No data yet: it appears after the first requests.")}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section className="card space-y-3">
+        <h2 className="h2">{tr("الذكاء الاصطناعي", "AI")}</h2>
+        {m.ai24.reasons.length > 0 && (<div><p className="muted mb-1">{tr("أسباب الفشل / الاسترداد (24 ساعة)", "Failure / refund reasons (24 h)")}</p><div className="flex flex-wrap gap-2">{m.ai24.reasons.map((r) => (<span key={r.error} className="chip" dir="ltr">{r.error} x{r.n}</span>))}</div></div>)}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[320px] text-sm">
+            <thead><tr className="text-xs font-extrabold text-ink-soft"><th className="py-2 text-start">{tr("اليوم", "Day")}</th><th>{tr("منجز", "Done")}</th><th>{tr("مُسترد", "Refunded")}</th><th>{tr("فاشل", "Failed")}</th></tr></thead>
+            <tbody>{m.ai_daily.slice().reverse().map((d) => (<tr key={d.day} className="border-t border-line text-center"><td className="py-2 text-start tabular-nums" dir="ltr">{d.day}</td><td className="tabular-nums">{d.completed}</td><td className="tabular-nums">{d.refunded}</td><td className="tabular-nums">{d.failed}</td></tr>))}</tbody>
+          </table>
+        </div>
+      </section>
+      <section className="card space-y-3">
+        <h2 className="h2">{tr("Pi المستلمة (آخر 14 يومًا)", "Pi received (last 14 days)")}</h2>
+        {m.money_daily.length === 0 ? <p className="muted">{tr("لا مدفوعات في هذه الفترة.", "No payments in this period.")}</p> : (
+          <ul className="divide-y divide-line text-sm">{m.money_daily.slice().reverse().map((d) => (<li key={d.day} className="flex items-center gap-3 py-2"><span className="tabular-nums" dir="ltr">{d.day}</span><span className="muted">{d.purchases} {tr("عملية", "orders")}</span><span className="ms-auto font-extrabold tabular-nums">{fmtPi(d.pi)} Pi</span></li>))}</ul>
+        )}
+      </section>
+      <section className="card space-y-3">
+        <h2 className="h2">{tr("أكبر الجداول", "Largest tables")}</h2>
+        <ul className="divide-y divide-line text-sm">{m.db.top_tables.map((t) => (<li key={t.name} className="flex items-center gap-3 py-2"><span className="font-bold" dir="ltr">{t.name}</span><span className="muted tabular-nums">{t.rows >= 0 ? `${t.rows} ${tr("صف", "rows")}` : ""}</span><span className="ms-auto tabular-nums">{mb(t.bytes)}</span></li>))}</ul>
       </section>
     </div>
   );
