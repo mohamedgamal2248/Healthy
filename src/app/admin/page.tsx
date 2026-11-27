@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useApp } from "@/components/AppProvider";
-import { Field, Gate, Notice, PageHeader, PageSkeleton, Spinner } from "@/components/ui";
+import { Field, Gate, Notice, PageHeader, PageSkeleton, Sheet, Spinner } from "@/components/ui";
 import { Icon } from "@/components/Icon";
 import { INGREDIENTS, MEAL_TAGS } from "@/data/ingredients";
 
@@ -86,7 +86,7 @@ function Inner() {
       {tab === "challenges" && <ChallengeAdmin items={chs} onSave={(c) => post("/admin/challenges", c)} busy={busy} />}
       {tab === "meals" && <MealAdmin items={meals} onSave={(m) => post("/admin/meals", m)} busy={busy} />}
       {tab === "rotation" && <Rotation meals={meals} onSave={(b) => post("/admin/rotation", b)} busy={busy} />}
-      {tab === "notify" && <NotifyAdmin />}
+      {tab === "notify" && <div className="space-y-5"><BroadcastAdmin /><NotifyAdmin /></div>}
       {tab === "group" && <GroupAdmin chs={chs} onSave={(b) => post("/admin/group", b)} busy={busy} />}
     </div>
   );
@@ -205,6 +205,108 @@ function GroupAdmin({ chs, onSave, busy }: { chs: Ch[]; onSave: (b: unknown) => 
 export default function AdminPage() { return <Gate><Inner /></Gate>; }
 
 type NotifyResult = { pi: { requested: number; delivered: number; error?: string }; push: { configured: boolean; devices: number; sent: number; removed: number; failed: number; statuses?: (number | string)[] } };
+
+
+type Broadcast = { id: string; audience: string; title_ar: string | null; body_ar: string | null; title_en: string | null; body_en: string | null; recipients: number; pi_requested: number; pi_delivered: number; push_devices: number; push_sent: number; status: string; created_at: string };
+type Preview = { people: number; pi: number; devices: number; truncated: boolean };
+
+const TEMPLATES: { key: string; ar: string; en: string; t: { title_ar: string; body_ar: string; title_en: string; body_en: string; subroute: string } }[] = [
+  { key: "daily", ar: "تذكير يومي", en: "Daily reminder", t: { title_ar: "تحدّي اليوم في انتظارك", body_ar: "خمس دقائق تكفي. افتح Healthy وسجّل وجبتك وأنجز تحدّي اليوم.", title_en: "Today's challenge is waiting", body_en: "Five minutes is enough. Open Healthy, log a meal and finish today's challenge.", subroute: "/today" } },
+  { key: "meal", ar: "وجبة اليوم", en: "Meal idea", t: { title_ar: "وجبة صحية لليوم", body_ar: "اكتشف وجبات جديدة قليلة السعرات من مكونات بسيطة في كتالوج Healthy.", title_en: "A healthy meal idea for today", body_en: "Discover new low-calorie meals from simple ingredients in the Healthy catalogue.", subroute: "/meals" } },
+  { key: "water", ar: "الماء", en: "Water", t: { title_ar: "هل شربت ماءً اليوم؟", body_ar: "كوب ماء الآن يساعدك على الاستمرار. سجّل عاداتك اليوم في Healthy.", title_en: "Have you had water today?", body_en: "A glass of water now helps you keep going. Log your habits in Healthy today.", subroute: "/today" } },
+  { key: "comeback", ar: "عودة", en: "Come back", t: { title_ar: "اشتقنا لك", body_ar: "خطتك وتحدّياتك في انتظارك. ارجع وكمّل من حيث توقفت.", title_en: "We miss you", body_en: "Your plan and challenges are waiting. Come back and pick up where you left off.", subroute: "/today" } },
+];
+
+const newId = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now().toString(16)}-0000-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, "0")}`);
+
+/** Owner-only: write one announcement (Arabic and/or English), preview who receives it, confirm, send. Everyone gets it in their own language. */
+function BroadcastAdmin() {
+  const { tr, toast, errMsg } = useApp();
+  const [f, setF] = useState({ title_ar: "", body_ar: "", title_en: "", body_en: "", audience: "all", subroute: "/today" });
+  const [id, setId] = useState(newId);
+  const [prev, setPrev] = useState<Preview | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<{ pi_requested: number; pi_delivered: number; push_devices: number; push_sent: number } | null>(null);
+  const [hist, setHist] = useState<Broadcast[] | null>(null);
+  const loadHist = useCallback(() => { api<{ broadcasts: Broadcast[] }>("/admin/broadcast").then((r) => setHist(r.broadcasts)).catch(() => setHist([])); }, []);
+  useEffect(() => { loadHist(); }, [loadHist]);
+  const set = (k: keyof typeof f, v: string) => { setF((x) => ({ ...x, [k]: v })); setDone(null); };
+  const hasText = (f.title_ar.trim() && f.body_ar.trim()) || (f.title_en.trim() && f.body_en.trim());
+  const preview = async () => {
+    setBusy(true);
+    try { setPrev(await api<Preview>("/admin/broadcast", { body: { action: "preview", ...f } })); } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
+  };
+  const send = async () => {
+    setBusy(true);
+    try {
+      const r = await api<{ pi_requested: number; pi_delivered: number; push_devices: number; push_sent: number }>("/admin/broadcast", { body: { action: "send", id, ...f } });
+      setDone(r); setPrev(null); setId(newId()); loadHist();
+      toast(tr("تم إرسال الإشعار.", "Announcement sent."), "ok");
+    } catch (e) { toast(errMsg(e), "err"); setPrev(null); loadHist(); } finally { setBusy(false); }
+  };
+  const audiences: [string, string][] = [["all", tr("كل المستخدمين", "All users")], ["active7", tr("نشطون آخر 7 أيام", "Active in the last 7 days")], ["inactive7", tr("غائبون أكثر من 7 أيام", "Away for 7+ days")], ["ar", tr("مستخدمو العربية", "Arabic users")], ["en", tr("مستخدمو الإنجليزية", "English users")]];
+  const targets: [string, string][] = [["/today", tr("اليوم", "Today")], ["/plan", tr("الخطة", "Plan")], ["/meals", tr("الوجبات", "Meals")], ["/diary", tr("اليوميات", "Diary")], ["/progress", tr("تقدّمي", "Progress")], ["/community", tr("المجتمع", "Community")]];
+  const audName = (k: string) => audiences.find((a) => a[0] === k)?.[1] ?? k;
+  return (
+    <section className="card space-y-4">
+      <h2 className="h2">{tr("إرسال إشعار للمستخدمين", "Send an announcement")}</h2>
+      <p className="muted">{tr("اختر قالبًا أو اكتب نصك. كل مستخدم يستلم نصه بلغته، ولو كتبت لغة واحدة تصل للجميع بها. لن يُرسل شيء قبل أن تراجع وتؤكد.", "Pick a template or write your own. Each user gets it in their own language; if you write only one language everyone gets that one. Nothing is sent until you review and confirm.")}</p>
+      <div className="flex flex-wrap gap-2" role="group" aria-label={tr("قوالب", "Templates")}>
+        {TEMPLATES.map((t) => (<button key={t.key} className="chip" onClick={() => { setF((x) => ({ ...x, ...t.t })); setDone(null); }}>{tr(t.ar, t.en)}</button>))}
+        <button className="chip" onClick={() => { setF((x) => ({ ...x, title_ar: "", body_ar: "", title_en: "", body_en: "" })); setDone(null); }}>{tr("مسح", "Clear")}</button>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-3">
+          <Field label={tr("العنوان (عربي)", "Title (Arabic)")}><input className="field" dir="rtl" maxLength={60} value={f.title_ar} onChange={(e) => set("title_ar", e.target.value)} /></Field>
+          <Field label={tr("الرسالة (عربي)", "Message (Arabic)")}><textarea className="field" dir="rtl" rows={3} maxLength={160} value={f.body_ar} onChange={(e) => set("body_ar", e.target.value)} /><span className="muted tabular-nums">{f.body_ar.length}/160</span></Field>
+        </div>
+        <div className="space-y-3">
+          <Field label={tr("العنوان (إنجليزي)", "Title (English)")}><input className="field" dir="ltr" maxLength={60} value={f.title_en} onChange={(e) => set("title_en", e.target.value)} /></Field>
+          <Field label={tr("الرسالة (إنجليزي)", "Message (English)")}><textarea className="field" dir="ltr" rows={3} maxLength={160} value={f.body_en} onChange={(e) => set("body_en", e.target.value)} /><span className="muted tabular-nums">{f.body_en.length}/160</span></Field>
+        </div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <Field label={tr("المستلمون", "Audience")}><select className="field" value={f.audience} onChange={(e) => set("audience", e.target.value)}>{audiences.map(([k, l]) => (<option key={k} value={k}>{l}</option>))}</select></Field>
+        <Field label={tr("يفتح على صفحة", "Opens on")}><select className="field" value={f.subroute} onChange={(e) => set("subroute", e.target.value)}>{targets.map(([k, l]) => (<option key={k} value={k}>{l}</option>))}</select></Field>
+      </div>
+      <button className="btn-primary" onClick={preview} disabled={busy || !hasText}>{busy ? <Spinner size={18} /> : <Icon name="bell" />}{tr("راجع وأرسل", "Review and send")}</button>
+      {done && <Notice tone="ok">{tr(`تم. Pi: ${done.pi_delivered} من ${done.pi_requested}. أجهزة المتصفح: ${done.push_sent} من ${done.push_devices}.`, `Done. Pi: ${done.pi_delivered} of ${done.pi_requested}. Browser devices: ${done.push_sent} of ${done.push_devices}.`)}</Notice>}
+      <Sheet open={!!prev} onClose={() => !busy && setPrev(null)} title={tr("تأكيد الإرسال", "Confirm sending")}>
+        {prev && (
+          <div className="space-y-4">
+            <div className="rounded-2xl bg-brand-50 p-4 text-sm font-bold">
+              <p>{tr("المستلمون:", "Audience:")} {audName(f.audience)}</p>
+              <p>{tr(`${prev.people} مستخدم، منهم ${prev.pi} عبر مركز إشعارات Pi و${prev.devices} جهاز متصفح.`, `${prev.people} users: ${prev.pi} via the Pi Notification Center and ${prev.devices} browser devices.`)}</p>
+              {prev.truncated && <p className="text-rose-600">{tr("وصلنا للحد الأقصى 5000 مستخدم في الإرسال الواحد.", "Reached the 5000-user limit for one send.")}</p>}
+            </div>
+            <div className="space-y-1 text-sm">
+              {f.title_ar && f.body_ar && <p dir="rtl"><span className="font-extrabold">{f.title_ar}</span> - {f.body_ar}</p>}
+              {f.title_en && f.body_en && <p dir="ltr"><span className="font-extrabold">{f.title_en}</span> - {f.body_en}</p>}
+            </div>
+            <p className="muted">{tr("الإرسال لا يمكن التراجع عنه. Pi يسلّم فقط لمن فعّل الإشعارات، وبحد أقصى 48 إشعارًا للمستخدم يوميًا.", "Sending cannot be undone. Pi delivers only to people who allow notifications, with a maximum of 48 per user per day.")}</p>
+            <div className="flex gap-2">
+              <button className="btn-ghost flex-1" disabled={busy} onClick={() => setPrev(null)}>{tr("إلغاء", "Cancel")}</button>
+              <button className="btn-primary flex-1" disabled={busy || prev.people === 0} onClick={send}>{busy ? <Spinner size={18} /> : null}{tr("أرسل الآن", "Send now")}</button>
+            </div>
+          </div>
+        )}
+      </Sheet>
+      <div>
+        <h3 className="mb-2 font-extrabold">{tr("آخر الإرسالات", "Recent sends")}</h3>
+        {hist === null ? <Spinner size={18} /> : hist.length === 0 ? <p className="muted">{tr("لا إرسالات بعد.", "Nothing sent yet.")}</p> : (
+          <ul className="divide-y divide-line text-sm">
+            {hist.map((h) => (
+              <li key={h.id} className="py-2">
+                <div className="flex flex-wrap items-center gap-x-3"><span className="font-extrabold">{h.title_ar || h.title_en}</span><span className="muted">{audName(h.audience)}</span><span className={`text-xs font-bold ${h.status === "done" ? "text-brand-700" : "text-rose-600"}`}>{h.status}</span><span className="ms-auto text-xs text-ink-soft" dir="ltr">{new Date(h.created_at).toLocaleString()}</span></div>
+                <p className="muted tabular-nums">{tr(`${h.recipients} مستلم · Pi ${h.pi_delivered}/${h.pi_requested} · متصفح ${h.push_sent}/${h.push_devices}`, `${h.recipients} recipients · Pi ${h.pi_delivered}/${h.pi_requested} · browser ${h.push_sent}/${h.push_devices}`)}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
 
 /** Test panel: sends a notification to the admin's own account and shows what each channel did. */
 function NotifyAdmin() {
