@@ -13,7 +13,7 @@ type Stats = { aiByKind: KindCost[]; aiCostUsd: number; avgCostUsd: number; aiCa
 
 function Inner() {
   const { me, tr, toast, errMsg } = useApp();
-  const [tab, setTab] = useState<"stats" | "challenges" | "meals" | "rotation" | "group" | "notify">("stats");
+  const [tab, setTab] = useState<"stats" | "users" | "challenges" | "meals" | "rotation" | "group" | "notify">("stats");
   const [stats, setStats] = useState<Stats | null>(null);
   const [chs, setChs] = useState<Ch[]>([]);
   const [meals, setMeals] = useState<Meal[]>([]);
@@ -32,14 +32,18 @@ function Inner() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5 py-5">
-      <PageHeader title={tr("لوحة الإدارة", "Admin")} sub={tr("أدوات المحتوى والإجماليات فقط. لا تُعرض ملفات صحية فردية.", "Content tools and totals only. No individual health profiles are shown.")} />
-      <div className="flex flex-wrap gap-2">{([["stats", tr("الإجماليات", "Totals")], ["challenges", tr("التحديات", "Challenges")], ["meals", tr("الوجبات", "Meals")], ["rotation", tr("وجبات اليوم", "Daily rotation")], ["group", tr("تحدي الأسبوع", "Weekly challenge")], ["notify", tr("الإشعارات", "Notifications")]] as const).map(([k, l]) => (<button key={k} className="chip" aria-pressed={tab === k} onClick={() => setTab(k)}>{l}</button>))}</div>
+      <PageHeader title={tr("لوحة الإدارة", "Admin")} sub={tr("أدوات المحتوى والإجماليات وإحصاءات الاستخدام. لا تُعرض ملفات صحية فردية.", "Content tools, totals and usage statistics. No individual health profiles are shown.")} />
+      <div className="flex flex-wrap gap-2">{([["stats", tr("الإجماليات", "Totals")], ["users", tr("المستخدمون", "Users")], ["challenges", tr("التحديات", "Challenges")], ["meals", tr("الوجبات", "Meals")], ["rotation", tr("وجبات اليوم", "Daily rotation")], ["group", tr("تحدي الأسبوع", "Weekly challenge")], ["notify", tr("الإشعارات", "Notifications")]] as const).map(([k, l]) => (<button key={k} className="chip" aria-pressed={tab === k} onClick={() => setTab(k)}>{l}</button>))}</div>
 
       {tab === "stats" && (
         <>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
             {[["users", tr("المستخدمون", "Users"), stats.users], ["check", tr("تحديات منجزة", "Challenges completed"), stats.challengesCompleted], ["chef", tr("وصفات AI", "Recipes generated"), stats.recipesGenerated], ["sparkles", tr("خطط فعّالة", "Plans active"), stats.plansActive], ["pi", tr("Pi المستلمة", "Pi received"), stats.piReceived]].map(([ic, l, v]) => (
-              <div key={l as string} className="card"><Icon name={ic as string} size={22} className="text-brand-600" /><p className="mt-2 text-3xl font-extrabold tabular-nums">{v as number}</p><p className="muted">{l as string}</p></div>
+              ic === "users" ? (
+                <button key={l as string} type="button" onClick={() => setTab("users")} className="card text-start transition hover:shadow-md" aria-label={tr("عرض جدول المستخدمين", "Show the users table")}><Icon name={ic as string} size={22} className="text-brand-600" /><p className="mt-2 text-3xl font-extrabold tabular-nums">{v as number}</p><p className="muted">{l as string} · <span className="font-extrabold text-brand-700">{tr("عرض الجدول", "View table")}</span></p></button>
+              ) : (
+                <div key={l as string} className="card"><Icon name={ic as string} size={22} className="text-brand-600" /><p className="mt-2 text-3xl font-extrabold tabular-nums">{v as number}</p><p className="muted">{l as string}</p></div>
+              )
             ))}
           </div>
           <section className="card space-y-3">
@@ -77,6 +81,7 @@ function Inner() {
           </section>
         </>
       )}
+      {tab === "users" && <UsersAdmin />}
       {tab === "challenges" && <ChallengeAdmin items={chs} onSave={(c) => post("/admin/challenges", c)} busy={busy} />}
       {tab === "meals" && <MealAdmin items={meals} onSave={(m) => post("/admin/meals", m)} busy={busy} />}
       {tab === "rotation" && <Rotation meals={meals} onSave={(b) => post("/admin/rotation", b)} busy={busy} />}
@@ -230,5 +235,114 @@ function NotifyAdmin() {
         </div>
       )}
     </section>
+  );
+}
+
+
+type UserRow = { username: string; created_at: string; last_login_at: string | null; login_count: number; kyc_verified: boolean; language: string; deleted: boolean; active_days: number; first_day: string | null; last_day: string | null; ai_requests: number; food_entries: number; challenges_done: number; plan_active: boolean };
+type Report = {
+  users: UserRow[];
+  daily: { day: string; active: number; new: number }[];
+  summary: { total: number; dau: number; wau: number; mau: number; returned: number; never_returned: number; avg_active_days: number; avg_logins: number; d1_eligible: number; d1_returned: number; d7_eligible: number; d7_returned: number };
+};
+const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "-");
+const ago = (iso: string | null, tr: (a: string, e: string) => string) => {
+  if (!iso) return "-";
+  const m = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (m < 60) return tr(`منذ ${m} د`, `${m} min ago`);
+  const h = Math.round(m / 60);
+  if (h < 48) return tr(`منذ ${h} ساعة`, `${h} h ago`);
+  const d = Math.round(h / 24);
+  return tr(`منذ ${d} يوم`, `${d} d ago`);
+};
+
+/** Owner-only: every Pioneer who signed in (Pi username, dates and counters only) with daily activity and return rates. */
+function UsersAdmin() {
+  const { tr, toast, errMsg } = useApp();
+  const [r, setR] = useState<Report | null>(null);
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState<"login" | "created" | "days" | "ai">("login");
+  const [page, setPage] = useState(0);
+  useEffect(() => { api<Report>("/admin/users").then(setR).catch((e) => toast(errMsg(e), "err")); }, [toast, errMsg]);
+  if (!r) return <div className="card flex items-center gap-2 py-6"><Spinner /><span className="muted">{tr("جارٍ التحميل...", "Loading...")}</span></div>;
+  const s = r.summary;
+  const dt = (iso: string | null) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "-");
+  const rows = r.users
+    .filter((u) => !q.trim() || u.username.toLowerCase().includes(q.trim().toLowerCase()))
+    .sort((a, b) => sort === "created" ? +new Date(b.created_at) - +new Date(a.created_at) : sort === "days" ? b.active_days - a.active_days : sort === "ai" ? b.ai_requests - a.ai_requests : +new Date(b.last_login_at ?? b.created_at) - +new Date(a.last_login_at ?? a.created_at));
+  const PAGE = 50;
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE));
+  const view = rows.slice(page * PAGE, page * PAGE + PAGE);
+  const maxActive = Math.max(1, ...r.daily.map((d) => d.active));
+  const kpis: [string, string][] = [
+    [tr("نشطون اليوم", "Active today"), String(s.dau)],
+    [tr("نشطون آخر 7 أيام", "Active, last 7 days"), String(s.wau)],
+    [tr("نشطون آخر 30 يومًا", "Active, last 30 days"), String(s.mau)],
+    [tr("عادوا مرة أخرى", "Came back at least once"), `${s.returned} (${pct(s.returned, s.total)})`],
+    [tr("لم يعودوا", "Never came back"), `${s.never_returned} (${pct(s.never_returned, s.total)})`],
+    [tr("متوسط أيام الاستخدام", "Avg days of use per user"), String(s.avg_active_days)],
+    [tr("متوسط مرات الدخول", "Avg sign-ins per user"), String(s.avg_logins)],
+    [tr("عودة في اليوم التالي", "Back the next day"), `${pct(s.d1_returned, s.d1_eligible)} (${s.d1_returned}/${s.d1_eligible})`],
+    [tr("عودة خلال 7 أيام", "Back within 7 days"), `${pct(s.d7_returned, s.d7_eligible)} (${s.d7_returned}/${s.d7_eligible})`],
+  ];
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        {kpis.map(([l, v]) => (<div key={l} className="card"><p className="text-2xl font-extrabold tabular-nums">{v}</p><p className="muted">{l}</p></div>))}
+      </div>
+      <section className="card space-y-3">
+        <div className="flex items-center justify-between gap-3"><h2 className="h2">{tr("النشاط اليومي (آخر 30 يومًا)", "Daily activity (last 30 days)")}</h2><span className="muted">{tr("نشطون / جدد", "active / new")}</span></div>
+        <div className="flex h-32 items-end gap-[3px]" dir="ltr" role="img" aria-label={tr("رسم النشاط اليومي", "Daily activity chart")}>
+          {r.daily.map((d) => (
+            <div key={d.day} className="group relative flex h-full flex-1 flex-col justify-end" title={`${d.day}: ${d.active} ${tr("نشط", "active")}, ${d.new} ${tr("جديد", "new")}`}>
+              <div className="w-full rounded-t bg-brand-500" style={{ height: `${(d.active / maxActive) * 100}%`, minHeight: d.active ? 3 : 0 }} />
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-between text-xs text-ink-soft tabular-nums" dir="ltr"><span>{r.daily[0]?.day.slice(5)}</span><span>{r.daily[r.daily.length - 1]?.day.slice(5)}</span></div>
+        <p className="muted">{tr("يُحسب اليوم بتوقيت كل مستخدم. اليوم يُسجَّل عند فتح التطبيق أو الدخول بـ Pi. البيانات قبل هذه الميزة مأخوذة من نشاط المستخدمين المحفوظ (تحديات وأكل وعادات)، وآخر دخول لها تقريبي.", "A day is counted in each user's own time zone and is recorded when the app is opened or a user signs in with Pi. Older data comes from stored activity (challenges, food, habits), so their last sign-in is approximate.")}</p>
+      </section>
+      <section className="card space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="h2 me-auto">{tr("المستخدمون", "Users")} ({rows.length})</h2>
+          <input className="field max-w-[180px]" dir="ltr" placeholder={tr("بحث باسم المستخدم", "Search username")} value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} aria-label={tr("بحث", "Search")} />
+          <select className="field max-w-[190px]" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label={tr("ترتيب", "Sort")}>
+            <option value="login">{tr("آخر دخول", "Last sign-in")}</option>
+            <option value="created">{tr("تاريخ التسجيل", "Registered")}</option>
+            <option value="days">{tr("أيام الاستخدام", "Days of use")}</option>
+            <option value="ai">{tr("طلبات AI", "AI requests")}</option>
+          </select>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead><tr className="text-xs font-extrabold text-ink-soft"><th className="py-2 text-start">Pi username</th><th className="text-start">{tr("سجّل في", "Registered")}</th><th className="text-start">{tr("آخر دخول", "Last sign-in")}</th><th>{tr("مرات الدخول", "Sign-ins")}</th><th>{tr("أيام الاستخدام", "Days used")}</th><th>{tr("AI", "AI")}</th><th>{tr("أكل", "Food")}</th><th>{tr("تحديات", "Challenges")}</th><th>{tr("خطة", "Plan")}</th></tr></thead>
+            <tbody>
+              {view.map((u) => (
+                <tr key={u.username} className="border-t border-line text-center align-top">
+                  <td className="py-2 text-start font-extrabold" dir="ltr">{u.username}{u.deleted ? <span className="ms-1 text-xs font-normal text-rose-600">({tr("محذوف", "deleted")})</span> : null}{!u.kyc_verified ? <span className="ms-1 text-xs font-normal text-ink-soft">(no KYC)</span> : null}</td>
+                  <td className="text-start text-ink-soft"><span className="block">{dt(u.created_at)}</span></td>
+                  <td className="text-start"><span className="block">{dt(u.last_login_at)}</span><span className="text-xs text-ink-soft">{ago(u.last_login_at, tr)}</span></td>
+                  <td className="tabular-nums">{u.login_count}</td>
+                  <td className="tabular-nums">{u.active_days}</td>
+                  <td className="tabular-nums">{u.ai_requests}</td>
+                  <td className="tabular-nums">{u.food_entries}</td>
+                  <td className="tabular-nums">{u.challenges_done}</td>
+                  <td>{u.plan_active ? tr("نعم", "Yes") : "-"}</td>
+                </tr>
+              ))}
+              {view.length === 0 && <tr><td colSpan={9} className="py-6 text-center muted">{tr("لا يوجد مستخدمون مطابقون.", "No matching users.")}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        {pages > 1 && (
+          <div className="flex items-center justify-between">
+            <button className="chip" disabled={page === 0} onClick={() => setPage(page - 1)}>{tr("السابق", "Previous")}</button>
+            <span className="muted tabular-nums">{page + 1} / {pages}</span>
+            <button className="chip" disabled={page >= pages - 1} onClick={() => setPage(page + 1)}>{tr("التالي", "Next")}</button>
+          </div>
+        )}
+        <p className="muted">{tr("أسماء Pi وتواريخ وعدّادات فقط. لا تُعرض بيانات صحية.", "Pi usernames, dates and counters only. No health data is shown.")}</p>
+      </section>
+    </div>
   );
 }

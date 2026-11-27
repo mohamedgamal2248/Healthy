@@ -3,7 +3,7 @@ import { ok, readJson, route, E, HttpError } from "@/server/http";
 import { isKycVerified, verifyAccessToken } from "@/server/pi-backend";
 import { signSession } from "@/server/session";
 import { rateLimit, clientIp } from "@/server/ratelimit";
-import { validTz } from "@/lib/dates";
+import { localDate, validTz } from "@/lib/dates";
 
 /** Pi sign-in: the access token from the Pi SDK is verified server-side against the Pi API. */
 export const POST = route(async (req) => {
@@ -20,6 +20,8 @@ export const POST = route(async (req) => {
   } else {
     must(await db().from("hl_profiles").update({ pi_uid: me.uid, kyc_verified: kyc, deleted_at: null, updated_at: new Date().toISOString() }).eq("username", me.username));
   }
-  const v = must(await db().from("hl_profiles").select("token_version").eq("username", me.username).single()) as { token_version: number };
+  const v = must(await db().from("hl_profiles").select("token_version,timezone").eq("username", me.username).single()) as { token_version: number; timezone: string | null };
+  // Usage stats for the owner dashboard (dates and counters only). Never blocks a sign-in.
+  try { must(await db().rpc("hl_touch_login", { p_user: me.username, p_day: localDate(validTz(v.timezone)) })); } catch (e) { console.error("[auth] login stats", e instanceof Error ? e.message : e); }
   return ok({ token: signSession(me.username, me.uid, v.token_version), username: me.username, kycVerified: kyc });
 });
