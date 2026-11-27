@@ -13,12 +13,21 @@ import { RefineBar } from "@/components/Refine";
 import { CoachThinking } from "@/components/CoachThinking";
 import { CameraCapture } from "@/components/CameraCapture";
 import { toCompressedDataUrl } from "@/lib/image";
+import { CHAT } from "@/config/pricing";
 
 type Recipe = { id: string; title: string; content: CoachContent; shared: boolean; duplicate?: boolean };
-type Kind = "recipe" | "workout" | "challenge" | "scan" | "fridge";
+type Kind = "recipe" | "workout" | "challenge" | "scan" | "fridge" | "chat";
+type Msg = { role: "user" | "assistant"; content: string; warn?: boolean; low?: boolean };
+type DayInfo = { totals: { calories: number; protein_g: number }; target: number | null; targets: { protein: number } | null; entries: unknown[] };
+const words = (t: string) => t.trim().split(/\s+/).filter(Boolean).length;
 
 const EXAMPLES: Record<Kind, { ar: string; en: string }[]> = {
   scan: [],
+  chat: [
+    { ar: "كم سعرة في رغيف عيش بلدي؟", en: "How many calories in a loaf of baladi bread?" },
+    { ar: "إيه أحسن سناك بعد التمرين؟", en: "What is a good snack after a workout?" },
+    { ar: "تمرين خفيف قبل النوم؟", en: "A light exercise before bed?" },
+  ],
   fridge: [
     { ar: "بيض وجبنة قريش وطماطم وخيار", en: "eggs, cottage cheese, tomatoes and cucumber" },
     { ar: "رز وفراخ وكوسة", en: "rice, chicken and zucchini" },
@@ -37,13 +46,20 @@ const EXAMPLES: Record<Kind, { ar: string; en: string }[]> = {
     { ar: "تحدي أسبوع لتقليل السكر المضاف", en: "A one-week challenge to cut added sugar" },
   ],
 };
-const KINDS: { k: Kind; ar: string; en: string; icon: string; subAr: string; subEn: string }[] = [
-  { k: "recipe", ar: "وصفة", en: "A recipe", icon: "utensils", subAr: "اطلب أكلة معينة", subEn: "Ask for a dish" },
-  { k: "fridge", ar: "من اللي في التلاجة", en: "From my fridge", icon: "image", subAr: "صوّر أو اكتب · ٣ أفكار", subEn: "Photo or list · 3 ideas" },
-  { k: "scan", ar: "صوّر طبقك", en: "Scan your plate", icon: "camera", subAr: "سعرات تقديرية", subEn: "Estimated calories" },
-  { k: "workout", ar: "تمرين منزلي", en: "Home workout", icon: "bolt", subAr: "حسب وقتك", subEn: "Fits your time" },
-  { k: "challenge", ar: "تحدي ٧ أيام", en: "7-day challenge", icon: "flame", subAr: "عادة جديدة", subEn: "Build a habit" },
+const TILES: { k: Exclude<Kind, "scan" | "chat">; ar: string; en: string; icon: string }[] = [
+  { k: "recipe", ar: "وصفة", en: "Recipe", icon: "utensils" },
+  { k: "fridge", ar: "التلاجة", en: "Fridge", icon: "image" },
+  { k: "workout", ar: "تمرين", en: "Workout", icon: "bolt" },
+  { k: "challenge", ar: "تحدي ٧ أيام", en: "7-day goal", icon: "flame" },
 ];
+const LABEL: Record<Kind, { ar: string; en: string }> = {
+  scan: { ar: "صوّر طبقك", en: "Scan your plate" },
+  chat: { ar: "اسأل المساعد", en: "Ask the coach" },
+  recipe: { ar: "عايز أكلة معينة؟", en: "Want a specific dish?" },
+  fridge: { ar: "إيه اللي عندك؟ (اكتب، أو صوّر وسيب الكتابة)", en: "What do you have? (type it, or just take a photo)" },
+  workout: { ar: "إيه التمرين اللي عايزه؟", en: "What workout do you want?" },
+  challenge: { ar: "عادة عايز تبنيها؟", en: "What habit do you want to build?" },
+};
 
 function ChefInner() {
   const { tr, lang, me, toast, errMsg, refresh } = useApp();
@@ -71,6 +87,17 @@ function ChefInner() {
     if (!f) return;
     try { setPhoto(await toCompressedDataUrl(f)); } catch { toast(tr("تعذّر قراءة الصورة. جرّب صورة أخرى.", "Couldn't read that photo. Try another one."), "err"); }
   };
+
+  const [day, setDay] = useState<DayInfo | null>(null);
+  const [chat, setChat] = useState<Msg[]>([]);
+  const [chatText, setChatText] = useState("");
+  const [chatBusy, setChatBusy] = useState(false);
+  const chatEnd = useRef<HTMLDivElement>(null);
+  const [dur, setDur] = useState<number | null>(null);
+  const [recent, setRecent] = useState<{ id: string; title: string; content: CoachContent }[] | null>(null);
+  useEffect(() => { api<DayInfo>("/food").then(setDay).catch(() => {}); }, []);
+  useEffect(() => { api<{ recipes: { id: string; title: string; content: CoachContent }[] }>("/recipes").then((r) => setRecent(r.recipes.slice(0, 3))).catch(() => setRecent([])); }, [recipe]);
+  useEffect(() => { chatEnd.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [chat, chatBusy]);
 
   const accepted = !!me?.profile.disclaimer_accepted_at;
   const total = balances?.total ?? 0;
@@ -106,6 +133,25 @@ function ChefInner() {
     } finally { setBusy(false); }
   };
 
+  const chatWords = words(chatText);
+  const chatTooLong = chatWords > CHAT.maxUserWords || chatText.length > CHAT.maxUserChars;
+  const sendChat = async () => {
+    const text = chatText.trim();
+    if (!text || chatBusy || chatTooLong || !accepted || total === 0) return;
+    const history: Msg[] = [...chat, { role: "user", content: text }];
+    setChat(history); setChatText(""); setChatBusy(true);
+    try {
+      const r = await api<{ reply: string; confidence: "high" | "low"; balances: Balances }>("/coach/chat", { body: { messages: history.filter((m) => !m.warn).slice(-(CHAT.historyMessages + 1)).map((m) => ({ role: m.role, content: m.content })), lang } });
+      setChat((c) => [...c, { role: "assistant", content: r.reply, low: r.confidence === "low" }]);
+      setBalances(r.balances); refresh();
+    } catch (e) {
+      // Off-topic / medical questions and failures are not charged: show why in the conversation and keep the rest of it.
+      if (e instanceof ApiError && e.code === "refused") setChat((c) => [...c, { role: "assistant", content: tr(e.ar, e.en), warn: true }]);
+      else { toast(errMsg(e), "err"); setChat(history.slice(0, -1)); setChatText(text); }
+      refresh().then((m) => m?.balances && setBalances(m.balances));
+    } finally { setChatBusy(false); }
+  };
+
   const toggleFav = async () => { if (!recipe) return; setFav(!fav); try { await api("/favourites", { body: { type: "recipe", id: recipe.id } }); } catch (e) { setFav(fav); toast(errMsg(e), "err"); } };
   const addToDay = async () => { if (!recipe) return; try { await api("/food", { body: { source: "recipe", recipeId: recipe.id } }); toast(tr("تمت الإضافة إلى يومك", "Added to your day"), "ok"); } catch (e) { toast(errMsg(e), "err"); } };
   const track = async () => {
@@ -127,11 +173,13 @@ function ChefInner() {
   };
 
   if (loadingOpen) return <PageSkeleton />;
+  const remaining = day?.target ? Math.max(0, Math.round((day.target - day.totals.calories) / 10) * 10) : null;
+  const protLeft = day?.targets && day.entries.length > 0 ? Math.max(0, Math.round(day.targets.protein - day.totals.protein_g)) : 0;
   const canGenerate = (kind === "scan" ? !!photo : kind === "fridge" ? !!photo || prompt.trim().length >= 3 : prompt.trim().length >= 3) && !busy && accepted && total > 0;
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 py-5">
-      <PageHeader title={tr("Healthy AI", "Healthy AI")} sub={tr("وجبات وتمارين وتحديات على مقاسك", "Meals, workouts and challenges made for you")} action={me?.balances ? <Link href="/pricing" className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 text-sm font-extrabold tabular-nums ${total === 0 ? "border-rose-200 bg-rose-50 text-rose-700" : total <= 2 ? "border-sun-200 bg-sun-50 text-sun-600" : "border-sun-100 bg-sun-50/60 text-ink"}`} aria-label={tr("رصيد الكريدت", "Credit balance")}><Icon name="bolt" size={16} filled />{total} {tr("كريدت", "credits")}</Link> : undefined} />
+      <PageHeader title={tr("Healthy AI", "Healthy AI")} sub={tr("وجبات وتمارين وتحديات على مقاسك", "Meals, workouts and challenges made for you")} />
       {!accepted && <Notice tone="warn" icon="user"><div className="flex flex-wrap items-center gap-3"><span>{tr("وافق على التنبيه الصحي في ملفك أولًا.", "Accept the health disclaimer in your profile first.")}</span><Link href="/profile" className="btn-primary btn-sm">{tr("افتح الملف", "Open profile")}</Link></div></Notice>}
 
       {!recipe && !busy && <Tabs label={tr("القسم", "Section")} value={view} onChange={setView} tabs={[["new", tr("طلب جديد", "New")], ["mine", tr("نتائجي", "My results")]] as const} />}
@@ -163,24 +211,77 @@ function ChefInner() {
         </>
       ) : (
         busy ? (
-          <section className="card"><CoachThinking kind={kind} /></section>
+          <section className="card"><CoachThinking kind={kind === "chat" ? "recipe" : kind} /></section>
         ) : (
         <>
-          <section className="card space-y-4">
+          <section className="space-y-3">
+            {day?.target ? (
+              <Link href="/diary" className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-white px-4 py-2.5 text-sm font-bold">
+                <span className="min-w-0">{day.entries.length === 0 ? tr("لسه مسجّلتش أكل النهارده", "Nothing logged yet today") : tr(`فاضلك ${remaining} سعرة${protLeft ? ` و${protLeft} جم بروتين` : ""} النهارده`, `${remaining} kcal${protLeft ? ` and ${protLeft} g protein` : ""} left today`)}</span>
+                <span className="muted shrink-0">{tr("يومياتي", "Diary")}</span>
+              </Link>
+            ) : null}
             <div className="grid grid-cols-2 gap-2.5" role="radiogroup" aria-label={tr("نوع الطلب", "Request type")}>
-              {KINDS.map((x) => {
-                const on = kind === x.k;
+              {([["scan", "camera", tr("صوّر طبقك", "Scan your plate"), tr("سعرات تقديرية في ثواني", "Calories in seconds")], ["chat", "chat", tr("اسأل المساعد", "Ask the coach"), tr("رد قصير عن الأكل والتمرين", "Short answers on food and fitness")]] as const).map(([k, icon, title, sub]) => {
+                const on = kind === k;
                 return (
-                  <button key={x.k} role="radio" aria-checked={on} onClick={() => { setKind(x.k); setPrompt(""); }} className={`flex min-h-28 flex-col items-center justify-center gap-0.5 rounded-2xl border-2 p-2 text-center transition active:scale-95 last:odd:col-span-2 ${on ? "border-brand-600 bg-brand-50" : "border-line bg-white"}`}>
-                    <span className={`mb-1 flex h-10 w-10 items-center justify-center rounded-xl ${on ? "bg-brand-600 text-white" : "bg-brand-50 text-brand-600"}`}><Icon name={x.icon} size={22} /></span>
-                    <span className="text-sm font-extrabold leading-tight">{tr(x.ar, x.en)}</span>
-                    <span className="text-[11px] font-semibold text-ink-soft">{tr(x.subAr, x.subEn)}</span>
-                    <span className="text-[11px] font-extrabold text-brand-700">{tr("١ كريدت", "1 credit")}</span>
+                  <button key={k} role="radio" aria-checked={on} onClick={() => { setKind(k); setPrompt(""); }} className={`flex min-h-28 flex-col items-center justify-center gap-1 rounded-2xl border-2 p-3 text-center transition active:scale-95 ${on ? "border-brand-600 bg-brand-50 shadow-sm" : "border-line bg-white"}`}>
+                    <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${on ? "bg-brand-600 text-white" : "bg-brand-50 text-brand-600"}`}><Icon name={icon} size={24} /></span>
+                    <span className="text-base font-extrabold leading-tight">{title}</span>
+                    <span className="text-xs font-semibold text-ink-soft">{sub}</span>
                   </button>
                 );
               })}
             </div>
-            {kind === "scan" ? (
+            <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label={tr("أنواع أخرى", "More types")}>
+              {TILES.map((x) => {
+                const on = kind === x.k;
+                return (
+                  <button key={x.k} role="radio" aria-checked={on} onClick={() => { setKind(x.k); setPrompt(""); setDur(null); }} className={`flex min-h-20 flex-col items-center justify-center gap-1 rounded-2xl border-2 px-1 py-2 text-center transition active:scale-95 ${on ? "border-brand-600 bg-brand-50" : "border-line bg-white"}`}>
+                    <Icon name={x.icon} size={22} className={on ? "text-brand-700" : "text-brand-600"} />
+                    <span className="text-xs font-extrabold leading-tight">{tr(x.ar, x.en)}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="muted text-center">{tr("كل طلب أو رسالة = ١ كريدت. لو فشل أو كان خارج النطاق يرجع الكريدت تلقائيًا.", "Every request or message = 1 credit. If it fails or is out of scope, it is refunded automatically.")}</p>
+          </section>
+
+          <section className="card space-y-4">
+            {kind === "chat" ? (
+              <div className="space-y-3">
+                <Notice tone="info" icon="info">{tr(`أجاوب فقط عن الأكل والسعرات والتمارين المنزلية والعادات اليومية. ردودي قصيرة، وسؤالك حتى ${CHAT.maxUserWords} كلمة.`, `I only answer about food, calories, home workouts and daily habits. Replies are short and your question can be up to ${CHAT.maxUserWords} words.`)}</Notice>
+                {chat.length > 0 ? (
+                  <div className="max-h-[48vh] min-h-40 space-y-2.5 overflow-y-auto rounded-2xl bg-brand-50/60 p-2.5" aria-live="polite">
+                    {chat.map((m, i) => (
+                      <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                        <p className={`max-w-[88%] whitespace-pre-line rounded-2xl px-3.5 py-2.5 text-sm font-semibold leading-relaxed ${m.role === "user" ? "bg-brand-600 text-white" : m.warn ? "border border-sun-100 bg-sun-50 text-sun-600" : "border border-line bg-white text-ink"}`}>
+                          {m.content}
+                          {m.low && <span className="mt-1 block text-xs font-bold opacity-70">{tr("تقدير غير مؤكد. للدقة صوّر الوجبة أو راجع مختصًا.", "Not certain. For accuracy, scan the meal or check with a professional.")}</span>}
+                          {m.warn && <span className="mt-1 block text-xs font-bold opacity-70">{tr("لم يُخصم كريدت.", "No credit was used.")}</span>}
+                        </p>
+                      </div>
+                    ))}
+                    {chatBusy && <div className="flex justify-start"><p className="rounded-2xl border border-line bg-white px-3.5 py-2.5"><Spinner size={18} /></p></div>}
+                    <div ref={chatEnd} />
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">{EXAMPLES.chat.map((e) => (<button key={e.ar} className="chip" onClick={() => setChatText(lang === "ar" ? e.ar : e.en)}>{lang === "ar" ? e.ar : e.en}</button>))}</div>
+                )}
+                <div className="flex items-end gap-2">
+                  <label className="block min-w-0 flex-1">
+                    <span className="sr-only">{tr("سؤالك", "Your question")}</span>
+                    <textarea className="field !min-h-12 resize-none py-3 leading-snug" rows={2} value={chatText} onChange={(e) => setChatText(e.target.value.slice(0, CHAT.maxUserChars + 40))} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } }} placeholder={tr("اكتب سؤالك هنا…", "Type your question…")} />
+                  </label>
+                  <button className="btn-primary !min-h-12 shrink-0" onClick={sendChat} disabled={!chatText.trim() || chatBusy || chatTooLong || !accepted || total === 0} aria-label={tr("إرسال بكريدت واحد", "Send for 1 credit")}>{chatBusy ? <Spinner size={18} /> : <Icon name="send" size={20} />}<span>{tr("١ كريدت", "1 credit")}</span></button>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`text-xs font-bold tabular-nums ${chatTooLong ? "text-rose-600" : "text-ink-soft"}`} dir="ltr">{chatWords}/{CHAT.maxUserWords} {tr("كلمة", "words")}</span>
+                  {chat.length > 0 && <button className="btn-ghost btn-sm" onClick={() => { setChat([]); setChatText(""); }}><Icon name="refresh" size={16} />{tr("محادثة جديدة", "New chat")}</button>}
+                </div>
+                {chatTooLong && <p className="text-xs font-bold text-rose-600">{tr(`السؤال أطول من ${CHAT.maxUserWords} كلمة. اختصره.`, `That is over ${CHAT.maxUserWords} words. Please shorten it.`)}</p>}
+              </div>
+            ) : kind === "scan" ? (
               <div className="space-y-3">
                 <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = ""; }} />
                 <input ref={nativeCamRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = ""; }} />
@@ -208,9 +309,13 @@ function ChefInner() {
               </div>
             ) : (
               <>
-            <label className="block"><span className="label">{kind === "fridge" ? tr("إيه اللي عندك؟ (اكتب، أو صوّر وسيب الكتابة)", "What do you have? (type it, or just take a photo)") : tr("عايز أكلة معينة؟", "Want a specific dish?")}</span>
-              <textarea className="field !min-h-32 resize-none py-3 leading-relaxed" value={prompt} onChange={(e) => setPrompt(e.target.value)} maxLength={400} placeholder={tr(kind === "fridge" ? "مثال: بيض وجبنة قريش وطماطم وخيار" : kind === "recipe" ? "مثال: وجبة غدا ٣٠٠ سعرة وبروتين عالي" : kind === "workout" ? "مثال: تمرين منزلي ١٥ دقيقة للمبتدئين" : "مثال: تحدي ٧ أيام لشرب مياه أكتر", kind === "fridge" ? "e.g. eggs, cottage cheese, tomatoes, cucumber" : kind === "recipe" ? "e.g. a 300 kcal high-protein lunch" : kind === "workout" ? "e.g. a 15-minute beginner workout" : "e.g. a 7-day hydration challenge")} />
-            </label>
+            <p className="label">{tr(LABEL[kind].ar, LABEL[kind].en)}</p>
+            {kind === "workout" && (
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label={tr("مدة التمرين", "Workout length")}>
+                {[10, 15, 20, 30].map((m) => (<button key={m} className="chip" aria-pressed={dur === m} onClick={() => { setDur(m); setPrompt(lang === "ar" ? `تمرين منزلي ${m} دقيقة للمبتدئين` : `A ${m}-minute home workout for beginners`); }}>{m} {tr("دقيقة", "min")}</button>))}
+              </div>
+            )}
+            <textarea className="field !min-h-20 resize-none py-3 leading-relaxed" rows={2} value={prompt} onChange={(e) => setPrompt(e.target.value)} maxLength={400} aria-label={tr(LABEL[kind].ar, LABEL[kind].en)} placeholder={tr(kind === "fridge" ? "مثال: بيض وجبنة قريش وطماطم وخيار" : kind === "recipe" ? "مثال: وجبة غدا ٣٠٠ سعرة وبروتين عالي" : kind === "workout" ? "مثال: تمرين منزلي ١٥ دقيقة للمبتدئين" : "مثال: تحدي ٧ أيام لشرب مياه أكتر", kind === "fridge" ? "e.g. eggs, cottage cheese, tomatoes, cucumber" : kind === "recipe" ? "e.g. a 300 kcal high-protein lunch" : kind === "workout" ? "e.g. a 15-minute beginner workout" : "e.g. a 7-day hydration challenge")} />
             {kind === "fridge" && (
               <div className="space-y-2">
                 <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = ""; }} />
@@ -231,14 +336,34 @@ function ChefInner() {
                 <p className="muted">{tr("بنقترح ٣ أفكار من اللي عندك بحسب تفضيلاتك وباقي سعراتك اليوم. الصورة بتتبعت لمزوّد الذكاء الاصطناعي ولا تُحفظ عندنا.", "We suggest 3 ideas from what you have, matched to your preferences and what's left of today's calories. The photo goes to the AI provider and is not stored by us.")}</p>
               </div>
             )}
-            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">{EXAMPLES[kind].map((e) => (<button key={e.ar} className="chip shrink-0 whitespace-nowrap" onClick={() => setPrompt(lang === "ar" ? e.ar : e.en)}>{lang === "ar" ? e.ar : e.en}</button>))}</div>
+            <div className="flex flex-wrap gap-2">
+              {kind === "recipe" && remaining !== null && remaining >= 150 && (() => { const k = Math.min(700, Math.max(200, Math.round(remaining / 2 / 10) * 10)); return <button className="chip" onClick={() => setPrompt(lang === "ar" ? `وجبة بحوالي ${k} سعرة تكمّل يومي` : `A ~${k} kcal meal that fits my day`)}>{tr(`وجبة بحوالي ${k} سعرة تناسب يومك`, `A ~${k} kcal meal that fits your day`)}</button>; })()}
+              {EXAMPLES[kind].map((e) => (<button key={e.ar} className="chip" onClick={() => setPrompt(lang === "ar" ? e.ar : e.en)}>{lang === "ar" ? e.ar : e.en}</button>))}
+            </div>
               </>
             )}
-            {refusal && <Notice tone="warn">{refusal}</Notice>}
+            {kind !== "chat" && refusal && <Notice tone="warn">{refusal}</Notice>}
             {total === 0 && accepted && <Notice tone="warn" icon="bolt"><div className="flex flex-wrap items-center gap-3"><span>{tr("رصيدك من الكريدت خلص. اكسب ٣ كريدت بتحدي البداية (٧ أيام) أو اشترِ كريدت.", "You're out of AI requests. Earn 3 with the 7-day starter challenge, or get more.")}</span><Link href="/today" className="btn-soft btn-sm">{tr("تحدي البداية", "Starter challenge")}</Link><Link href="/pricing" className="btn-sun btn-sm">{tr("اشترِ كريدت", "Get requests")}</Link></div></Notice>}
-            <button className="btn-primary w-full" onClick={generate} disabled={!canGenerate}>{busy ? <Spinner /> : <Icon name="sparkles" />}{busy ? tr("Healthy AI بيجهّز طلبك…", "Healthy AI is working on it…") : kind === "scan" ? tr("حلّل الوجبة — 1 كريدت", "Analyse meal — 1 credit") : kind === "fridge" ? tr("اقترح ٣ أفكار — 1 كريدت", "Suggest 3 ideas — 1 credit") : tr("اطلب من Healthy AI — 1 كريدت", "Ask Healthy AI — 1 credit")}</button>
-            <p className="muted text-center">{tr("لو فشل التوليد يرجع الكريدت تلقائيًا.", "If generation fails, your credit is refunded automatically.")}</p>
+            {kind !== "chat" && (
+              <>
+                <button className="btn-primary w-full" onClick={generate} disabled={!canGenerate}>{busy ? <Spinner /> : <Icon name="sparkles" />}{busy ? tr("Healthy AI بيجهّز طلبك…", "Healthy AI is working on it…") : kind === "scan" ? tr("حلّل الوجبة — 1 كريدت", "Analyse meal — 1 credit") : kind === "fridge" ? tr("اقترح ٣ أفكار — 1 كريدت", "Suggest 3 ideas — 1 credit") : tr("اطلب من Healthy AI — 1 كريدت", "Ask Healthy AI — 1 credit")}</button>
+                {!canGenerate && !busy && <p className="muted text-center">{!accepted ? tr("وافق على التنبيه الصحي في ملفك أولًا.", "Accept the health disclaimer in your profile first.") : total === 0 ? tr("رصيدك خلص.", "You're out of credits.") : kind === "scan" ? tr("صوّر وجبتك أولًا.", "Take a photo of your meal first.") : kind === "fridge" ? tr("اكتب المكونات أو صوّرها أولًا.", "List the ingredients or take a photo first.") : tr("اكتب طلبك أولًا (٣ حروف على الأقل).", "Type your request first (at least 3 characters).")}</p>}
+              </>
+            )}
+            {kind === "chat" && !accepted && <p className="muted text-center">{tr("وافق على التنبيه الصحي في ملفك أولًا.", "Accept the health disclaimer in your profile first.")}</p>}
           </section>
+
+          {recent && recent.length > 0 && (
+            <section className="space-y-2" aria-label={tr("آخر نتائجي", "My latest results")}>
+              <div className="flex items-center justify-between"><h2 className="font-extrabold">{tr("آخر نتائجي", "My latest results")}</h2><button className="btn-ghost btn-sm" onClick={() => setView("mine")}>{tr("عرض الكل", "View all")}</button></div>
+              {recent.map((r) => (
+                <Link key={r.id} href={`/chef?recipe=${r.id}`} className="card-row !min-h-14 hover:shadow-md">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600"><Icon name={r.content.kind === "workout" ? "bolt" : r.content.kind === "challenge" ? "flame" : r.content.kind === "scan" ? "camera" : "utensils"} size={20} /></span>
+                  <p className="min-w-0 flex-1 truncate font-extrabold">{r.title}</p>
+                </Link>
+              ))}
+            </section>
+          )}
           <DisclaimerBanner conditions={me?.profile.conditions} compact />
         </>
         )

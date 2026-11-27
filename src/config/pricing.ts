@@ -54,4 +54,14 @@ export const AI_LIMITS = {
   inFlightWindowMs: 90_000,     // a user can have only one generation running at a time
 } as const;
 
+/** The short chat assistant: each message is one paid request, so its size is capped on both sides. */
+export const CHAT = {
+  maxUserWords: 40,      // a question, not an essay
+  maxUserChars: 240,
+  maxReplyWords: 70,     // answers stay short (the prompt asks for ~50; this is the hard cap)
+  historyMessages: 4,    // earlier messages sent along for context (2 exchanges)
+  historyChars: 800,     // total size of that history
+  timeoutMs: 30_000,
+} as const;
+
 export const isItemKey = (k: unknown): k is ItemKey => typeof k === "string" && k in PRICING;

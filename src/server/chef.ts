@@ -1,13 +1,14 @@
 import { db, must } from "./supabase";
 import { HttpError, E } from "./http";
 import type { Auth } from "./auth";
-import { AI_LIMITS, RECIPE_COST } from "@/config/pricing";
+import { AI_LIMITS, CHAT, RECIPE_COST } from "@/config/pricing";
 import { spendCredit, refundCredit } from "./credits";
 import { aiConfigured, AiNotConfigured, trackUsage, estimateCostUsd, type Usage } from "./ai/provider";
 import { generateRecipe, AiRefused, RecipeSchema, recipeNumbersProblem, reconcileRecipe, type Recipe } from "./ai/recipe";
 import { generateCard, CardSchema, isCoachKind, type Card, type CoachKind } from "./ai/coach";
 import { enforceGenerationLimits, withDeadline } from "./ai/limits";
 import { analyzeMealPhoto, validImage, type Scan } from "./ai/scan";
+import { chatInputProblem, generateChat, type ChatTurn } from "./ai/chat";
 import { generateFridge, refineRecipe, refineWorkout, isRecipeRefine, isWorkoutRefine, cleanNote, type Fridge } from "./ai/extra";
 import { ctxKey, dayCtxFrom, prefsFromProfile, type DayCtx } from "./ai/context";
 import { foodDay } from "./food";
@@ -335,4 +336,60 @@ export async function trackResult(a: Auth, id: string) {
   must(await db().from("hl_challenges").upsert({ id: chId, type: "custom", title_ar: title, title_en: title, target_value: days > 1 ? days : card.duration_min ?? null, unit: days > 1 ? "days" : "min", active: false }, { onConflict: "id" }));
   must(await db().from("hl_user_challenges").upsert(Array.from({ length: days }, (_, i) => ({ username: a.username, challenge_id: chId, date: addDays(a.today, i), status: "assigned" })), { onConflict: "username,date,challenge_id", ignoreDuplicates: true }));
   return { started: true, already: false, days };
+}
+
+/**
+ * One message to the short chat assistant = exactly 1 credit. Same guarantees as every paid request (limits first, credit spent
+ * atomically, hard deadline, automatic refund on failure). A question outside food / exercise / habits, a medical request, or an
+ * unusable answer is refunded and never counted as a paid reply. The conversation is kept on the person's device; only the last
+ * few turns travel with each message, and only the question text (first 200 characters) is logged.
+ */
+export async function chatTurnReply(a: Auth, messagesIn: unknown, uiLang?: unknown) {
+  if (!Array.isArray(messagesIn) || messagesIn.length < 1 || messagesIn.length > 40) throw E.bad();
+  const turns: ChatTurn[] = [];
+  for (const m of messagesIn.slice(-(CHAT.historyMessages + 1))) {
+    const r = (m as { role?: unknown })?.role, c = (m as { content?: unknown })?.content;
+    if ((r !== "user" && r !== "assistant") || typeof c !== "string") throw E.bad();
+    turns.push({ role: r, content: c.trim().slice(0, r === "user" ? CHAT.maxUserChars + 1 : 600) });
+  }
+  const last = turns[turns.length - 1];
+  if (last.role !== "user") throw E.bad();
+  const problem = chatInputProblem(last.content);
+  if (problem === "empty") throw E.bad("اكتب سؤالك.", "Type your question.");
+  if (problem) throw E.bad(`الرسالة طويلة. الحد ${CHAT.maxUserWords} كلمة.`, `That message is too long. The limit is ${CHAT.maxUserWords} words.`);
+  const text = last.content;
+  if (isRefusalRequest(text)) throw refusal();
+  if (!aiConfigured()) throw E.notConfigured("Healthy AI");
+  const lang = detectLang(text, asLang(uiLang, a.profile.language === "en" ? "en" : "ar"));
+  await enforceGenerationLimits(a.username);
+
+  const req = must(
+    await db().from("hl_ai_requests").insert({ username: a.username, type: "recipe", input_summary: `[chat] ${text}`.slice(0, 200), credit_cost: RECIPE_COST, status: "pending" }).select("id").single(),
+  ) as { id: string };
+  await assertSoleInFlight(a.username, req.id);
+  const spent = await spendCredit(a.username, req.id);
+  if (!spent) {
+    must(await db().from("hl_ai_requests").update({ status: "failed", credit_cost: 0, error: "no_credits" }).eq("id", req.id));
+    throw E.noCredits();
+  }
+  let usage: Usage = { tokensIn: 0, tokensOut: 0, searches: 0 };
+  try {
+    const tracked = await trackUsage(() => withDeadline((async () => {
+      const day = await dayContext(a);
+      return generateChat(turns, { goal: a.profile.goal, conditions: a.profile.conditions, lang, prefs: prefsFromProfile(a.profile), day });
+    })(), CHAT.timeoutMs), CHAT.timeoutMs);
+    usage = tracked.usage;
+    const out = tracked.result;
+    must(await db().from("hl_ai_requests").update({ status: "completed", output: { words: out.reply.split(/\s+/).length, confidence: out.confidence }, tokens_in: usage.tokensIn, tokens_out: usage.tokensOut, est_cost_usd: estimateCostUsd(usage) }).eq("id", req.id));
+    return { reply: out.reply, confidence: out.confidence };
+  } catch (e) {
+    await refundCredit(req.id);
+    const failUsage = (e as { usage?: Usage }).usage ?? usage;
+    const reason = e instanceof AiRefused ? "off_topic" : e instanceof Error ? e.message.slice(0, 120) : "failed";
+    must(await db().from("hl_ai_requests").update({ status: "refunded", error: reason, tokens_in: failUsage.tokensIn, tokens_out: failUsage.tokensOut, est_cost_usd: estimateCostUsd(failUsage) }).eq("id", req.id));
+    if (e instanceof AiRefused) throw refusal(e.message_ar, lang === "en" ? e.message_ar : e.message_ar);
+    if (e instanceof AiNotConfigured) throw E.notConfigured("Healthy AI");
+    if (e instanceof Error && e.message === "timeout") throw new HttpError(504, "ai_timeout", "الرد تأخّر أكثر من اللازم، فأعدنا لك الكريدت تلقائيًا. جرّب مرة أخرى.", "The reply took too long, so your credit was returned automatically. Please try again.");
+    throw new HttpError(502, "ai_failed", "تعذّر الرد هذه المرة. أعدنا لك الكريدت تلقائيًا، جرّب صياغة أخرى.", "I couldn't answer this time. Your credit was returned automatically; try rewording.");
+  }
 }

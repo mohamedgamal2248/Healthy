@@ -59,7 +59,7 @@ function Inner() {
                       const high = k.avgCost > 0.01;
                       return (
                         <tr key={k.kind} className="border-t border-line text-center">
-                          <td className="py-2.5 text-start font-extrabold">{({ recipe: tr("وجبة", "Meal"), workout: tr("تمرين", "Workout"), challenge: tr("تحدٍّ", "Challenge"), scan: tr("تحليل صورة", "Photo scan"), plan: tr("خطة", "Plan") } as Record<string, string>)[k.kind] ?? k.kind}</td>
+                          <td className="py-2.5 text-start font-extrabold">{({ recipe: tr("وجبة", "Meal"), workout: tr("تمرين", "Workout"), challenge: tr("تحدٍّ", "Challenge"), scan: tr("تحليل صورة", "Photo scan"), fridge: tr("من التلاجة", "From fridge"), chat: tr("محادثة", "Chat"), plan: tr("خطة", "Plan") } as Record<string, string>)[k.kind] ?? k.kind}</td>
                           <td className="tabular-nums">{k.n}{k.refunded ? <span className="text-xs text-ink-soft"> ({k.refunded} {tr("مُسترد", "refunded")})</span> : null}</td>
                           <td className={`font-extrabold tabular-nums ${high ? "text-rose-600" : ""}`}>${k.avgCost.toFixed(5)}</td>
                           <td className="tabular-nums text-ink-soft">{k.avgIn} / {k.avgOut}</td>

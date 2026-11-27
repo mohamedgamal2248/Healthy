@@ -777,7 +777,7 @@ test("failed or non-compliant output is refunded and never saved; cached answers
   const { readFileSync } = await import("node:fs");
   const chef = readFileSync("src/server/chef.ts", "utf8");
   // every paid path refunds in its catch block, and the cache is re-validated before reuse
-  assert.equal((chef.match(/await refundCredit\(req\.id\)/g) ?? []).length, 3);
+  assert.equal((chef.match(/await refundCredit\(req\.id\)/g) ?? []).length, 4); // recipe/workout/challenge, scan, fridge, chat
   assert.match(chef, /!outputIsSafe\(JSON\.stringify\(parsed\.data\)\)/);
   assert.match(chef, /duplicateOr</);
   const { resultSignature } = await import("../src/server/chef");
@@ -1069,4 +1069,44 @@ test("announcements: each person reads their own language, falling back to the o
   const onlyAr = { title_ar: "عنوان", body_ar: "نص", title_en: "T", body_en: null };
   assert.deepEqual(textFor(onlyAr, "en"), { title: "عنوان", body: "نص" }); // a title without a message is not a usable English text
   assert.equal(textFor({ title_ar: null, body_ar: null, title_en: null, body_en: null }, "en"), null);
+});
+
+test("chat assistant: input limits, short replies, off-topic and unsafe answers never become a paid reply", async () => {
+  const c = await import("../src/server/ai/chat");
+  const { AiRefused, AiUnusable } = await import("../src/server/ai/recipe");
+  const { CHAT } = await import("../src/config/pricing");
+  // question size is limited in words and characters before any credit is spent
+  assert.equal(c.chatInputProblem("كم سعرة في رغيف العيش البلدي؟"), null);
+  assert.equal(c.chatInputProblem(" a "), "empty");
+  assert.equal(c.chatInputProblem(Array.from({ length: CHAT.maxUserWords + 1 }, () => "كلمة").join(" ")), "words");
+  assert.equal(c.chatInputProblem("x".repeat(CHAT.maxUserChars + 1)), "chars");
+  assert.equal(c.chatInputProblem(Array.from({ length: CHAT.maxUserWords }, () => "كلمة").join(" ")), null);
+  // replies are cut to the word limit, on a sentence end when possible
+  const long = Array.from({ length: 200 }, (_, i) => `كلمة${i}`).join(" ");
+  assert.ok(c.wordCount(c.limitWords(long, CHAT.maxReplyWords)) <= CHAT.maxReplyWords + 1);
+  assert.equal(c.limitWords("جملة قصيرة. وجملة أخرى.", 70), "جملة قصيرة. وجملة أخرى.");
+  const sentences = `${Array.from({ length: 60 }, () => "كلمة").join(" ")}. ${Array.from({ length: 30 }, () => "زيادة").join(" ")}.`;
+  assert.ok(c.limitWords(sentences, 70).endsWith("."));
+  // a good answer passes; shape is enforced
+  assert.deepEqual(c.parseChatOutput({ on_topic: true, confidence: "high", reply: "الرغيف البلدي حوالي 250 سعرة تقريبًا." }, "ar"), { reply: "الرغيف البلدي حوالي 250 سعرة تقريبًا.", confidence: "high" });
+  assert.equal(c.parseChatOutput({ on_topic: true, reply: "Roughly 250 kcal." }, "en").confidence, "high");
+  assert.throws(() => c.parseChatOutput({ reply: "x" }, "ar"), AiUnusable);
+  assert.throws(() => c.parseChatOutput("text", "ar"), AiUnusable);
+  // off topic: refused with a safe message (the caller refunds)
+  assert.throws(() => c.parseChatOutput({ on_topic: false, reply: "أنا أجيب عن الأكل والتمارين فقط." }, "ar"), (e: unknown) => e instanceof AiRefused && /الأكل/.test((e as { message_ar: string }).message_ar));
+  assert.throws(() => c.parseChatOutput({ on_topic: false, reply: "visit https://x.com" }, "en"), (e: unknown) => e instanceof AiRefused && !/https/.test((e as { message_ar: string }).message_ar));
+  // unsafe or malformed content is never delivered
+  for (const reply of ["خد جرعة فيتامين يوميًا", "جرب الصيام المتقطع", "اشرب نبيذ أحمر", "كل 800 سعرة في اليوم", "زور https://spam.example", "ده | جدول |", "take your medication"]) {
+    assert.throws(() => c.parseChatOutput({ on_topic: true, confidence: "high", reply }, "ar"), AiUnusable, reply);
+  }
+  // prompt carries the hard rules and the person's context
+  const p = c.chatSystemPrompt({ goal: "lose", conditions: ["diabetes"], lang: "ar", prefs: { allergies: ["nuts"], dislikes: "", equipment: [], level: null, avoid: [], household: 3 }, day: null });
+  assert.match(p, /on_topic/); assert.match(p, /٥٠ كلمة/); assert.match(p, /السكري/); assert.match(p, /المكسرات/);
+  assert.doesNotMatch(p, /quantity/); // the recipe-only household instruction is not leaked into chat
+  assert.match(c.chatSystemPrompt({ goal: null, conditions: [], lang: "en" }), /ENGLISH/);
+  // history: roles alternate, start with the user, and stay small
+  const t = (role: "user" | "assistant", content: string) => ({ role, content });
+  const hist = c.trimHistory([t("assistant", "old"), t("user", "q1"), t("assistant", "a1"), t("user", "q2"), t("assistant", "a2"), t("user", "q3")]);
+  assert.equal(hist[0].role, "user"); assert.equal(hist[hist.length - 1].content, "q3"); assert.ok(hist.length <= CHAT.historyMessages + 1);
+  assert.deepEqual(c.trimHistory([t("user", "solo")]), [t("user", "solo")]);
 });

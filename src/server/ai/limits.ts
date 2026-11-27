@@ -24,7 +24,7 @@ export async function enforceGenerationLimits(username: string): Promise<void> {
 }
 
 /** Fail (and let the caller refund) if the work takes longer than the time budget. */
-export async function withDeadline<T>(p: Promise<T>, ms = AI_LIMITS.timeoutMs): Promise<T> {
+export async function withDeadline<T>(p: Promise<T>, ms: number = AI_LIMITS.timeoutMs): Promise<T> {
   let t: ReturnType<typeof setTimeout>;
   const timeout = new Promise<never>((_, rej) => { t = setTimeout(() => rej(new Error("timeout")), ms); });
   try { return await Promise.race([p, timeout]); } finally { clearTimeout(t!); }

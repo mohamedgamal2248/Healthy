@@ -20,7 +20,7 @@ export const GET = route(async (req) => {
   // Cost per request kind: text requests carry a "[kind]" prefix in input_summary (older ones are plain recipes).
   const byKind = new Map<string, { n: number; refunded: number; cost: number; tin: number; tout: number; searches: number }>();
   for (const r of cost) {
-    const m = /^\[(recipe|workout|challenge|scan)\]/.exec(r.input_summary ?? "");
+    const m = /^\[(recipe|workout|challenge|scan|fridge|chat)\]/.exec(r.input_summary ?? "");
     const kind = r.type === "plan" ? "plan" : m ? m[1] : "recipe";
     const k = byKind.get(kind) ?? { n: 0, refunded: 0, cost: 0, tin: 0, tout: 0, searches: 0 };
     k.n++; k.cost += Number(r.est_cost_usd); k.tin += r.tokens_in ?? 0; k.tout += r.tokens_out ?? 0; k.searches += r.searches ?? 0;
