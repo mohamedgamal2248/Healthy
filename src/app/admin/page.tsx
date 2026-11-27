@@ -376,10 +376,8 @@ const DB_LIMIT = 500 * 1048576; // Supabase free plan
 function MonitorAdmin() {
   const { tr, toast, errMsg } = useApp();
   const [m, setM] = useState<Monitor | null>(null);
-  const [auto, setAuto] = useState(false);
   const load = useCallback((fresh = false) => { api<Monitor>(`/admin/monitor${fresh ? "?fresh=1" : ""}`).then(setM).catch((e) => toast(errMsg(e), "err")); }, [toast, errMsg]);
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { if (!auto) return; const t = setInterval(() => load(true), 60_000); return () => clearInterval(t); }, [auto, load]);
   if (!m) return <div className="card flex items-center gap-2 py-6"><Spinner /><span className="muted">{tr("جارٍ التحميل...", "Loading...")}</span></div>;
   const tot = m.routes.reduce((a, r) => ({ n: a.n + r.n, e5: a.e5 + r.e5xx, e4: a.e4 + r.e4xx, slow: a.slow + r.slow, ms: a.ms + (r.avg_ms ?? 0) * r.n }), { n: 0, e5: 0, e4: 0, slow: 0, ms: 0 });
   const lastHour = m.hourly[m.hourly.length - 1];
@@ -412,7 +410,6 @@ function MonitorAdmin() {
       <div className="flex flex-wrap items-center gap-2">
         <Notice tone={problems.length ? "bad" : "ok"}>{problems.length ? problems.join(" · ") : tr("لا توجد مشاكل ظاهرة الآن.", "No visible problems right now.")}</Notice>
         <span className="ms-auto flex items-center gap-2">
-          <label className="flex items-center gap-1 text-sm"><input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />{tr("تحديث تلقائي كل دقيقة", "Auto-refresh every minute")}</label>
           <button className="chip" onClick={() => load(true)}>{tr("تحديث", "Refresh")}</button>
         </span>
       </div>
