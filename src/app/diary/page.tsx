@@ -11,13 +11,15 @@ import { CalorieCard, FoodTile, MacroRings } from "@/components/Rings";
 import type { MealRow } from "@/server/meals";
 
 type Entry = { id: string; name: string; name_ar?: string; name_en?: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; source: "meal" | "scan" | "manual"; source_id?: string | null; estimated: boolean; auto?: boolean; servings?: number };
-type Day = { date: string; entries: Entry[]; totals: { calories: number; protein_g: number; carbs_g: number; fat_g: number }; target: number | null; targets: { protein: number; carbs: number; fat: number } | null; recent?: (Entry & { date: string })[] };
-type Tab = "meals" | "recent" | "manual";
+type Day = { date: string; entries: Entry[]; totals: { calories: number; protein_g: number; carbs_g: number; fat_g: number }; target: number | null; targets: { protein: number; carbs: number; fat: number } | null; plan?: PlanSlot[] | null; recent?: (Entry & { date: string })[] };
+type PlanSlot = { type: string; source: string; meal_id?: string | null; name_ar?: string; name_en?: string; servings: number; calories: number; protein_g: number };
+type Tab = "plan" | "meals" | "recent" | "manual";
 
-function AddSheet({ open, initialTab, recent, onClose, onAdded }: { open: boolean; initialTab: Tab; recent: (Entry & { date: string })[]; onClose: () => void; onAdded: (d: Day) => void }) {
+function AddSheet({ open, initialTab, recent, plan, entries, onClose, onAdded }: { open: boolean; initialTab: Tab; recent: (Entry & { date: string })[]; plan: PlanSlot[]; entries: Entry[]; onClose: () => void; onAdded: (d: Day) => void }) {
   const { tr, lang, toast, errMsg } = useApp();
   const [tab, setTab] = useState<Tab>(initialTab);
-  useEffect(() => { if (open) setTab(initialTab); }, [open, initialTab]);
+  // "Add to your day" starts with today's plan meals when there is a plan; the full catalogue is one tap away.
+  useEffect(() => { if (open) setTab(initialTab === "meals" && plan.length > 0 ? "plan" : initialTab); }, [open, initialTab, plan.length]);
   const [carbs, setCarbs] = useState("");
   const [fat, setFat] = useState("");
   const [q, setQ] = useState("");
@@ -28,21 +30,42 @@ function AddSheet({ open, initialTab, recent, onClose, onAdded }: { open: boolea
   const [busy, setBusy] = useState<string | null>(null);
   useEffect(() => { const t = setTimeout(() => setQd(q), 250); return () => clearTimeout(t); }, [q]);
   const { data } = useGet<{ meals: MealRow[] }>(open && tab === "meals" ? `/public/meals?${qd.trim() ? `q=${encodeURIComponent(qd.trim())}` : ""}` : null, undefined, { anon: true });
-  const add = async (key: string, body: unknown) => {
+  const add = async (key: string, body: unknown, keepOpen = false) => {
     setBusy(key);
-    try { onAdded(await api<Day>("/food", { body })); toast(tr("تمت الإضافة", "Added"), "ok"); onClose(); } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(null); }
+    try { onAdded(await api<Day>("/food", { body })); toast(tr("تمت الإضافة", "Added"), "ok"); if (!keepOpen) onClose(); } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(null); }
   };
+  const slotName = (s: PlanSlot) => (lang === "ar" ? s.name_ar : s.name_en) || s.name_en || s.name_ar || "";
+  const typeLabel: Record<string, string> = { breakfast: tr("فطار", "Breakfast"), lunch: tr("غدا", "Lunch"), dinner: tr("عشا", "Dinner"), snack: tr("سناك", "Snack") };
+  const logged = new Set(entries.filter((e) => e.source === "meal" && e.source_id).map((e) => e.source_id as string));
   const kcalN = Number(kcal);
   const manualOk = name.trim().length > 0 && Number.isInteger(kcalN) && kcalN >= 0 && kcalN <= 5000;
   return (
     <Sheet open={open} onClose={onClose} title={tr("أضف إلى يومك", "Add to your day")}>
       <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-2 rounded-2xl bg-brand-50 p-1.5">
-          {([["meals", tr("القائمة", "Catalogue")], ["recent", tr("كرر", "Repeat")], ["manual", tr("يدويًا", "Manual")]] as const).map(([k, l]) => (
+        <div className={`grid gap-2 rounded-2xl bg-brand-50 p-1.5 ${plan.length ? "grid-cols-4" : "grid-cols-3"}`}>
+          {([...(plan.length ? [["plan", tr("خطة اليوم", "Today's plan")]] : []), ["meals", tr("القائمة", "Catalogue")], ["recent", tr("كرر", "Repeat")], ["manual", tr("يدويًا", "Manual")]] as [Tab, string][]).map(([k, l]) => (
             <button key={k} className={`min-h-11 rounded-xl text-sm font-extrabold ${tab === k ? "bg-white text-brand-800 shadow-sm" : "text-ink-soft"}`} aria-pressed={tab === k} onClick={() => setTab(k)}>{l}</button>
           ))}
         </div>
-        {tab === "meals" ? (
+        {tab === "plan" ? (
+          <ul className="max-h-[55dvh] space-y-2 overflow-y-auto">
+            {plan.map((s, i) => {
+              const key = `plan-${i}`;
+              const done = !!s.meal_id && logged.has(s.meal_id);
+              return (
+                <li key={key}>
+                  <button className={`flex min-h-14 w-full items-center gap-3 rounded-2xl border p-3 text-start ${done ? "border-brand-200 bg-brand-50" : "border-line hover:bg-brand-50"}`} disabled={busy !== null || done}
+                    onClick={() => add(key, s.meal_id ? { source: "meal", mealId: s.meal_id, portion: s.servings } : { source: "manual", name: slotName(s).slice(0, 120), calories: Math.round(s.calories), protein_g: s.protein_g }, true)}>
+                    <span className="min-w-0 flex-1"><span className="block text-xs font-extrabold text-brand-700">{typeLabel[s.type] ?? s.type}{s.servings !== 1 ? ` · ${tr("حصة", "portion")} x${s.servings}` : ""}</span><span className="block truncate font-extrabold">{slotName(s)}</span></span>
+                    <span className="text-sm font-bold tabular-nums text-ink-soft">{s.calories} {tr("سعرة", "kcal")}</span>
+                    {busy === key ? <Spinner size={18} /> : done ? <Icon name="check" size={18} className="text-brand-600" /> : <Icon name="plus" size={18} className="text-brand-600" />}
+                  </button>
+                </li>
+              );
+            })}
+            <li><button className="btn-ghost btn-sm w-full" onClick={() => setTab("meals")}>{tr("أضف وجبة أخرى من القائمة", "Add another meal from the catalogue")}</button></li>
+          </ul>
+        ) : tab === "meals" ? (
           <>
             <div className="relative"><Icon name="search" size={18} className="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-ink-soft" /><input className="field !ps-11" placeholder={tr("ابحث عن وجبة…", "Search meals…")} value={q} onChange={(e) => setQ(e.target.value)} aria-label={tr("بحث", "Search")} /></div>
             <ul className="max-h-[45dvh] space-y-2 overflow-y-auto">
@@ -103,7 +126,7 @@ function Inner() {
     if (q === "meals" || q === "recent" || q === "manual") { setTab(q); setOpen(true); history.replaceState(null, "", "/diary"); }
   }, []);
   if (!d) return <PageSkeleton />;
-  const openAdd = (t: Tab) => { setTab(t); setOpen(true); };
+  const openAdd = (t: Tab) => { setTab(t === "meals" && (d.plan?.length ?? 0) > 0 ? "plan" : t); setOpen(true); };
   // Portion of an entry (the plan's meals can be made bigger or smaller): quarter steps from 0.5 to 3.
   const setPortion = async (id: string, servings: number) => {
     if (servings < 0.5 || servings > 3) return;
@@ -158,7 +181,7 @@ function Inner() {
         </ul>
       )}
       <p className="text-xs font-semibold text-ink-soft">{tr("أرقام تقديرية للإرشاد العام وليست نصيحة طبية.", "Estimates for general guidance, not medical advice.")}</p>
-      <AddSheet open={open} initialTab={tab} recent={d.recent ?? []} onClose={() => setOpen(false)} onAdded={(x) => setData(x)} />
+      <AddSheet open={open} initialTab={tab} recent={d.recent ?? []} plan={d.plan ?? []} entries={d.entries} onClose={() => setOpen(false)} onAdded={(x) => setData(x)} />
     </div>
   );
 }

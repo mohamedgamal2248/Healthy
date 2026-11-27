@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { after } from "next/server";
 import { quickstartState } from "@/server/quickstart";
+import { planToday } from "@/server/autolog";
 import { db, must } from "@/server/supabase";
 import { ok, readJson, route, E } from "@/server/http";
 import { requireUser } from "@/server/auth";
@@ -20,8 +21,9 @@ const Ref = z.object({
 
 /** Today's food diary: entries, totals and the daily target. */
 async function dayWithRecent(a: Awaited<ReturnType<typeof requireUser>>) {
-  const [day, recent] = await Promise.all([foodDay(a), recentFoods(a, 8)]);
-  return { ...day, recent };
+  const [day, recent, plan] = await Promise.all([foodDay(a), recentFoods(a, 8), planToday(a)]);
+  // today's plan meals: the "Add to your day" sheet offers these first
+  return { ...day, recent, plan: plan.day ? plan.day.slots : null };
 }
 
 export const GET = route(async (req) => ok(await dayWithRecent(await requireUser(req))));

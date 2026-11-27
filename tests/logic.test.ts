@@ -1159,3 +1159,12 @@ test("plan snacks can be logged as eaten (they live in the planner, not the cata
   assert.equal(ar.name, s.name_ar);
   await assert.rejects(resolveEntry(a, { source: "meal", mealId: "snack-does-not-exist" }));
 });
+
+test("diary: the add sheet offers today's plan meals first and the /food answers carry them", async () => {
+  const { readFileSync } = await import("node:fs");
+  const route = readFileSync("src/app/api/food/route.ts", "utf8");
+  assert.match(route, /plan: plan\.day \? plan\.day\.slots : null/); // every /food response (GET, POST, PATCH, DELETE) includes the plan
+  const page = readFileSync("src/app/diary/page.tsx", "utf8");
+  assert.match(page, /initialTab === "meals" && plan\.length > 0 \? "plan"/);
+  assert.match(page, /logged\.has\(s\.meal_id\)/); // a plan meal already in the diary is shown as done, not added twice
+});
