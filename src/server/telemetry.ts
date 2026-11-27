@@ -3,10 +3,9 @@ import { db } from "./supabase";
 
 /**
  * Lightweight request telemetry for the owner dashboard.
- * Every request is counted IN MEMORY (no database cost). Each server instance writes its counters to the database in ONE
- * batched call at most every FLUSH_MS, so the extra load is about 1 write per instance per 15 s whatever the traffic,
- * and is skipped entirely if the database is struggling (the write is best-effort and never affects a response).
- * Counts are approximate: the last few seconds of an instance that goes idle are not written.
+ * Every request is counted IN MEMORY (no database cost). Each server instance writes its counters in ONE batched call per
+ * FLUSH_MS window, so the extra load is at most about 1 write per instance per 15 s whatever the traffic. The write is
+ * best-effort and never affects a response. Counts are approximate (an instance that is recycled mid-window loses that window).
  */
 const FLUSH_MS = 15_000;
 const MAX_ROUTES = 120;
@@ -16,8 +15,8 @@ type Row = { n: number; ms_sum: number; ms_max: number; e5: number; e4: number; 
 type Err = { route: string; status: number; message: string; n: number };
 let rows = new Map<string, Row>();
 let errs = new Map<string, Err>();
-let lastFlush = 0;
 let flushing = false;
+let scheduled = false;
 
 /** "/api/recipes/3f2c...-uuid/like?x=1" -> "/api/recipes/:id/like" so every recipe shares one row. */
 export function normalizeRoute(url: string): string {
@@ -54,13 +53,10 @@ export function recordRequest(url: string, method: string, status: number, ms: n
   }
 }
 
-/** Writes the counters in one batched call when due. Safe to call after every response. */
-export async function flushTelemetry(force = false): Promise<void> {
+/** Writes the counters in one batched call. */
+export async function flushTelemetry(): Promise<void> {
   if (flushing || rows.size === 0) return;
-  const now = Date.now();
-  if (!force && now - lastFlush < FLUSH_MS) return;
   flushing = true;
-  lastFlush = now;
   const batchRows = [...rows.entries()].map(([route, v]) => ({ route, ...v }));
   const batchErrs = [...errs.values()];
   rows = new Map(); errs = new Map();
@@ -74,10 +70,20 @@ export async function flushTelemetry(force = false): Promise<void> {
   }
 }
 
-/** Called by the route wrapper: count in memory, then (if due) flush after the response has been sent. */
+/**
+ * Called by the route wrapper: count in memory. The first request of a window schedules ONE flush FLUSH_MS later (after the
+ * response has been sent), so everything counted in between is written together, including the tail of a quiet period.
+ */
 export function track(url: string, method: string, status: number, ms: number, error?: unknown): void {
   try {
     recordRequest(url, method, status, ms, error);
-    if (Date.now() - lastFlush >= FLUSH_MS) after(() => flushTelemetry());
-  } catch { /* telemetry must never affect a response (also outside a request scope, e.g. in tests) */ }
+    if (!scheduled) {
+      scheduled = true;
+      after(async () => {
+        await new Promise((r) => setTimeout(r, FLUSH_MS));
+        scheduled = false;
+        await flushTelemetry();
+      });
+    }
+  } catch { scheduled = false; /* telemetry must never affect a response (also outside a request scope, e.g. in tests) */ }
 }

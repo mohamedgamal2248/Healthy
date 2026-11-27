@@ -11,6 +11,6 @@ import { flushTelemetry } from "@/server/telemetry";
 export const GET = route(async (req) => {
   await requireAdmin(req);
   const fresh = new URL(req.url).searchParams.has("fresh");
-  if (fresh) { forget("admin-monitor"); await flushTelemetry(true); } // include this instance's latest counters
+  if (fresh) { forget("admin-monitor"); await flushTelemetry(); } // include this instance's latest counters
   return ok(await memo("admin-monitor", 20_000, async () => must(await db().rpc("hl_admin_monitor"))));
 });
