@@ -66,3 +66,9 @@ export async function readJson<T = Record<string, unknown>>(req: Request): Promi
     throw E.bad();
   }
 }
+
+/** Two-letter country code of the caller from the hosting edge header. The IP address itself is never stored or logged. */
+export function countryOf(req: Request): string | null {
+  const c = (req.headers.get("x-vercel-ip-country") ?? "").trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(c) && c !== "XX" && c !== "T1" ? c : null;
+}

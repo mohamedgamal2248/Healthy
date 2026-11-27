@@ -27,6 +27,7 @@ export type Profile = {
   notify_pi: boolean;
   reminder_hour: number;
   token_version: number;
+  country: string | null;
   deleted_at: string | null;
   created_at: string;
   timezone_changed_at: string | null;

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { db, must } from "@/server/supabase";
-import { ok, readJson, route, E } from "@/server/http";
+import { ok, readJson, route, E, countryOf } from "@/server/http";
 import { adminUsernames, requireUser } from "@/server/auth";
 import { getBalances } from "@/server/credits";
 import { rateLimit } from "@/server/ratelimit";
@@ -10,9 +10,14 @@ import { ALLERGENS, EQUIPMENT, JOINTS, LEVELS, cleanDislikes } from "@/lib/ai-pr
 
 export const GET = route(async (req) => {
   const a = await requireUser(req);
+  // Keep the owner's country statistics current for people who stay signed in: one tiny write, only when the country changed.
+  const cc = countryOf(req);
+  if (cc && cc !== a.profile.country) {
+    try { must(await db().from("hl_profiles").update({ country: cc }).eq("username", a.username)); } catch { /* statistics only */ }
+  }
   const balances = a.profile.kyc_verified ? await getBalances(a.username) : null;
-  const { pi_uid: _uid, token_version: _tv, deleted_at: _d, created_at: _c, ...profile } = a.profile;
-  void _uid; void _tv; void _d; void _c;
+  const { pi_uid: _uid, token_version: _tv, deleted_at: _d, created_at: _c, country: _cc, ...profile } = a.profile;
+  void _uid; void _tv; void _d; void _c; void _cc;
   const lw = await latestWeight(a.username);
   return ok({ profile: { ...profile, weight_kg: lw ? lw.kg : profile.weight_kg, weight_date: lw?.date ?? null }, balances, isAdmin: adminUsernames().includes(a.username.toLowerCase()) });
 });

@@ -240,13 +240,20 @@ function NotifyAdmin() {
 }
 
 
-type UserRow = { username: string; created_at: string; last_login_at: string | null; login_count: number; kyc_verified: boolean; language: string; deleted: boolean; active_days: number; first_day: string | null; last_day: string | null; ai_requests: number; food_entries: number; challenges_done: number; plan_active: boolean; pi_paid: number; purchases: number; last_purchase: string | null; credits_left: number };
+type UserRow = { username: string; created_at: string; last_login_at: string | null; login_count: number; kyc_verified: boolean; language: string; deleted: boolean; active_days: number; first_day: string | null; last_day: string | null; ai_requests: number; food_entries: number; challenges_done: number; plan_active: boolean; pi_paid: number; purchases: number; last_purchase: string | null; credits_left: number; country: string | null };
+type CountryRow = { code: string; users: number; active30: number; paying: number; pi: number | string; ai: number };
 type Report = {
   users: UserRow[];
   daily: { day: string; active: number; new: number }[];
+  countries: CountryRow[];
   summary: { total: number; dau: number; wau: number; mau: number; returned: number; never_returned: number; avg_active_days: number; avg_logins: number; d1_eligible: number; d1_returned: number; d7_eligible: number; d7_returned: number; paying_users: number; pi_total: number; purchases_total: number; credits_outstanding: number; ai_total: number };
 };
 const fmtPi = (n: number | string) => { const v = Number(n); return Number.isInteger(v) ? String(v) : v.toFixed(2); };
+/** Country name in the viewer's language from a two-letter code ("??" = not known yet). */
+const countryName = (code: string | null, lang: string) => {
+  if (!code || code === "??") return lang === "ar" ? "غير معروف" : "Unknown";
+  try { return new Intl.DisplayNames([lang], { type: "region" }).of(code) ?? code; } catch { return code; }
+};
 const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : "-");
 const ago = (iso: string | null, tr: (a: string, e: string) => string) => {
   if (!iso) return "-";
@@ -260,7 +267,7 @@ const ago = (iso: string | null, tr: (a: string, e: string) => string) => {
 
 /** Owner-only: every Pioneer who signed in (Pi username, dates and counters only) with daily activity and return rates. */
 function UsersAdmin() {
-  const { tr, toast, errMsg } = useApp();
+  const { tr, toast, errMsg, lang } = useApp();
   const [r, setR] = useState<Report | null>(null);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<"login" | "created" | "days" | "ai" | "pi">("login");
@@ -311,6 +318,29 @@ function UsersAdmin() {
         <p className="muted">{tr("يُحسب اليوم بتوقيت كل مستخدم. اليوم يُسجَّل عند فتح التطبيق أو الدخول بـ Pi. البيانات قبل هذه الميزة مأخوذة من نشاط المستخدمين المحفوظ (تحديات وأكل وعادات)، وآخر دخول لها تقريبي.", "A day is counted in each user's own time zone and is recorded when the app is opened or a user signs in with Pi. Older data comes from stored activity (challenges, food, habits), so their last sign-in is approximate.")}</p>
       </section>
       <section className="card space-y-3">
+        <h2 className="h2">{tr("المستخدمون حسب الدولة", "Users by country")}</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[520px] text-sm">
+            <thead><tr className="text-xs font-extrabold text-ink-soft"><th className="py-2 text-start">#</th><th className="text-start">{tr("الدولة", "Country")}</th><th>{tr("مستخدمون", "Users")}</th><th>{tr("النسبة", "Share")}</th><th>{tr("نشطون 30 يومًا", "Active 30 d")}</th><th>{tr("دافعون", "Paying")}</th><th>{tr("AI", "AI")}</th></tr></thead>
+            <tbody>
+              {r.countries.map((c, i) => (
+                <tr key={c.code} className="border-t border-line text-center">
+                  <td className="py-2 text-start tabular-nums text-ink-soft">{i + 1}</td>
+                  <td className="text-start font-extrabold">{countryName(c.code, lang)}{c.code !== "??" ? <span className="ms-1 text-xs font-normal text-ink-soft" dir="ltr">{c.code}</span> : null}</td>
+                  <td className="tabular-nums font-extrabold">{c.users}</td>
+                  <td className="tabular-nums">{pct(c.users, s.total)}</td>
+                  <td className="tabular-nums">{c.active30}</td>
+                  <td className="tabular-nums">{c.paying}</td>
+                  <td className="tabular-nums">{c.ai}</td>
+                </tr>
+              ))}
+              {r.countries.length === 0 && <tr><td colSpan={7} className="py-6 text-center muted">{tr("لا بيانات بعد.", "No data yet.")}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <p className="muted">{tr("الدولة تُستنتج من عنوان الاتصال وقت الدخول، ولا يُحفظ عنوان IP نفسه. المستخدمون القدامى يظهرون \"غير معروف\" إلى أن يفتحوا التطبيق مرة أخرى.", "The country is derived from the connection at sign-in; the IP address itself is never stored. Existing users show as Unknown until they next open the app.")}</p>
+      </section>
+      <section className="card space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="h2 me-auto">{tr("المستخدمون", "Users")} ({rows.length})</h2>
           <input className="field max-w-[180px]" dir="ltr" placeholder={tr("بحث باسم المستخدم", "Search username")} value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} aria-label={tr("بحث", "Search")} />
@@ -323,14 +353,15 @@ function UsersAdmin() {
           </select>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-sm">
-            <thead><tr className="text-xs font-extrabold text-ink-soft"><th className="py-2 text-start">Pi username</th><th className="text-start">{tr("سجّل في", "Registered")}</th><th className="text-start">{tr("آخر دخول", "Last sign-in")}</th><th>{tr("مرات الدخول", "Sign-ins")}</th><th>{tr("أيام الاستخدام", "Days used")}</th><th>{tr("Pi مدفوعة", "Pi paid")}</th><th>{tr("كريدت متبقٍّ", "Credits left")}</th><th>{tr("AI", "AI")}</th><th>{tr("أكل", "Food")}</th><th>{tr("تحديات", "Challenges")}</th><th>{tr("خطة", "Plan")}</th></tr></thead>
+          <table className="w-full min-w-[980px] text-sm">
+            <thead><tr className="text-xs font-extrabold text-ink-soft"><th className="py-2 text-start">Pi username</th><th className="text-start">{tr("سجّل في", "Registered")}</th><th className="text-start">{tr("آخر دخول", "Last sign-in")}</th><th>{tr("الدولة", "Country")}</th><th>{tr("مرات الدخول", "Sign-ins")}</th><th>{tr("أيام الاستخدام", "Days used")}</th><th>{tr("Pi مدفوعة", "Pi paid")}</th><th>{tr("كريدت متبقٍّ", "Credits left")}</th><th>{tr("AI", "AI")}</th><th>{tr("أكل", "Food")}</th><th>{tr("تحديات", "Challenges")}</th><th>{tr("خطة", "Plan")}</th></tr></thead>
             <tbody>
               {view.map((u) => (
                 <tr key={u.username} className="border-t border-line text-center align-top">
                   <td className="py-2 text-start font-extrabold" dir="ltr">{u.username}{u.deleted ? <span className="ms-1 text-xs font-normal text-rose-600">({tr("محذوف", "deleted")})</span> : null}{!u.kyc_verified ? <span className="ms-1 text-xs font-normal text-ink-soft">(no KYC)</span> : null}</td>
                   <td className="text-start text-ink-soft"><span className="block">{dt(u.created_at)}</span></td>
                   <td className="text-start"><span className="block">{dt(u.last_login_at)}</span><span className="text-xs text-ink-soft">{ago(u.last_login_at, tr)}</span></td>
+                  <td className="text-ink-soft">{u.country ? countryName(u.country, lang) : "-"}</td>
                   <td className="tabular-nums">{u.login_count}</td>
                   <td className="tabular-nums">{u.active_days}</td>
                   <td className="tabular-nums">{Number(u.pi_paid) > 0 ? <span className="font-extrabold text-brand-700">{fmtPi(u.pi_paid)}<span className="block text-[11px] font-normal text-ink-soft">{u.purchases} {tr("عملية", "orders")}</span></span> : "-"}</td>
@@ -341,7 +372,7 @@ function UsersAdmin() {
                   <td>{u.plan_active ? tr("نعم", "Yes") : "-"}</td>
                 </tr>
               ))}
-              {view.length === 0 && <tr><td colSpan={11} className="py-6 text-center muted">{tr("لا يوجد مستخدمون مطابقون.", "No matching users.")}</td></tr>}
+              {view.length === 0 && <tr><td colSpan={12} className="py-6 text-center muted">{tr("لا يوجد مستخدمون مطابقون.", "No matching users.")}</td></tr>}
             </tbody>
           </table>
         </div>

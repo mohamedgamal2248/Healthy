@@ -1017,3 +1017,15 @@ test("plan: regenerating with a new seed and the old meals to avoid gives a diff
   assert.ok(same <= 3, `only ${ids(a).length - same} of ${ids(a).length} meals changed`);
   for (const d of b.days) assert.ok(Math.abs(d.total_kcal - 2200) <= 2200 * 0.08, `${d.date}: ${d.total_kcal}`);
 });
+
+test("country comes only from the edge header and only as a two-letter code", async () => {
+  const { countryOf } = await import("../src/server/http");
+  const req = (v?: string) => new Request("https://x.app/api/me", { headers: v === undefined ? {} : { "x-vercel-ip-country": v } });
+  assert.equal(countryOf(req("eg")), "EG");
+  assert.equal(countryOf(req("SA")), "SA");
+  assert.equal(countryOf(req()), null);
+  assert.equal(countryOf(req("XX")), null);
+  assert.equal(countryOf(req("T1")), null);
+  assert.equal(countryOf(req("Egypt")), null);
+  assert.equal(countryOf(req("1.2.3.4")), null);
+});
