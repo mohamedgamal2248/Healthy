@@ -13,8 +13,10 @@ const MAX_ERRORS = 20;
 
 type Row = { n: number; ms_sum: number; ms_max: number; e5: number; e4: number; slow: number };
 type Err = { route: string; status: number; message: string; n: number };
+type CErr = { route: string; status: number; code: string; n: number };
 let rows = new Map<string, Row>();
 let errs = new Map<string, Err>();
+let cerrs = new Map<string, CErr>();
 let flushing = false;
 let scheduled = false;
 
@@ -45,6 +47,14 @@ export function recordRequest(url: string, method: string, status: number, ms: n
   r.n++; r.ms_sum += ms; r.ms_max = Math.max(r.ms_max, ms);
   if (status >= 500) r.e5++; else if (status >= 400) r.e4++;
   if (ms > slowLimitMs(route)) r.slow++;
+  if (status >= 400 && status < 500) {
+    // Why a request was refused (expired session, bad input, rate limit...), by error code only: never any user text.
+    const code = (error as { code?: unknown } | undefined)?.code;
+    const c = typeof code === "string" && /^[a-z0-9_]{1,40}$/i.test(code) ? code : `http_${status}`;
+    const key = `${route}|${status}|${c}`;
+    const e = cerrs.get(key);
+    if (e) e.n++; else if (cerrs.size < MAX_ERRORS) cerrs.set(key, { route, status, code: c, n: 1 });
+  }
   if (status >= 500) {
     const message = (error instanceof Error ? error.message : typeof error === "string" ? error : `HTTP ${status}`).replace(/\s+/g, " ").slice(0, 300);
     const key = `${route}|${status}|${message.slice(0, 80)}`;
@@ -59,10 +69,12 @@ export async function flushTelemetry(): Promise<void> {
   flushing = true;
   const batchRows = [...rows.entries()].map(([route, v]) => ({ route, ...v }));
   const batchErrs = [...errs.values()];
-  rows = new Map(); errs = new Map();
+  const batchClient = [...cerrs.values()];
+  rows = new Map(); errs = new Map(); cerrs = new Map();
   try {
     const res = await db().rpc("hl_stat_flush", { p_rows: batchRows, p_errors: batchErrs });
     if (res.error) console.error("[telemetry]", res.error.message);
+    if (batchClient.length) { const r2 = await db().rpc("hl_client_err_flush", { p_errors: batchClient }); if (r2.error) console.error("[telemetry]", r2.error.message); }
   } catch (e) {
     console.error("[telemetry]", e instanceof Error ? e.message : e);
   } finally {

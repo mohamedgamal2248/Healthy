@@ -56,6 +56,8 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
   const data = await res.json().catch(() => null);
   if (!res.ok) {
     const e = data?.error ?? {};
+    // A rejected session token is dead: forget it right away so the other requests of this page do not keep sending it (and failing).
+    if (res.status === 401 && token && path !== "/auth/pi") { rememberToken(null); try { window.dispatchEvent(new Event("healthy:signedout")); } catch { /* not in a browser */ } }
     throw new ApiError(res.status, e.code ?? "error", e.ar ?? "حدث خطأ. حاول مرة أخرى.", e.en ?? "Something went wrong.", e);
   }
   return data as T;

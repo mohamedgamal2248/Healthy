@@ -117,6 +117,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const out = () => { clearGetCache(); setMe(null); setReady(true); };
+    window.addEventListener("healthy:signedout", out);
+    return () => window.removeEventListener("healthy:signedout", out);
+  }, []);
+
+  useEffect(() => {
     if (getToken()) prefetchRoute(window.location.pathname); // page data loads while /me does
     refresh();
   }, [refresh]);

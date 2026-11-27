@@ -561,11 +561,33 @@ type Monitor = {
   routes: { route: string; n: number; avg_ms: number | null; max_ms: number; e5xx: number; e4xx: number; slow: number }[];
   hourly: { hour: string; n: number; e5xx: number; e4xx: number; slow: number; avg_ms: number | null }[];
   errors: { route: string; status: number; message: string; n: number; first_at: string; last_at: string }[];
+  client_errors?: { route: string; status: number; code: string; n: number; last_at: string }[];
   ai24: { completed: number; refunded: number; failed: number; pending_stuck: number; reasons: { error: string; n: number }[] };
   ai_daily: { day: string; completed: number; refunded: number; failed: number }[];
   money_daily: { day: string; purchases: number; pi: number | string }[];
   purchases_open: number;
   db: { total_bytes: number; healthy_bytes: number; connections: number; active_connections: number; top_tables: { name: string; bytes: number; rows: number }[] };
+};
+/** Plain-language meaning of the AI refund reasons and 4xx codes, so the dashboard explains itself. */
+const AI_REASON: Record<string, [string, string]> = {
+  duplicate: ["نتيجة مكررة: الشخص عنده نفس النتيجة محفوظة فرُدّ كريدته (مقصود، ليس خطأ)", "Duplicate result: the person already had it saved, so the credit was returned (by design, not an error)"],
+  off_topic: ["سؤال خارج نطاق المساعد: رُدّ الكريدت (مقصود)", "Question outside the assistant's scope: credit returned (by design)"],
+  refused: ["طلب مرفوض بقواعد الأمان: رُدّ الكريدت (مقصود)", "Request refused by the safety rules: credit returned (by design)"],
+  no_credits: ["لا رصيد", "No credits"],
+  concurrent: ["طلبان في نفس الوقت", "Two requests at once"],
+  timeout: ["تأخر الرد فرُدّ الكريدت", "The reply was too slow, so the credit was returned"],
+};
+const CODE_MEANING: Record<string, [string, string]> = {
+  unauthenticated: ["جلسة منتهية أو غير مسجّل", "Expired session or not signed in"],
+  not_found: ["غير موجود", "Not found"],
+  bad_request: ["بيانات غير صالحة", "Invalid input"],
+  rate_limited: ["تجاوز حد التكرار", "Rate limit reached"],
+  refused: ["رفض أمان", "Safety refusal"],
+  no_credits: ["لا رصيد", "No credits"],
+  kyc_required: ["يحتاج توثيق KYC", "KYC required"],
+  in_flight: ["طلب AI آخر يعمل", "Another AI request is running"],
+  http_401: ["جلسة منتهية أو غير مسجّل", "Expired session or not signed in"],
+  http_404: ["غير موجود", "Not found"],
 };
 const mb = (b: number) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.round(b / 1024)} KB`);
 const DB_LIMIT = 500 * 1048576; // Supabase free plan
@@ -626,6 +648,18 @@ function MonitorAdmin() {
         <p className="muted">{tr("أخضر: سليم، برتقالي: فيه طلبات بطيئة، أحمر: فيه أخطاء سيرفر. الأرقام من عدّاد داخل التطبيق يُكتب على دفعات (كل 15 ثانية كحد أقصى لكل نسخة)، فهي تقريبية وتُحفظ 14 يومًا.", "Green: healthy, orange: has slow requests, red: has server errors. Numbers come from an in-app counter written in batches (at most every 15 s per server instance), so they are approximate and kept 14 days.")}</p>
       </section>
       <section className="card space-y-3">
+        <h2 className="h2">{tr("أسباب أخطاء 4xx (آخر 24 ساعة)", "Why requests got 4xx (last 24 h)")}</h2>
+        {!m.client_errors || m.client_errors.length === 0 ? <p className="muted">{tr("لا بيانات بعد. تظهر هنا الأسباب لكل مسار من الآن فصاعدًا.", "No data yet. Reasons per route appear here from now on.")}</p> : (
+          <ul className="divide-y divide-line text-sm">{m.client_errors.map((e, i) => (
+            <li key={i} className="py-2">
+              <div className="flex flex-wrap items-center gap-x-3"><span className="font-extrabold text-sun-600">{e.status}</span><span dir="ltr" className="font-bold">{e.route}</span><span className="muted tabular-nums">x{e.n}</span><span className="ms-auto text-xs text-ink-soft" dir="ltr">{ago(e.last_at, tr)}</span></div>
+              <p className="text-ink-soft"><span dir="ltr" className="font-bold">{e.code}</span>{CODE_MEANING[e.code] ? ` - ${tr(CODE_MEANING[e.code][0], CODE_MEANING[e.code][1])}` : ""}</p>
+            </li>))}
+          </ul>
+        )}
+        <p className="muted">{tr("401 عادة جلسة منتهية أو زائر غير مسجّل، و429 حد التكرار، و400 بيانات غير صالحة. هذه أخطاء من جهة الطلب وليست أعطال سيرفر.", "401 is usually an expired session or a signed-out visitor, 429 the rate limit, 400 invalid input. These come from the request side, not server faults.")}</p>
+      </section>
+      <section className="card space-y-3">
         <h2 className="h2">{tr("أحدث الأخطاء", "Recent errors")}</h2>
         {m.errors.length === 0 ? <p className="muted">{tr("لا أخطاء مسجّلة.", "No errors recorded.")}</p> : (
           <ul className="divide-y divide-line text-sm">{m.errors.map((e, i) => (
@@ -660,7 +694,7 @@ function MonitorAdmin() {
       </section>
       <section className="card space-y-3">
         <h2 className="h2">{tr("الذكاء الاصطناعي", "AI")}</h2>
-        {m.ai24.reasons.length > 0 && (<div><p className="muted mb-1">{tr("أسباب الفشل / الاسترداد (24 ساعة)", "Failure / refund reasons (24 h)")}</p><div className="flex flex-wrap gap-2">{m.ai24.reasons.map((r) => (<span key={r.error} className="chip" dir="ltr">{r.error} x{r.n}</span>))}</div></div>)}
+        {m.ai24.reasons.length > 0 && (<div><p className="muted mb-1">{tr("أسباب الفشل / الاسترداد (24 ساعة)", "Failure / refund reasons (24 h)")}</p><div className="flex flex-wrap gap-2">{m.ai24.reasons.map((r) => (<span key={r.error} className="chip" dir="ltr" title={AI_REASON[r.error] ? tr(AI_REASON[r.error][0], AI_REASON[r.error][1]) : undefined}>{r.error} x{r.n}</span>))}</div>{m.ai24.reasons.some((r) => AI_REASON[r.error]) && <ul className="mt-2 space-y-1 text-sm text-ink-soft">{m.ai24.reasons.filter((r) => AI_REASON[r.error]).map((r) => (<li key={r.error}><span dir="ltr" className="font-bold">{r.error}</span>: {tr(AI_REASON[r.error][0], AI_REASON[r.error][1])}</li>))}</ul>}</div>)}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[320px] text-sm">
             <thead><tr className="text-xs font-extrabold text-ink-soft"><th className="py-2 text-start">{tr("اليوم", "Day")}</th><th>{tr("منجز", "Done")}</th><th>{tr("مُسترد", "Refunded")}</th><th>{tr("فاشل", "Failed")}</th></tr></thead>

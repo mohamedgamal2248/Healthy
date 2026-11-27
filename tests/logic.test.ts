@@ -1131,3 +1131,17 @@ test("quick start: a complete profile is required, credits are small and fixed, 
   assert.match(src, /p\.kyc_verified/); // credits only for verified accounts
   assert.match(src, /calories\.gte\.100/); // a 1-kcal manual entry earns nothing
 });
+
+test("telemetry records WHY a request got a 4xx (error code only), never user text, and 5xx stay separate", async () => {
+  const { recordRequest } = await import("../src/server/telemetry");
+  const { HttpError } = await import("../src/server/http");
+  assert.doesNotThrow(() => recordRequest("/api/me", "GET", 401, 5, new HttpError(401, "unauthenticated", "x", "y")));
+  assert.doesNotThrow(() => recordRequest("/api/me", "PATCH", 400, 5, new Error("weight 123456 secret text")));
+  assert.doesNotThrow(() => recordRequest("/api/x", "GET", 404, 5));
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync("src/server/telemetry.ts", "utf8");
+  assert.match(src, /\^\[a-z0-9_\]\{1,40\}\$/i); // only a short code-shaped string is kept, never a message
+  assert.doesNotMatch(src.slice(src.indexOf("status >= 400 && status < 500"), src.indexOf("status >= 500) {")), /message/);
+  const { api401 } = { api401: readFileSync("src/lib/api.ts", "utf8") };
+  assert.match(api401, /res\.status === 401 && token/); // a dead session is dropped at once
+});

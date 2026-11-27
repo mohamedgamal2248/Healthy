@@ -12,5 +12,8 @@ export const GET = route(async (req) => {
   await requireAdmin(req);
   const fresh = new URL(req.url).searchParams.has("fresh");
   if (fresh) { forget("admin-monitor"); await flushTelemetry(); } // include this instance's latest counters
-  return ok(await memo("admin-monitor", 20_000, async () => must(await db().rpc("hl_admin_monitor"))));
+  return ok(await memo("admin-monitor", 20_000, async () => {
+    const [monitor, client] = await Promise.all([db().rpc("hl_admin_monitor"), db().rpc("hl_client_errors")]);
+    return { ...(must(monitor) as object), client_errors: must(client) };
+  }));
 });
