@@ -5,6 +5,7 @@ import { addDays, weekStart } from "@/lib/dates";
 import { dailyCalories, type Activity, type Goal, type Sex } from "@/lib/nutrition";
 import { getMeal } from "./meals";
 import { MEAL_SEEDS } from "@/data/meals";
+import { SNACKS } from "@/lib/planner";
 import { adjustScan, type ScanIng, type ScanTotals, type Swap } from "@/lib/scanmath";
 
 export type FoodEntry = { id: string; name: string; name_ar?: string; name_en?: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; source: "meal" | "scan" | "manual"; estimated: boolean; /** Put into the diary from the weekly plan (until the person edits it). */ auto?: boolean; servings?: number; /** Catalogue meal id (source "meal") or saved result id (source "scan"): opens the details page. */ source_id?: string | null };
@@ -121,6 +122,12 @@ export function validPortion(p: unknown): number {
 export async function resolveEntry(a: Auth, b: { source?: string; mealId?: string; recipeId?: string; entryId?: string; portion?: number; exclude?: number[]; swap?: Swap[] }): Promise<Add> {
   const ar = a.profile.language === "ar";
   const portion = validPortion(b.portion);
+  // The plan's snacks live in the planner (not the meal catalogue): they are logged under their own id so "eaten" can be recognised.
+  if (b.source === "meal" && b.mealId && b.mealId.startsWith("snack-")) {
+    const sn = SNACKS.find((x) => x.id === b.mealId);
+    if (!sn) throw E.notFound();
+    return { name: (ar ? sn.name_ar : sn.name_en) || sn.name_en, calories: Math.round(sn.calories * portion), protein_g: r1(sn.protein_g * portion), carbs_g: null, fat_g: null, source: "meal", source_id: sn.id, servings: portion };
+  }
   if (b.source === "meal" && b.mealId) {
     const m = await getMeal(b.mealId);
     if (!m || !m.active) throw E.notFound();

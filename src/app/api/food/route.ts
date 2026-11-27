@@ -55,6 +55,7 @@ export const PATCH = route(async (req) => {
   const old = Number(row.servings) || 1;
   let upd: { calories: number; protein_g: number; carbs_g: number | null; fat_g: number | null };
   if (row.source === "meal" && row.source_id) {
+    // (a snack is resolved from the planner by the same call)
     const r = await resolveEntry(a, { source: "meal", mealId: row.source_id, portion: servings });
     upd = { calories: r.calories, protein_g: r.protein_g, carbs_g: null, fat_g: null };
   } else {

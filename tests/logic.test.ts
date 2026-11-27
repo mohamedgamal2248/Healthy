@@ -1145,3 +1145,17 @@ test("telemetry records WHY a request got a 4xx (error code only), never user te
   const { api401 } = { api401: readFileSync("src/lib/api.ts", "utf8") };
   assert.match(api401, /res\.status === 401 && token/); // a dead session is dropped at once
 });
+
+test("plan snacks can be logged as eaten (they live in the planner, not the catalogue) and are recognised again by their id", async () => {
+  const { resolveEntry } = await import("../src/server/food");
+  const { SNACKS } = await import("../src/lib/planner");
+  const a = { profile: { language: "en" } } as never;
+  const s = SNACKS[0];
+  const one = await resolveEntry(a, { source: "meal", mealId: s.id, portion: 1 });
+  assert.equal(one.source, "meal"); assert.equal(one.source_id, s.id); assert.equal(one.calories, s.calories); assert.equal(one.name, s.name_en);
+  const big = await resolveEntry(a, { source: "meal", mealId: s.id, portion: 1.5 });
+  assert.equal(big.calories, Math.round(s.calories * 1.5)); assert.equal(big.servings, 1.5);
+  const ar = await resolveEntry({ profile: { language: "ar" } } as never, { source: "meal", mealId: s.id });
+  assert.equal(ar.name, s.name_ar);
+  await assert.rejects(resolveEntry(a, { source: "meal", mealId: "snack-does-not-exist" }));
+});

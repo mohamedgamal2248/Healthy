@@ -133,7 +133,7 @@ function Inner() {
             <li key={e.id} className="card-row !min-h-16">
               {(() => {
                 // Catalogue meals open the meal page; photo analyses and AI recipes open the saved result. Manual entries have no page.
-                const href = e.source_id ? (e.source === "meal" ? `/meals/${e.source_id}` : e.source === "scan" ? `/chef?recipe=${e.source_id}` : null) : null;
+                const href = e.source_id ? (e.source === "meal" ? (e.source_id.startsWith("snack-") ? null : `/meals/${e.source_id}`) : e.source === "scan" ? `/chef?recipe=${e.source_id}` : null) : null;
                 const inner = (
                   <>
                     <FoodTile source={e.source} size={44} />
