@@ -33,7 +33,7 @@ export async function quickstartState(username: string): Promise<QsState> {
 
   const done: Record<QuickstartStep, boolean> = { profile: profileComplete(p), meal: granted.has("meal"), reminder: !!p.reminder_set_at };
   if (!done.meal) {
-    const m = must(await db().from("hl_food_log").select("id").eq("username", username).or("source.in.(meal,scan,recipe),calories.gte.100").limit(1)) as unknown[];
+    const m = must(await db().from("hl_food_log").select("id").eq("username", username).eq("auto", false).or("source.in.(meal,scan,recipe),calories.gte.100").limit(1)) as unknown[];
     done.meal = m.length > 0;
   }
   const newly: QuickstartStep[] = [];

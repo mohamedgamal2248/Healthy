@@ -31,6 +31,7 @@ export type Profile = {
   last_seen_at: string | null;
   notify_news: boolean;
   notify_events: boolean;
+  plan_autolog: boolean;
   deleted_at: string | null;
   created_at: string;
   timezone_changed_at: string | null;

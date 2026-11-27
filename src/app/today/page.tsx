@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useGet } from "@/lib/useGet";
@@ -19,7 +19,7 @@ type RecentFood = { id: string; name: string; name_ar?: string; name_en?: string
 
 type Today = {
   date: string; challenges: ChallengeItem[]; swapUsed: boolean; streak: { current: number; longest: number; total: number; frozen?: boolean; freezeReady?: boolean }; completedToday: number;
-  meals: { breakfast: (MealRow & { servings?: number }) | null; lunch: (MealRow & { servings?: number }) | null; dinner: (MealRow & { servings?: number }) | null }; mealsFromPlan?: boolean; badges: { badge_key: string }[]; favourites: string[];
+  meals: { breakfast: (MealRow & { servings?: number }) | null; lunch: (MealRow & { servings?: number }) | null; dinner: (MealRow & { servings?: number }) | null }; mealsFromPlan?: boolean; snacks?: { id: string | null; name_ar: string; name_en: string; servings: number; calories: number; protein_g: number }[]; autolog?: boolean; badges: { badge_key: string }[]; favourites: string[];
   reminder: "none" | "morning" | "inactive"; balances: Balances | null; profileReady: boolean;
   starter: { rewarded: boolean; reward: number };
   food?: { calories: number; target: number | null; entries: number; totals: { calories: number; protein_g: number; carbs_g: number; fat_g: number }; targets: { protein: number; carbs: number; fat: number } | null; recent: RecentFood[] };
@@ -63,6 +63,15 @@ function RecentMeals({ items, onRepeat, busy }: { items: RecentFood[]; onRepeat:
 function TodayInner() {
   const { tr, toast, errMsg, lang, me } = useApp();
   const { data: d, setData: setD, reload: load } = useGet<Today>("/today", (e) => toast(errMsg(e), "err"));
+  // Once a day the plan's meals are put into the diary, so the counters below follow the plan (the person can edit or remove them).
+  const autologRan = useRef(false);
+  const wantsAutolog = !!d?.autolog;
+  useEffect(() => {
+    if (!wantsAutolog || autologRan.current) return;
+    autologRan.current = true;
+    api<{ added: number }>("/food/autolog", { body: {} }).then((r) => { if (r.added > 0) { load(); toast(tr("أضفنا وجبات خطتك اليوم إلى يومياتك. عدّلها أو احذفها من صفحة يومي.", "We added today's plan meals to your diary. Edit or remove them on My day."), "ok"); } }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantsAutolog]);
   const [busy, setBusy] = useState(false);
   const [repeating, setRepeating] = useState<string | null>(null);
   const router = useRouter();
@@ -126,7 +135,7 @@ function TodayInner() {
       {d.food && (
         <div className="space-y-2.5">
           <CalorieCard totals={d.food.totals} target={d.food.target} entries={d.food.entries} onAdd={() => router.push("/diary?add=meals")} />
-          {d.food.entries > 0 && <MacroRings totals={d.food.totals} targets={d.food.targets} estimated />}
+          {d.food.entries > 0 && <Link href="/diary" aria-label={tr("افتح يومي", "Open My day")} className="block"><MacroRings totals={d.food.totals} targets={d.food.targets} estimated /></Link>}
         </div>
       )}
 
@@ -174,6 +183,20 @@ function TodayInner() {
             <div className="grid gap-4 md:grid-cols-3">
               {slots.map(([k, label]) => d.meals[k] ? <MealCard key={k} meal={d.meals[k]!} label={d.mealsFromPlan && d.meals[k]!.servings ? `${label} · ${tr("حصة", "portion")} ×${d.meals[k]!.servings}` : label} fav={d.favourites.includes(d.meals[k]!.id)} onFav={fav} /> : null)}
             </div>
+            {d.snacks && d.snacks.length > 0 && (
+              <div className="mt-3 rounded-2xl border border-line bg-white px-3 py-2">
+                <p className="text-xs font-extrabold text-ink-soft">{tr("سناك اليوم", "Today's snacks")}</p>
+                <ul className="divide-y divide-line">
+                  {d.snacks.map((s, i) => (
+                    <li key={`${s.id ?? s.name_en}-${i}`} className="flex items-center gap-2 py-1.5 text-sm">
+                      <Icon name="leaf" size={15} className="shrink-0 text-brand-600" />
+                      <span className="min-w-0 flex-1 truncate font-bold">{lang === "ar" ? s.name_ar : s.name_en}</span>
+                      <span className="shrink-0 text-xs font-bold tabular-nums text-ink-soft">{s.calories} {tr("سعرة", "kcal")} · {Math.round(s.protein_g)} {tr("جم", "g")}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
 
           {d.community && (

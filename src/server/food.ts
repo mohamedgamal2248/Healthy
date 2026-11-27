@@ -7,7 +7,7 @@ import { getMeal } from "./meals";
 import { MEAL_SEEDS } from "@/data/meals";
 import { adjustScan, type ScanIng, type ScanTotals, type Swap } from "@/lib/scanmath";
 
-export type FoodEntry = { id: string; name: string; name_ar?: string; name_en?: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; source: "meal" | "scan" | "manual"; estimated: boolean; /** Catalogue meal id (source "meal") or saved result id (source "scan"): opens the details page. */ source_id?: string | null };
+export type FoodEntry = { id: string; name: string; name_ar?: string; name_en?: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; source: "meal" | "scan" | "manual"; estimated: boolean; /** Put into the diary from the weekly plan (until the person edits it). */ auto?: boolean; servings?: number; /** Catalogue meal id (source "meal") or saved result id (source "scan"): opens the details page. */ source_id?: string | null };
 export const MAX_ENTRIES_PER_DAY = 40;
 /** Daily macro split of the calorie target (energy share): protein 25%, carbs 50%, fat 25%. */
 export const MACRO_SPLIT = { protein: 0.25, carbs: 0.5, fat: 0.25 } as const;
@@ -41,8 +41,8 @@ export function targetFrom(a: Auth, planTarget: number | null): number | null {
   return dailyCalories({ weightKg: Number(p.weight_kg), heightCm: Number(p.height_cm), age: p.age, sex: p.sex as Sex, goal: p.goal as Goal, activity: p.activity as Activity, conditions: p.conditions });
 }
 
-export type Row = { id: string; name: string; calories: number; protein_g: number | string; carbs_g: number | string | null; fat_g: number | string | null; source: FoodEntry["source"]; source_id?: string | null; created_at?: string; date?: string };
-const COLS = "id,name,calories,protein_g,carbs_g,fat_g,source,source_id,created_at,date";
+export type Row = { id: string; name: string; calories: number; protein_g: number | string; carbs_g: number | string | null; fat_g: number | string | null; source: FoodEntry["source"]; source_id?: string | null; created_at?: string; date?: string; auto?: boolean; servings?: number | string };
+const COLS = "id,name,calories,protein_g,carbs_g,fat_g,source,source_id,created_at,date,auto,servings";
 
 // Catalogue names in both languages: a meal logged in English still reads in Arabic after the language is switched.
 const MEAL_NAMES = new Map(MEAL_SEEDS.map((m) => [m.id, { ar: m.name_ar, en: m.name_en }]));
@@ -52,7 +52,7 @@ export function toEntry(r: Row): FoodEntry {
   const known = r.carbs_g !== null && r.fat_g !== null;
   const est = known ? { carbs_g: Number(r.carbs_g), fat_g: Number(r.fat_g) } : estimateCarbsFat(r.calories, protein);
   const names = r.source === "meal" && r.source_id ? MEAL_NAMES.get(r.source_id) : undefined;
-  return { id: r.id, name: r.name, ...(names ? { name_ar: names.ar, name_en: names.en } : {}), calories: r.calories, protein_g: protein, ...est, source: r.source, estimated: !known, source_id: r.source_id ?? null };
+  return { id: r.id, name: r.name, ...(names ? { name_ar: names.ar, name_en: names.en } : {}), calories: r.calories, protein_g: protein, ...est, source: r.source, estimated: !known, source_id: r.source_id ?? null, ...(r.auto ? { auto: true } : {}), ...(r.servings !== undefined ? { servings: Number(r.servings) } : {}) };
 }
 
 export async function foodDay(a: Auth) {
@@ -106,7 +106,7 @@ export async function recentFoods(a: Auth, limit = 6): Promise<(FoodEntry & { da
   return distinctRecent(rows, a.today, limit);
 }
 
-type Add = { name: string; calories: number; protein_g: number; carbs_g: number | null; fat_g: number | null; source: FoodEntry["source"]; source_id: string | null };
+type Add = { name: string; calories: number; protein_g: number; carbs_g: number | null; fat_g: number | null; source: FoodEntry["source"]; source_id: string | null; servings?: number };
 type ScanLite = { dish_name: string; dish_name_local?: string; ingredients?: ScanIng[]; totals: ScanTotals };
 export { adjustScan };
 
@@ -144,9 +144,9 @@ export async function resolveEntry(a: Auth, b: { source?: string; mealId?: strin
   }
   if (b.source === "repeat" && b.entryId) {
     // Copy one of the user's OWN recent entries (last 30 days) as it was logged.
-    const e = must(await db().from("hl_food_log").select("name,calories,protein_g,carbs_g,fat_g,source,source_id").eq("id", b.entryId).eq("username", a.username).gte("date", addDays(a.today, -30)).maybeSingle()) as { name: string; calories: number; protein_g: number; carbs_g: number | null; fat_g: number | null; source: FoodEntry["source"]; source_id: string | null } | null;
+    const e = must(await db().from("hl_food_log").select("name,calories,protein_g,carbs_g,fat_g,source,source_id,servings").eq("id", b.entryId).eq("username", a.username).gte("date", addDays(a.today, -30)).maybeSingle()) as { name: string; calories: number; protein_g: number; carbs_g: number | null; fat_g: number | null; source: FoodEntry["source"]; source_id: string | null } | null;
     if (!e) throw E.notFound();
-    return { name: e.name, calories: e.calories, protein_g: Number(e.protein_g), carbs_g: e.carbs_g === null ? null : Number(e.carbs_g), fat_g: e.fat_g === null ? null : Number(e.fat_g), source: e.source, source_id: e.source_id };
+    return { name: e.name, calories: e.calories, protein_g: Number(e.protein_g), carbs_g: e.carbs_g === null ? null : Number(e.carbs_g), fat_g: e.fat_g === null ? null : Number(e.fat_g), source: e.source, source_id: e.source_id, servings: Number((e as { servings?: number | string }).servings ?? 1) };
   }
   throw E.bad();
 }

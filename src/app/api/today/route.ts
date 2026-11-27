@@ -3,7 +3,8 @@ import { ok, route } from "@/server/http";
 import { requireUser } from "@/server/auth";
 import { ensureToday, reminderFrom } from "@/server/challenges";
 import { effectiveStreak, freezeAvailable, isFrozen } from "@/lib/streak";
-import { mealsFromPlanDay, mealsOfTheDay, type PlanMealSlot } from "@/server/meals";
+import { mealsFromPlanDay, mealsOfTheDay } from "@/server/meals";
+import { planToday } from "@/server/autolog";
 import { balancesFrom } from "@/server/credits";
 import { currentGroup, groupCounts } from "@/server/community";
 import { TRIAL_CREDITS } from "@/config/pricing";
@@ -30,11 +31,13 @@ export const GET = route(async (req) => {
     timed(ensureToday(a), "challenges", tm),
     timed(mealsOfTheDay(a.today), "meals", tm),
     timed(Promise.resolve(db().rpc("hl_today_bundle", { p_user: a.username, p_today: a.today, p_week: weekStart(a.today), p_kyc: kyc })).then((r) => must(r) as Bundle), "bundle", tm),
-    timed(Promise.resolve(db().rpc("hl_plan_day", { p_user: a.username, p_week: weekStart(a.today), p_date: a.today })).then((r) => (r.error ? null : (r.data as { slots: PlanMealSlot[]; total_kcal: number } | null))), "plan", tm),
+    timed(planToday(a), "plan", tm),
     timed(kyc ? currentGroup(a.today).then(async (g) => ({ g, counts: await groupCounts(g, a.today) })).catch(() => null) : Promise.resolve(null), "group", tm),
   ]);
   // The meals shown are the ones in the person's own weekly plan for today; without a plan (or for a slot an AI recipe fills) the daily rotation is used.
-  const fromPlan = planDay && Array.isArray(planDay.slots) ? await mealsFromPlanDay(planDay.slots) : null;
+  const dayPlan = planDay.day;
+  const fromPlan = dayPlan ? await mealsFromPlanDay(dayPlan.slots) : null;
+  const snacks = (dayPlan?.slots ?? []).filter((s) => s.type === "snack").map((s) => ({ id: s.meal_id ?? null, name_ar: s.name_ar ?? "", name_en: s.name_en ?? "", servings: s.servings, calories: s.calories, protein_g: s.protein_g }));
   const meals = fromPlan ? { breakfast: fromPlan.breakfast ?? rotation.breakfast, lunch: fromPlan.lunch ?? rotation.lunch, dinner: fromPlan.dinner ?? rotation.dinner } : rotation;
   const st = bundle.streak;
   const streak = { current: st?.current_streak ?? 0, longest: st?.longest_streak ?? 0, last: st?.last_completed_date ?? null, total: st?.total_completed ?? 0, freezeUsed: st?.freeze_used_on ?? null };
@@ -58,6 +61,9 @@ export const GET = route(async (req) => {
     completedToday: rows.filter((r) => r.status === "completed").length,
     meals,
     mealsFromPlan: !!fromPlan,
+    snacks,
+    // true once per day: the page then asks the server to put the plan's meals into the diary
+    autolog: !!dayPlan && !planDay.filled && a.profile.plan_autolog !== false && dayPlan.slots.length > 0,
     badges,
     favourites: favs,
     reminder,

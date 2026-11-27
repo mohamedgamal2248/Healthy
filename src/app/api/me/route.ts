@@ -45,6 +45,7 @@ const Patch = z.object({
   notify_pi: z.boolean().optional(),
   notify_news: z.boolean().optional(),
   notify_events: z.boolean().optional(),
+  plan_autolog: z.boolean().optional(),
   reminder_hour: z.number().int().min(0).max(23).optional(),
   accept_disclaimer: z.boolean().optional(),
 });

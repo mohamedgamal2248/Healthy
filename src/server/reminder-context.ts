@@ -19,15 +19,15 @@ export async function daySnapshots(people: Who[]): Promise<Map<string, DaySnapsh
     const dates = [...new Set(chunk.map((p) => p.local_date))];
     const weeks = [...new Set(chunk.map((p) => weekStart(p.local_date)))];
     const [food, plans, profiles] = await Promise.all([
-      db().from("hl_food_log").select("username,date,calories,protein_g").in("username", names).in("date", dates).limit(5000),
+      db().from("hl_food_log").select("username,date,calories,protein_g,auto").in("username", names).in("date", dates).limit(5000),
       db().from("hl_diet_plans").select("username,week_start,daily_calorie_target").in("username", names).in("week_start", weeks),
       db().from("hl_profiles").select("username,age,sex,weight_kg,height_cm,goal,activity,conditions").in("username", names),
     ]);
     const eaten = new Map<string, { kcal: number; prot: number; n: number }>();
-    for (const r of must(food) as { username: string; date: string; calories: number; protein_g: number | string }[]) {
+    for (const r of must(food) as { username: string; date: string; calories: number; protein_g: number | string; auto: boolean }[]) {
       const key = `${r.username}|${r.date}`;
       const e = eaten.get(key) ?? { kcal: 0, prot: 0, n: 0 };
-      e.kcal += Number(r.calories); e.prot += Number(r.protein_g); e.n++;
+      e.kcal += Number(r.calories); e.prot += Number(r.protein_g); if (!r.auto) e.n++; // plan meals put in automatically do not count as "logged"
       eaten.set(key, e);
     }
     const planTarget = new Map((must(plans) as { username: string; week_start: string; daily_calorie_target: number }[]).map((p) => [`${p.username}|${p.week_start}`, p.daily_calorie_target]));

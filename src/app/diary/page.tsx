@@ -10,7 +10,7 @@ import { Icon } from "@/components/Icon";
 import { CalorieCard, FoodTile, MacroRings } from "@/components/Rings";
 import type { MealRow } from "@/server/meals";
 
-type Entry = { id: string; name: string; name_ar?: string; name_en?: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; source: "meal" | "scan" | "manual"; source_id?: string | null; estimated: boolean };
+type Entry = { id: string; name: string; name_ar?: string; name_en?: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; source: "meal" | "scan" | "manual"; source_id?: string | null; estimated: boolean; auto?: boolean; servings?: number };
 type Day = { date: string; entries: Entry[]; totals: { calories: number; protein_g: number; carbs_g: number; fat_g: number }; target: number | null; targets: { protein: number; carbs: number; fat: number } | null; recent?: (Entry & { date: string })[] };
 type Tab = "meals" | "recent" | "manual";
 
@@ -104,6 +104,12 @@ function Inner() {
   }, []);
   if (!d) return <PageSkeleton />;
   const openAdd = (t: Tab) => { setTab(t); setOpen(true); };
+  // Portion of an entry (the plan's meals can be made bigger or smaller): quarter steps from 0.5 to 3.
+  const setPortion = async (id: string, servings: number) => {
+    if (servings < 0.5 || servings > 3) return;
+    setBusy(id);
+    try { setData(await api<Day>("/food", { method: "PATCH", body: { id, servings } })); } catch (e) { toast(errMsg(e), "err"); reload(); } finally { setBusy(null); }
+  };
   const remove = async (id: string) => {
     setBusy(id);
     try { setData(await api<Day>("/food", { method: "DELETE", body: { id } })); } catch (e) { toast(errMsg(e), "err"); reload(); } finally { setBusy(null); }
@@ -132,7 +138,7 @@ function Inner() {
                   <>
                     <FoodTile source={e.source} size={44} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-extrabold">{(lang === "ar" ? e.name_ar : e.name_en) ?? e.name}</p>
+                      <p className="truncate font-extrabold">{(lang === "ar" ? e.name_ar : e.name_en) ?? e.name}{e.auto && <span className="ms-2 rounded-full bg-brand-50 px-2 py-0.5 align-middle text-[11px] font-bold text-brand-700">{tr("من خطتك", "From your plan")}</span>}</p>
                       <p className="text-xs font-bold text-ink-soft tabular-nums">{e.calories} {tr("سعرة", "kcal")} · {tr("ب", "P")} {Math.round(e.protein_g)} · {tr("ك", "C")} {Math.round(e.carbs_g)} · {tr("د", "F")} {Math.round(e.fat_g)}{e.estimated ? ` · ${tr("تقديري", "est.")}` : ""}</p>
                     </div>
                   </>
@@ -141,6 +147,11 @@ function Inner() {
                   ? <Link href={href} className="flex min-w-0 flex-1 items-center gap-3" aria-label={tr(`تفاصيل ${e.name}`, `Details of ${e.name}`)}>{inner}</Link>
                   : <div className="flex min-w-0 flex-1 items-center gap-3">{inner}</div>;
               })()}
+              <span className="flex shrink-0 items-center" role="group" aria-label={tr("الحصة", "Portion")}>
+                <button className="btn-ghost btn-sm !px-2" onClick={() => setPortion(e.id, (e.servings ?? 1) - 0.25)} disabled={busy === e.id || (e.servings ?? 1) <= 0.5} aria-label={tr("حصة أقل", "Smaller portion")}>-</button>
+                <span className="min-w-9 text-center text-xs font-extrabold tabular-nums" dir="ltr">x{e.servings ?? 1}</span>
+                <button className="btn-ghost btn-sm !px-2" onClick={() => setPortion(e.id, (e.servings ?? 1) + 0.25)} disabled={busy === e.id || (e.servings ?? 1) >= 3} aria-label={tr("حصة أكبر", "Larger portion")}>+</button>
+              </span>
               <button className="btn-ghost btn-sm !px-2.5" onClick={() => remove(e.id)} disabled={busy === e.id} aria-label={tr(`حذف ${e.name}`, `Delete ${e.name}`)}>{busy === e.id ? <Spinner size={16} /> : <Icon name="trash" size={18} />}</button>
             </li>
           ))}

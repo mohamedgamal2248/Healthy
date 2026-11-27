@@ -181,3 +181,21 @@ test("plan day: only today's day of this week's plan is returned", async () => {
   assert.equal(await day("2026-11-28", "2026-11-21"), null); // another week
   assert.equal(await day("2026-11-28", "2026-11-28", "bob"), null); // another person
 });
+
+test("plan autolog: a day is claimed once, and the plan day reports whether it was already filled", async () => {
+  const pg = await db();
+  for (const f of ["0022_plan_day", "0023_plan_autolog"]) await pg.exec(readFileSync(`supabase/migrations/${f}.sql`, "utf8").replace(/revoke all on [\s\S]*?;/g, "").replace(/grant execute on [\s\S]*?;/g, ""));
+  const plan = { days: [{ date: "2026-11-28", slots: [{ type: "breakfast", source: "catalogue", meal_id: "m1", servings: 1.5, calories: 585, protein_g: 26 }], total_kcal: 585 }], notes: {} };
+  await pg.query("insert into hl_diet_plans (username, week_start, daily_calorie_target, daily_water_target, adjustment_kcal, plan) values ('alice','2026-11-28',2830,2000,0,$1)", [JSON.stringify(plan)]);
+  const today = () => pg.query<{ r: { day: { date: string } | null; filled: boolean } }>("select hl_plan_today('alice','2026-11-28'::date,'2026-11-28') r").then((x) => x.rows[0].r);
+  assert.equal((await today()).filled, false);
+  assert.equal((await today()).day?.date, "2026-11-28");
+  const claim = () => pg.query<{ c: boolean }>("select hl_autolog_claim('alice','2026-11-28') c").then((x) => x.rows[0].c);
+  assert.equal(await claim(), true);
+  assert.equal(await claim(), false); // a second call (or a second device) adds nothing
+  assert.equal((await today()).filled, true);
+  await pg.query("insert into hl_food_log (username, date, name, calories, protein_g, source, auto, servings) values ('alice','2026-11-28','Hummus',585,26,'meal',true,1.5)");
+  const r = (await pg.query<{ auto: boolean; servings: string }>("select auto, servings from hl_food_log where username='alice'")).rows[0];
+  assert.equal(r.auto, true); assert.equal(Number(r.servings), 1.5);
+  await assert.rejects(pg.query("insert into hl_food_log (username, date, name, calories, protein_g, source, servings) values ('alice','2026-11-28','x',1,1,'meal',9)")); // portion limits are enforced by the database
+});
