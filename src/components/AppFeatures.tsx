@@ -22,6 +22,14 @@ export function AppFeatures() {
     setPiBusy(true);
     try { await api("/me", { method: "PATCH", body: { notify_pi: !piOn } }); await refresh(); } catch (e) { toast(errMsg(e), "err"); } finally { setPiBusy(false); }
   };
+  // Separate switches per kind of notification: announcements and celebration notices can be turned off while the daily reminder stays on.
+  const newsOn = me?.profile.notify_news !== false;
+  const eventsOn = me?.profile.notify_events !== false;
+  const [kindBusy, setKindBusy] = useState<string | null>(null);
+  const toggleKind = async (field: "notify_news" | "notify_events", on: boolean) => {
+    setKindBusy(field);
+    try { await api("/me", { method: "PATCH", body: { [field]: !on } }); await refresh(); } catch (e) { toast(errMsg(e), "err"); } finally { setKindBusy(null); }
+  };
   const { canPrompt, standalone, ios } = useInstall();
   const [supported, setSupported] = useState(false);
   const [on, setOn] = useState(false);
@@ -86,6 +94,14 @@ export function AppFeatures() {
         <select className="field !w-auto !min-h-11" value={hour} disabled={hourBusy} onChange={(e) => setHour(Number(e.target.value))} aria-label={tr("وقت التذكير", "Reminder time")}>
           {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>)}
         </select>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0"><p className="font-extrabold">{tr("أخبار وعروض Healthy", "Healthy news and offers")}</p><p className="muted">{tr("إعلانات قليلة عن ميزات جديدة. تصل على Pi وعلى أجهزتك.", "Occasional announcements about new features. Sent to Pi and your devices.")}</p></div>
+        <button className={newsOn ? "btn-ghost btn-sm" : "btn-primary btn-sm"} disabled={kindBusy === "notify_news"} onClick={() => toggleKind("notify_news", newsOn)} aria-pressed={newsOn}>{kindBusy === "notify_news" ? <Spinner size={16} /> : null}{newsOn ? tr("إيقاف", "Turn off") : tr("تفعيل", "Turn on")}</button>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0"><p className="font-extrabold">{tr("تهنئة بالإنجازات", "Achievement notices")}</p><p className="muted">{tr("إشعار عند وصول سلسلتك لرقم مميز أو إنهاء تحدي الأسبوع.", "A notice when your streak reaches a milestone or you finish the weekly challenge.")}</p></div>
+        <button className={eventsOn ? "btn-ghost btn-sm" : "btn-primary btn-sm"} disabled={kindBusy === "notify_events"} onClick={() => toggleKind("notify_events", eventsOn)} aria-pressed={eventsOn}>{kindBusy === "notify_events" ? <Spinner size={16} /> : null}{eventsOn ? tr("إيقاف", "Turn off") : tr("تفعيل", "Turn on")}</button>
       </div>
       {supported ? (
         <div className="flex items-center justify-between gap-3">

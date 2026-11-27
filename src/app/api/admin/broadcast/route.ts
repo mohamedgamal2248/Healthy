@@ -4,105 +4,89 @@ import { ok, readJson, route, E, HttpError } from "@/server/http";
 import { requireAdmin } from "@/server/auth";
 import { rateLimit } from "@/server/ratelimit";
 import { audit } from "@/server/audit";
-import { NOTIFY_BATCH, sendPiNotifications, type PiNotification } from "@/server/pi-notify";
-import { dropSubscription, pushConfigured, sendPush, type Sub } from "@/server/push";
+import { pushConfigured } from "@/server/push";
+import { runBroadcast, textFor } from "@/server/broadcast";
 
 export const maxDuration = 120;
 
-const AUDIENCES = ["all", "inactive7", "active7", "ar", "en"] as const;
 const ROUTES = ["/today", "/plan", "/meals", "/progress", "/community", "/diary"] as const;
-const Body = z.object({
-  action: z.enum(["preview", "send"]),
-  id: z.string().uuid().optional(),
-  audience: z.enum(AUDIENCES),
-  subroute: z.enum(ROUTES).default("/today"),
-  title_ar: z.string().trim().max(60).default(""),
-  body_ar: z.string().trim().max(160).default(""),
-  title_en: z.string().trim().max(60).default(""),
-  body_en: z.string().trim().max(160).default(""),
-});
-type Aud = { username: string; pi_uid: string | null; language: string | null; notify_pi: boolean };
+const AUDIENCE = z.string().regex(/^(all|active7|inactive3|inactive7|ar|en|paying|unpaid|country:[A-Za-z]{2})$/);
+const Text = { title_ar: z.string().trim().max(60).default(""), body_ar: z.string().trim().max(160).default(""), title_en: z.string().trim().max(60).default(""), body_en: z.string().trim().max(160).default("") };
+const Body = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("preview"), audience: AUDIENCE, subroute: z.enum(ROUTES).default("/today"), ...Text }),
+  z.object({
+    action: z.literal("send"), id: z.string().uuid(), audience: AUDIENCE, subroute: z.enum(ROUTES).default("/today"), ...Text,
+    mode: z.enum(["now", "at", "local"]).default("now"),
+    send_at: z.string().datetime().optional(),
+    local_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    local_hour: z.number().int().min(0).max(23).optional(),
+  }),
+  z.object({ action: z.literal("cancel"), id: z.string().uuid() }),
+]);
 
-/** Text for one person: their own language when written, otherwise the other one. */
-function textFor(b: z.infer<typeof Body>, lang: string | null): { title: string; body: string } | null {
-  const ar = b.title_ar && b.body_ar ? { title: b.title_ar, body: b.body_ar } : null;
-  const en = b.title_en && b.body_en ? { title: b.title_en, body: b.body_en } : null;
-  return (lang === "ar" ? ar ?? en : en ?? ar);
-}
-
-async function audience(kind: (typeof AUDIENCES)[number], today: string) {
-  return must(await db().rpc("hl_broadcast_audience", { p_audience: kind, p_today: today })) as Aud[];
-}
-
-/** History of the last announcements. */
+/** Recent announcements with delivery and open numbers, plus how every kind of notification performed over the last 14 days. */
 export const GET = route(async (req) => {
   await requireAdmin(req);
-  const rows = must(await db().from("hl_broadcasts").select("id,audience,title_ar,body_ar,title_en,body_en,recipients,pi_requested,pi_delivered,push_devices,push_sent,status,created_at").order("created_at", { ascending: false }).limit(15));
-  return ok({ broadcasts: rows });
+  const [broadcasts, summary] = await Promise.all([db().rpc("hl_broadcast_history"), db().rpc("hl_notif_summary", { p_days: 14 })]);
+  return ok({ broadcasts: must(broadcasts), summary: must(summary), countries: must(await db().from("hl_profiles").select("country").not("country", "is", null).is("deleted_at", null).limit(5000)).map((r: { country: string }) => r.country).filter((c: string, i: number, a: string[]) => a.indexOf(c) === i).sort() });
 });
 
 /**
- * Owner announcement to many people at once. "preview" only counts who would receive it. "send" is idempotent on the id the
- * page generated (a second click or a retry is refused), is limited to a few per day, and records the outcome.
- * Pi notifications respect each person's "notify_pi" choice; Web Push goes only to devices that subscribed themselves.
+ * Owner announcement. "preview" counts who would receive it, "send" sends now or schedules it (one time, or a chosen hour in each
+ * person's own time zone), "cancel" stops a scheduled one. Sending is idempotent on the id the page generated, limited to a few
+ * per day, and only reaches people who allow announcements.
  */
 export const POST = route(async (req) => {
   const a = await requireAdmin(req);
   const parsed = Body.safeParse(await readJson(req));
   if (!parsed.success) throw E.bad("اكتب العنوان والنص بلغة واحدة على الأقل.", "Write a title and message in at least one language.");
   const b = parsed.data;
-  if (!textFor(b, "ar") && !textFor(b, "en")) throw E.bad("اكتب العنوان والنص بلغة واحدة على الأقل.", "Write a title and message in at least one language.");
 
-  const people = await audience(b.audience, a.today);
-  const piTargets = people.filter((p) => p.notify_pi && p.pi_uid && textFor(b, p.language));
-  const names = people.filter((p) => textFor(b, p.language)).map((p) => p.username);
-  let devices = 0;
+  if (b.action === "cancel") {
+    const r = must(await db().from("hl_broadcasts").update({ status: "cancelled", finished_at: new Date().toISOString() }).eq("id", b.id).eq("status", "scheduled").select("id")) as { id: string }[];
+    if (!r.length) throw E.bad("لا يمكن إلغاء هذا الإرسال.", "This announcement cannot be cancelled.");
+    await audit(a.username, "broadcast_cancel", b.id);
+    return ok({ cancelled: true });
+  }
+
+  if (!textFor(b, "ar") && !textFor(b, "en")) throw E.bad("اكتب العنوان والنص بلغة واحدة على الأقل.", "Write a title and message in at least one language.");
+  const people = must(await db().rpc("hl_broadcast_audience", { p_audience: b.audience, p_today: a.today })) as { username: string; pi_uid: string | null; language: string | null; notify_pi: boolean }[];
+  const reach = people.filter((p) => textFor(b, p.language));
+  const piTargets = reach.filter((p) => p.notify_pi && p.pi_uid);
+
   if (b.action === "preview") {
-    if (pushConfigured() && names.length) {
+    let devices = 0;
+    if (pushConfigured() && reach.length) {
+      const names = reach.map((p) => p.username);
       for (let k = 0; k < names.length; k += 200) {
         const { count } = await db().from("hl_push_subscriptions").select("endpoint", { count: "exact", head: true }).in("username", names.slice(k, k + 200));
         devices += count ?? 0;
       }
     }
-    return ok({ people: people.length, pi: piTargets.length, devices, truncated: people.length >= 5000 });
+    return ok({ people: reach.length, pi: piTargets.length, devices, truncated: people.length >= 5000 });
   }
 
-  if (!b.id) throw E.bad();
-  await rateLimit("admin-broadcast", a.username, 5, 86400);
-  const ins = await db().from("hl_broadcasts").insert({ id: b.id, admin: a.username, audience: b.audience, subroute: b.subroute, title_ar: b.title_ar || null, body_ar: b.body_ar || null, title_en: b.title_en || null, body_en: b.body_en || null, recipients: names.length });
+  await rateLimit("admin-broadcast", a.username, 8, 86400);
+  const now = Date.now();
+  if (b.mode === "at") {
+    const t = b.send_at ? Date.parse(b.send_at) : NaN;
+    if (!(t > now - 60_000) || t > now + 30 * 86400_000) throw E.bad("اختر وقتًا في المستقبل خلال 30 يومًا.", "Pick a time in the future, within 30 days.");
+  }
+  if (b.mode === "local") {
+    const t = b.local_date ? Date.parse(`${b.local_date}T00:00:00Z`) : NaN;
+    if (!(t > now - 2 * 86400_000) || t > now + 30 * 86400_000 || b.local_hour === undefined) throw E.bad("اختر تاريخًا وساعة صحيحين خلال 30 يومًا.", "Pick a valid date and hour within 30 days.");
+  }
+  const ins = await db().from("hl_broadcasts").insert({
+    id: b.id, admin: a.username, audience: b.audience, subroute: b.subroute, title_ar: b.title_ar || null, body_ar: b.body_ar || null, title_en: b.title_en || null, body_en: b.body_en || null,
+    mode: b.mode, send_at: b.mode === "at" ? b.send_at : null, local_date: b.mode === "local" ? b.local_date : null, local_hour: b.mode === "local" ? b.local_hour : null,
+    status: b.mode === "now" ? "sending" : "scheduled",
+  });
   if (ins.error) {
     if (ins.error.code === "23505") throw new HttpError(409, "already_sent", "هذا الإشعار أُرسل من قبل.", "This announcement was already sent.");
     throw new Error(ins.error.message);
   }
-
-  const out = { pi_requested: 0, pi_delivered: 0, push_devices: 0, push_sent: 0, push_removed: 0 };
-  try {
-    for (let k = 0; k < piTargets.length; k += NOTIFY_BATCH) {
-      const items: PiNotification[] = piTargets.slice(k, k + NOTIFY_BATCH).map((p) => ({ user_uid: p.pi_uid!, ...textFor(b, p.language)!, subroute: b.subroute }));
-      const r = await sendPiNotifications(items);
-      out.pi_requested += r.requested; out.pi_delivered += r.delivered;
-    }
-    if (pushConfigured()) {
-      const byUser = new Map(people.map((p) => [p.username, p]));
-      for (let k = 0; k < names.length; k += 200) {
-        const subs = must(await db().from("hl_push_subscriptions").select("endpoint,p256dh,auth,username").in("username", names.slice(k, k + 200))) as (Sub & { username: string })[];
-        out.push_devices += subs.length;
-        for (let j = 0; j < subs.length; j += 10) {
-          await Promise.all(subs.slice(j, j + 10).map(async (s) => {
-            const t = textFor(b, byUser.get(s.username)?.language ?? null);
-            if (!t) return;
-            const r = await sendPush(s, t, { urgency: "normal" });
-            if (r === "ok") out.push_sent++;
-            else if (r === "gone") { await dropSubscription(s.endpoint); out.push_removed++; }
-          }));
-        }
-      }
-    }
-    await db().from("hl_broadcasts").update({ pi_requested: out.pi_requested, pi_delivered: out.pi_delivered, push_devices: out.push_devices, push_sent: out.push_sent, status: "done", finished_at: new Date().toISOString() }).eq("id", b.id);
-  } catch (e) {
-    await db().from("hl_broadcasts").update({ status: "failed", finished_at: new Date().toISOString() }).eq("id", b.id);
-    throw e;
-  }
-  await audit(a.username, "broadcast", b.audience, { id: b.id, recipients: names.length, pi: out.pi_delivered, push: out.push_sent });
-  return ok(out);
+  await audit(a.username, b.mode === "now" ? "broadcast" : "broadcast_schedule", b.audience, { id: b.id, mode: b.mode, to: reach.length });
+  if (b.mode !== "now") return ok({ scheduled: true, people: reach.length });
+  const out = await runBroadcast(b.id);
+  return ok({ scheduled: false, ...out });
 });

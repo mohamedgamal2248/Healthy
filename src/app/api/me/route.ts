@@ -10,14 +10,15 @@ import { ALLERGENS, EQUIPMENT, JOINTS, LEVELS, cleanDislikes } from "@/lib/ai-pr
 
 export const GET = route(async (req) => {
   const a = await requireUser(req);
-  // Keep the owner's country statistics current for people who stay signed in: one tiny write, only when the country changed.
+  // Remember the visit (and which notifications led to it) at most every 10 minutes per person, and keep the country current: one RPC.
   const cc = countryOf(req);
-  if (cc && cc !== a.profile.country) {
-    try { must(await db().from("hl_profiles").update({ country: cc }).eq("username", a.username)); } catch { /* statistics only */ }
+  const seen = a.profile.last_seen_at ? Date.parse(a.profile.last_seen_at) : 0;
+  if (Date.now() - seen > 10 * 60_000 || (cc && cc !== a.profile.country)) {
+    try { must(await db().rpc("hl_mark_seen", { p_user: a.username, p_country: cc })); } catch { /* statistics only */ }
   }
   const balances = a.profile.kyc_verified ? await getBalances(a.username) : null;
-  const { pi_uid: _uid, token_version: _tv, deleted_at: _d, created_at: _c, country: _cc, ...profile } = a.profile;
-  void _uid; void _tv; void _d; void _c; void _cc;
+  const { pi_uid: _uid, token_version: _tv, deleted_at: _d, created_at: _c, country: _cc, last_seen_at: _ls, ...profile } = a.profile;
+  void _uid; void _tv; void _d; void _c; void _cc; void _ls;
   const lw = await latestWeight(a.username);
   return ok({ profile: { ...profile, weight_kg: lw ? lw.kg : profile.weight_kg, weight_date: lw?.date ?? null }, balances, isAdmin: adminUsernames().includes(a.username.toLowerCase()) });
 });
@@ -41,6 +42,8 @@ const Patch = z.object({
   timezone: z.string().max(60).optional(),
   leaderboard_visible: z.boolean().optional(),
   notify_pi: z.boolean().optional(),
+  notify_news: z.boolean().optional(),
+  notify_events: z.boolean().optional(),
   reminder_hour: z.number().int().min(0).max(23).optional(),
   accept_disclaimer: z.boolean().optional(),
 });

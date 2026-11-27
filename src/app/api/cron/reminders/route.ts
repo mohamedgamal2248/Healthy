@@ -3,7 +3,8 @@ import { ok, route } from "@/server/http";
 import { requireCron } from "@/server/cron-auth";
 import { dropSubscription, pushConfigured, sendPush, type Sub } from "@/server/push";
 import { NOTIFY_BATCH, sendPiNotifications, type PiNotification } from "@/server/pi-notify";
-import { expiryText, smartReminderText } from "@/lib/reminder";
+import { expiryText, seedOf, smartReminderText } from "@/lib/reminder";
+import { processDueBroadcasts } from "@/server/broadcast";
 import { daySnapshots } from "@/server/reminder-context";
 import { addDays } from "@/lib/dates";
 
@@ -12,10 +13,12 @@ const BATCH = 500;
 const MAX_ROUNDS = 20; // up to 10,000 people per run; later runs pick up the rest
 
 type Claimed = { username: string; pi_uid: string | null; language: string | null; notify_pi: boolean; title: string; body: string };
-type Out = { due: number; pi: { requested: number; delivered: number; errors: number }; push: { devices: number; sent: number; removed: number; failed: number }; expiry: number };
+type Out = { broadcasts?: number; due: number; pi: { requested: number; delivered: number; errors: number }; push: { devices: number; sent: number; removed: number; failed: number }; expiry: number };
 
 /** Send one notification to a person on every channel they allow (Pi Notification Center + their registered browsers). */
-async function deliver(items: Claimed[], out: Out) {
+async function deliver(items: Claimed[], out: Out, kind: "reminder" | "expiry") {
+  // Log first so the owner can see how many of these led to opening the app. A logging problem never blocks sending.
+  if (items.length) { try { must(await db().from("hl_notif_log").insert(items.map((i) => ({ username: i.username, kind })))); } catch (e) { console.error("[reminders] log", e instanceof Error ? e.message : e); } }
   const pi: PiNotification[] = items.filter((i) => i.notify_pi && i.pi_uid).map((i) => ({ user_uid: i.pi_uid!, title: i.title, body: i.body, subroute: "/today" }));
   for (let k = 0; k < pi.length; k += NOTIFY_BATCH) {
     const r = await sendPiNotifications(pi.slice(k, k + NOTIFY_BATCH));
@@ -54,9 +57,9 @@ export const GET = route(async (req) => {
     const days = await daySnapshots(rows.map((r) => ({ username: r.username, local_date: r.local_date }))).catch((e) => { console.error("[reminders] day snapshot", e instanceof Error ? e.message : e); return new Map(); });
     await deliver(rows.map((r) => {
       const alive = !!r.last_completed_date && r.last_completed_date >= addDays(r.local_date, -1); // a stale streak number would mislead
-      const t = smartReminderText({ streak: alive ? r.current_streak : 0, lang: r.language === "ar" ? "ar" : "en", day: days.get(r.username) ?? null });
+      const t = smartReminderText({ streak: alive ? r.current_streak : 0, lang: r.language === "ar" ? "ar" : "en", day: days.get(r.username) ?? null, seed: seedOf(`${r.username}:${r.local_date}`) });
       return { username: r.username, pi_uid: r.pi_uid, language: r.language, notify_pi: r.notify_pi, ...t };
-    }), out);
+    }), out, "reminder");
     if (rows.length < BATCH) break;
   }
 
@@ -67,8 +70,9 @@ export const GET = route(async (req) => {
     await deliver(rows.map((r) => {
       const daysLeft = Math.ceil((Date.parse(r.expires_at) - Date.now()) / 86400_000);
       return { username: r.username, pi_uid: r.pi_uid, language: r.language, notify_pi: r.notify_pi, ...expiryText({ daysLeft, lang: r.language === "ar" ? "ar" : "en" }) };
-    }), out);
+    }), out, "expiry");
     if (rows.length < BATCH) break;
   }
+  try { out.broadcasts = await processDueBroadcasts(); } catch (e) { console.error("[reminders] broadcasts", e instanceof Error ? e.message : e); }
   return ok(out);
 });

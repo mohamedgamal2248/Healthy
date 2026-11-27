@@ -1,4 +1,7 @@
+import { after } from "next/server";
 import { dailyWaterCups } from "@/lib/nutrition";
+import { STREAK_MILESTONES, streakMilestoneText } from "@/lib/reminder";
+import { notifyEvent } from "./events";
 import { db, must } from "./supabase";
 import { ensureSeeded } from "./seed";
 import { grantTrial } from "./credits";
@@ -146,6 +149,11 @@ export async function completeChallenge(a: Auth, userChallengeId: string) {
     await db().from("hl_streaks").upsert({ username: a.username, current_streak: next.current, longest_streak: next.longest, last_completed_date: next.last, total_completed: next.total, freeze_used_on: next.freezeUsed ?? null }, { onConflict: "username" }),
   );
   const newBadges = await awardBadges(a.username, next.current);
+  // Celebrate streak milestones once each (the notice is sent after the response, so it never slows the tap).
+  if ((STREAK_MILESTONES as readonly number[]).includes(next.current)) {
+    const days = next.current, record = prev.longest < next.current;
+    after(() => notifyEvent(a.username, `streak_${days}`, (lang) => streakMilestoneText({ days, record, lang })));
+  }
   // Starter challenge: 7 days in a row earns the AI credits, once (unique ledger index guarantees it).
   let starterReward = false;
   if (next.current >= 7 && a.profile.kyc_verified) starterReward = await grantTrial(a.username);

@@ -1029,3 +1029,44 @@ test("country comes only from the edge header and only as a two-letter code", as
   assert.equal(countryOf(req("Egypt")), null);
   assert.equal(countryOf(req("1.2.3.4")), null);
 });
+
+test("reminder wording rotates by seed, celebrates milestones, and the original text is kept without a seed", async () => {
+  const { reminderText, smartReminderText, seedOf, streakMilestoneText, groupFinishText, STREAK_MILESTONES } = await import("../src/lib/reminder");
+  assert.deepEqual([...STREAK_MILESTONES], [3, 7, 14, 30, 60, 100]);
+  // same person + day => same wording; different seeds => several different lines, all non-empty
+  assert.equal(seedOf("mona:2026-11-27"), seedOf("mona:2026-11-27"));
+  assert.notEqual(seedOf("mona:2026-11-27"), seedOf("mona:2026-11-28"));
+  for (const lang of ["ar", "en"] as const) {
+    const lines = new Set([0, 1, 2, 3, 4, 5].map((seed) => JSON.stringify(reminderText({ streak: 4, lang, seed }))));
+    assert.ok(lines.size >= 3);
+    for (const l of lines) { const t = JSON.parse(l); assert.ok(t.title.length > 0 && t.body.length > 0 && t.title.length <= 60 && t.body.length <= 160); }
+    const none = new Set([0, 1, 2].map((seed) => reminderText({ streak: 0, lang, seed }).title));
+    assert.equal(none.size, 3);
+  }
+  assert.deepEqual(reminderText({ streak: 4, lang: "en" }), reminderText({ streak: 4, lang: "en", seed: 0 }));
+  // the day before a milestone, the reminder says so (for every seed)
+  for (const seed of [0, 1, 2]) assert.match(reminderText({ streak: 6, lang: "en", seed }).title, /reach 7 days/);
+  assert.match(reminderText({ streak: 2, lang: "ar" }).title, /3/);
+  // smart reminder rotates its wording too and never exceeds notification limits
+  const day = { target: 2830, proteinTarget: 177, eatenKcal: 0, eatenProtein: 0, entries: 0 };
+  const firsts = new Set([0, 1, 2].map((seed) => smartReminderText({ streak: 0, lang: "en", day, seed }).title));
+  assert.equal(firsts.size, 3);
+  // celebrations
+  assert.match(streakMilestoneText({ days: 7, record: true, lang: "en" }).body, /record/);
+  assert.doesNotMatch(streakMilestoneText({ days: 7, record: false, lang: "en" }).body, /record/);
+  assert.match(streakMilestoneText({ days: 30, record: false, lang: "ar" }).title, /30/);
+  assert.ok(groupFinishText({ lang: "ar" }).title.length > 0 && groupFinishText({ lang: "en" }).body.length <= 160);
+});
+
+test("announcements: each person reads their own language, falling back to the other", async () => {
+  const { textFor } = await import("../src/server/broadcast");
+  const both = { title_ar: "عنوان", body_ar: "نص", title_en: "Title", body_en: "Text" };
+  assert.deepEqual(textFor(both, "ar"), { title: "عنوان", body: "نص" });
+  assert.deepEqual(textFor(both, "en"), { title: "Title", body: "Text" });
+  assert.deepEqual(textFor(both, null), { title: "Title", body: "Text" });
+  const onlyEn = { title_ar: null, body_ar: null, title_en: "Title", body_en: "Text" };
+  assert.deepEqual(textFor(onlyEn, "ar"), { title: "Title", body: "Text" });
+  const onlyAr = { title_ar: "عنوان", body_ar: "نص", title_en: "T", body_en: null };
+  assert.deepEqual(textFor(onlyAr, "en"), { title: "عنوان", body: "نص" }); // a title without a message is not a usable English text
+  assert.equal(textFor({ title_ar: null, body_ar: null, title_en: null, body_en: null }, "en"), null);
+});

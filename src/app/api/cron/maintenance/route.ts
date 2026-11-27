@@ -37,6 +37,7 @@ export const GET = route(async (req) => {
   const cut = new Date(now - 14 * 86400_000).toISOString();
   const st = must(await db().from("hl_api_stats").delete().lt("hour", cut).select("route")) as unknown[];
   const er = must(await db().from("hl_api_errors").delete().lt("last_at", cut).select("key")) as unknown[];
-  out.statsDeleted = st.length + er.length;
+  const nl = must(await db().from("hl_notif_log").delete().lt("sent_at", new Date(now - 45 * 86400_000).toISOString()).not("kind", "like", "once:%").select("id")) as unknown[];
+  out.statsDeleted = st.length + er.length + nl.length;
   return ok(out);
 });
