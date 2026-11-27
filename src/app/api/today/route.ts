@@ -37,6 +37,8 @@ export const GET = route(async (req) => {
   // The meals shown are the ones in the person's own weekly plan for today; without a plan (or for a slot an AI recipe fills) the daily rotation is used.
   const dayPlan = planDay.day;
   const fromPlan = dayPlan ? await mealsFromPlanDay(dayPlan.slots) : null;
+  const eaten: Record<string, string> = {};
+  for (const r of bundle.food) if (r.date === a.today && r.source === "meal" && r.source_id && !eaten[r.source_id]) eaten[r.source_id] = r.id;
   const snacks = (dayPlan?.slots ?? []).filter((s) => s.type === "snack").map((s) => ({ id: s.meal_id ?? null, name_ar: s.name_ar ?? "", name_en: s.name_en ?? "", servings: s.servings, calories: s.calories, protein_g: s.protein_g }));
   const meals = fromPlan ? { breakfast: fromPlan.breakfast ?? rotation.breakfast, lunch: fromPlan.lunch ?? rotation.lunch, dinner: fromPlan.dinner ?? rotation.dinner } : rotation;
   const st = bundle.streak;
@@ -62,8 +64,8 @@ export const GET = route(async (req) => {
     meals,
     mealsFromPlan: !!fromPlan,
     snacks,
-    // true once per day: the page then asks the server to put the plan's meals into the diary
-    autolog: !!dayPlan && !planDay.filled && a.profile.plan_autolog !== false && dayPlan.slots.length > 0,
+    // meal id -> diary entry id for the plan meals the person already confirmed today (so the page can show "eaten" and undo it)
+    eaten,
     badges,
     favourites: favs,
     reminder,

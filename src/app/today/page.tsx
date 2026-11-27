@@ -19,7 +19,7 @@ type RecentFood = { id: string; name: string; name_ar?: string; name_en?: string
 
 type Today = {
   date: string; challenges: ChallengeItem[]; swapUsed: boolean; streak: { current: number; longest: number; total: number; frozen?: boolean; freezeReady?: boolean }; completedToday: number;
-  meals: { breakfast: (MealRow & { servings?: number }) | null; lunch: (MealRow & { servings?: number }) | null; dinner: (MealRow & { servings?: number }) | null }; mealsFromPlan?: boolean; snacks?: { id: string | null; name_ar: string; name_en: string; servings: number; calories: number; protein_g: number }[]; autolog?: boolean; badges: { badge_key: string }[]; favourites: string[];
+  meals: { breakfast: (MealRow & { servings?: number }) | null; lunch: (MealRow & { servings?: number }) | null; dinner: (MealRow & { servings?: number }) | null }; mealsFromPlan?: boolean; snacks?: { id: string | null; name_ar: string; name_en: string; servings: number; calories: number; protein_g: number }[]; eaten?: Record<string, string>; badges: { badge_key: string }[]; favourites: string[];
   reminder: "none" | "morning" | "inactive"; balances: Balances | null; profileReady: boolean;
   starter: { rewarded: boolean; reward: number };
   food?: { calories: number; target: number | null; entries: number; totals: { calories: number; protein_g: number; carbs_g: number; fat_g: number }; targets: { protein: number; carbs: number; fat: number } | null; recent: RecentFood[] };
@@ -63,15 +63,23 @@ function RecentMeals({ items, onRepeat, busy }: { items: RecentFood[]; onRepeat:
 function TodayInner() {
   const { tr, toast, errMsg, lang, me } = useApp();
   const { data: d, setData: setD, reload: load } = useGet<Today>("/today", (e) => toast(errMsg(e), "err"));
-  // Once a day the plan's meals are put into the diary, so the counters below follow the plan (the person can edit or remove them).
-  const autologRan = useRef(false);
-  const wantsAutolog = !!d?.autolog;
-  useEffect(() => {
-    if (!wantsAutolog || autologRan.current) return;
-    autologRan.current = true;
-    api<{ added: number }>("/food/autolog", { body: {} }).then((r) => { if (r.added > 0) { load(); toast(tr("أضفنا وجبات خطتك اليوم إلى يومياتك. عدّلها أو احذفها من صفحة يومي.", "We added today's plan meals to your diary. Edit or remove them on My day."), "ok"); } }).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wantsAutolog]);
+  // Plan meals count in the diary only after the person confirms them: "I ate it" adds the meal with its planned portion, and tapping again undoes it.
+  const [eatBusy, setEatBusy] = useState<string | null>(null);
+  const eatKey = (id: string | null, name: string) => id ?? name;
+  const toggleEaten = async (key: string, id: string | null, slot: { name_ar: string; name_en: string; servings: number; calories: number; protein_g: number }) => {
+    if (!d) return;
+    setEatBusy(key);
+    try {
+      const entryId = d.eaten?.[key];
+      if (entryId) await api("/food", { method: "DELETE", body: { id: entryId } });
+      else {
+        try { await api("/food", { body: { source: "meal", mealId: id, portion: slot.servings } }); }
+        catch { await api("/food", { body: { source: "manual", name: (lang === "ar" ? slot.name_ar : slot.name_en) || slot.name_en, calories: slot.calories, protein_g: slot.protein_g } }); } // a meal that is not in the catalogue is logged by its planned numbers
+      }
+      load();
+      window.dispatchEvent(new Event("healthy:refresh"));
+    } catch (e) { toast(errMsg(e), "err"); } finally { setEatBusy(null); }
+  };
   const [busy, setBusy] = useState(false);
   const [repeating, setRepeating] = useState<string | null>(null);
   const router = useRouter();
@@ -181,7 +189,7 @@ function TodayInner() {
           <section aria-labelledby="ml">
             <div className="mb-3 flex items-end justify-between"><h2 id="ml" className="h2">{d.mealsFromPlan ? tr("وجبات خطتك اليوم", "Today's meals from your plan") : tr("وجبات اليوم", "Meals of the day")}</h2><Link href={d.mealsFromPlan ? "/plan" : "/meals"} className="text-sm font-extrabold text-brand-700">{d.mealsFromPlan ? tr("خطتي الأسبوعية", "My weekly plan") : tr("كل الوجبات", "All meals")}</Link></div>
             <div className="grid gap-4 md:grid-cols-3">
-              {slots.map(([k, label]) => d.meals[k] ? <MealCard key={k} meal={d.meals[k]!} label={d.mealsFromPlan && d.meals[k]!.servings ? `${label} · ${tr("حصة", "portion")} ×${d.meals[k]!.servings}` : label} fav={d.favourites.includes(d.meals[k]!.id)} onFav={fav} /> : null)}
+              {slots.map(([k, label]) => d.meals[k] ? <MealCard key={k} meal={d.meals[k]!} label={d.mealsFromPlan && d.meals[k]!.servings ? `${label} · ${tr("حصة", "portion")} ×${d.meals[k]!.servings}` : label} fav={d.favourites.includes(d.meals[k]!.id)} onFav={fav} {...(d.mealsFromPlan && d.meals[k]!.servings ? { eaten: !!d.eaten?.[d.meals[k]!.id], eatBusy: eatBusy === d.meals[k]!.id, onEat: () => toggleEaten(d.meals[k]!.id, d.meals[k]!.id, { name_ar: d.meals[k]!.name_ar, name_en: d.meals[k]!.name_en, servings: d.meals[k]!.servings ?? 1, calories: d.meals[k]!.calories, protein_g: d.meals[k]!.protein_g }) } : {})} /> : null)}
             </div>
             {d.snacks && d.snacks.length > 0 && (
               <div className="mt-3 rounded-2xl border border-line bg-white px-3 py-2">
@@ -192,6 +200,7 @@ function TodayInner() {
                       <Icon name="leaf" size={15} className="shrink-0 text-brand-600" />
                       <span className="min-w-0 flex-1 truncate font-bold">{lang === "ar" ? s.name_ar : s.name_en}</span>
                       <span className="shrink-0 text-xs font-bold tabular-nums text-ink-soft">{s.calories} {tr("سعرة", "kcal")} · {Math.round(s.protein_g)} {tr("جم", "g")}</span>
+                      <button className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 ${s.id && d.eaten?.[s.id] ? "border-brand-600 bg-brand-600 text-white" : "border-brand-300 text-transparent"}`} onClick={() => toggleEaten(eatKey(s.id, s.name_en), s.id, s)} disabled={eatBusy === eatKey(s.id, s.name_en)} aria-pressed={!!(s.id && d.eaten?.[s.id])} aria-label={tr(`سجّلت ${s.name_ar}`, `I ate ${s.name_en}`)}>{eatBusy === eatKey(s.id, s.name_en) ? <Spinner size={14} /> : <Icon name="check" size={16} />}</button>
                     </li>
                   ))}
                 </ul>

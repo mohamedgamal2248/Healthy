@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { Icon } from "./Icon";
+import { Spinner } from "./ui";
 import { useApp } from "./AppProvider";
 import { MEAL_TAGS } from "@/data/ingredients";
 import type { MealRow } from "@/server/meals";
@@ -17,7 +18,7 @@ export function TagChips({ tags, max = 3 }: { tags: string[]; max?: number }) {
   );
 }
 
-export function MealCard({ meal, fav, onFav, label, missing }: { meal: MealRow; fav?: boolean; onFav?: (id: string) => void; label?: string; missing?: string }) {
+export function MealCard({ meal, fav, onFav, label, missing, eaten, onEat, eatBusy }: { meal: MealRow; fav?: boolean; onFav?: (id: string) => void; label?: string; missing?: string; /** Today's plan: this meal was confirmed as eaten. */ eaten?: boolean; onEat?: () => void; eatBusy?: boolean }) {
   const { tr, lang } = useApp();
   return (
     <article className="card relative !p-0">
@@ -39,6 +40,13 @@ export function MealCard({ meal, fav, onFav, label, missing }: { meal: MealRow; 
           <TagChips tags={meal.tags} />
         </div>
       </Link>
+      {onEat && (
+        <div className="px-4 pb-4">
+          <button className={eaten ? "btn-soft w-full" : "btn-primary w-full"} onClick={onEat} disabled={eatBusy} aria-pressed={!!eaten}>
+            {eatBusy ? <Spinner size={18} /> : <Icon name="check" size={18} />}{eaten ? tr("تم تسجيلها (اضغط للتراجع)", "Logged (tap to undo)") : tr("أكلتها", "I ate it")}
+          </button>
+        </div>
+      )}
       {onFav && (
         <button onClick={() => onFav(meal.id)} aria-pressed={!!fav} aria-label={tr("حفظ في المفضلة", "Save to favourites")} className="absolute end-3 top-3 flex h-11 w-11 items-center justify-center rounded-full border border-line bg-white transition active:scale-90">
           <Icon name="heart" size={22} filled={fav} className={fav ? "text-rose-600" : "text-ink-soft"} />

@@ -25,9 +25,8 @@ export function AppFeatures() {
   // Separate switches per kind of notification: announcements and celebration notices can be turned off while the daily reminder stays on.
   const newsOn = me?.profile.notify_news !== false;
   const eventsOn = me?.profile.notify_events !== false;
-  const autologOn = me?.profile.plan_autolog !== false;
   const [kindBusy, setKindBusy] = useState<string | null>(null);
-  const toggleKind = async (field: "notify_news" | "notify_events" | "plan_autolog", on: boolean) => {
+  const toggleKind = async (field: "notify_news" | "notify_events", on: boolean) => {
     setKindBusy(field);
     try { await api("/me", { method: "PATCH", body: { [field]: !on } }); await refresh(); } catch (e) { toast(errMsg(e), "err"); } finally { setKindBusy(null); }
   };
@@ -103,10 +102,6 @@ export function AppFeatures() {
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0"><p className="font-extrabold">{tr("تهنئة بالإنجازات", "Achievement notices")}</p><p className="muted">{tr("إشعار عند وصول سلسلتك لرقم مميز أو إنهاء تحدي الأسبوع.", "A notice when your streak reaches a milestone or you finish the weekly challenge.")}</p></div>
         <button className={eventsOn ? "btn-ghost btn-sm" : "btn-primary btn-sm"} disabled={kindBusy === "notify_events"} onClick={() => toggleKind("notify_events", eventsOn)} aria-pressed={eventsOn}>{kindBusy === "notify_events" ? <Spinner size={16} /> : null}{eventsOn ? tr("إيقاف", "Turn off") : tr("تفعيل", "Turn on")}</button>
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0"><p className="font-extrabold">{tr("إضافة وجبات خطتي ليومياتي", "Add my plan meals to my diary")}</p><p className="muted">{tr("كل يوم تُضاف وجبات خطتك لصفحة يومي تلقائيًا، وتقدر تعدّلها أو تحذفها.", "Each day your plan's meals are added to My day automatically; you can edit or remove them.")}</p></div>
-        <button className={autologOn ? "btn-ghost btn-sm" : "btn-primary btn-sm"} disabled={kindBusy === "plan_autolog"} onClick={() => toggleKind("plan_autolog", autologOn)} aria-pressed={autologOn}>{kindBusy === "plan_autolog" ? <Spinner size={16} /> : null}{autologOn ? tr("إيقاف", "Turn off") : tr("تفعيل", "Turn on")}</button>
       </div>
       {supported ? (
         <div className="flex items-center justify-between gap-3">

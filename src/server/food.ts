@@ -125,7 +125,7 @@ export async function resolveEntry(a: Auth, b: { source?: string; mealId?: strin
     const m = await getMeal(b.mealId);
     if (!m || !m.active) throw E.notFound();
     const kcal = Math.round(Number(m.calories) * portion), p = r1(Number(m.protein_g) * portion);
-    return { name: (ar ? m.name_ar : m.name_en) || m.name_en, calories: kcal, protein_g: p, carbs_g: null, fat_g: null, source: "meal", source_id: m.id };
+    return { name: (ar ? m.name_ar : m.name_en) || m.name_en, calories: kcal, protein_g: p, carbs_g: null, fat_g: null, source: "meal", source_id: m.id, servings: portion };
   }
   if (b.source === "recipe" && b.recipeId) {
     const r = must(await db().from("hl_recipes").select("id,title,content").eq("id", b.recipeId).eq("username", a.username).maybeSingle()) as { id: string; title: string; content: { kind?: string; scan?: ScanLite; recipe?: { name: string; calories: number; protein: number } } } | null;
