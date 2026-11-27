@@ -99,3 +99,24 @@ export function mealsOfTheDay(date: string): Promise<Record<"breakfast" | "lunch
     return { breakfast: byId.get(ids.breakfast ?? "") ?? null, lunch: byId.get(ids.lunch ?? "") ?? null, dinner: byId.get(ids.dinner ?? "") ?? null };
   });
 }
+
+export type PlanMealSlot = { type: string; source: string; meal_id?: string | null; servings: number; calories: number; protein_g: number };
+export type TodayMeal = MealRow & { servings?: number };
+
+/**
+ * The three main meals of the person's OWN plan for today (breakfast, lunch, dinner), shown with the portion and the calories
+ * and protein of that portion, so the Today page matches the weekly plan. A slot filled by an AI recipe (no catalogue meal)
+ * is left empty rather than replaced by an unrelated dish.
+ */
+export async function mealsFromPlanDay(slots: PlanMealSlot[]): Promise<Record<"breakfast" | "lunch" | "dinner", TodayMeal | null>> {
+  const main = slots.filter((s) => (s.type === "breakfast" || s.type === "lunch" || s.type === "dinner") && s.source === "catalogue" && s.meal_id);
+  const ids = [...new Set(main.map((s) => s.meal_id as string))];
+  const rows = ids.length ? (must(await db().from("hl_meals").select("*").in("id", ids)) as MealRow[]) : [];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const pick = (type: "breakfast" | "lunch" | "dinner"): TodayMeal | null => {
+    const s = main.find((x) => x.type === type);
+    const m = s ? byId.get(s.meal_id as string) : undefined;
+    return s && m ? { ...m, calories: s.calories, protein_g: s.protein_g, servings: s.servings } : null;
+  };
+  return { breakfast: pick("breakfast"), lunch: pick("lunch"), dinner: pick("dinner") };
+}

@@ -19,7 +19,7 @@ type RecentFood = { id: string; name: string; name_ar?: string; name_en?: string
 
 type Today = {
   date: string; challenges: ChallengeItem[]; swapUsed: boolean; streak: { current: number; longest: number; total: number; frozen?: boolean; freezeReady?: boolean }; completedToday: number;
-  meals: { breakfast: MealRow | null; lunch: MealRow | null; dinner: MealRow | null }; badges: { badge_key: string }[]; favourites: string[];
+  meals: { breakfast: (MealRow & { servings?: number }) | null; lunch: (MealRow & { servings?: number }) | null; dinner: (MealRow & { servings?: number }) | null }; mealsFromPlan?: boolean; badges: { badge_key: string }[]; favourites: string[];
   reminder: "none" | "morning" | "inactive"; balances: Balances | null; profileReady: boolean;
   starter: { rewarded: boolean; reward: number };
   food?: { calories: number; target: number | null; entries: number; totals: { calories: number; protein_g: number; carbs_g: number; fat_g: number }; targets: { protein: number; carbs: number; fat: number } | null; recent: RecentFood[] };
@@ -170,9 +170,9 @@ function TodayInner() {
         </summary>
         <div className="space-y-5 border-t border-line p-4">
           <section aria-labelledby="ml">
-            <div className="mb-3 flex items-end justify-between"><h2 id="ml" className="h2">{tr("وجبات اليوم", "Meals of the day")}</h2><Link href="/meals" className="text-sm font-extrabold text-brand-700">{tr("كل الوجبات", "All meals")}</Link></div>
+            <div className="mb-3 flex items-end justify-between"><h2 id="ml" className="h2">{d.mealsFromPlan ? tr("وجبات خطتك اليوم", "Today's meals from your plan") : tr("وجبات اليوم", "Meals of the day")}</h2><Link href={d.mealsFromPlan ? "/plan" : "/meals"} className="text-sm font-extrabold text-brand-700">{d.mealsFromPlan ? tr("خطتي الأسبوعية", "My weekly plan") : tr("كل الوجبات", "All meals")}</Link></div>
             <div className="grid gap-4 md:grid-cols-3">
-              {slots.map(([k, label]) => d.meals[k] ? <MealCard key={k} meal={d.meals[k]!} label={label} fav={d.favourites.includes(d.meals[k]!.id)} onFav={fav} /> : null)}
+              {slots.map(([k, label]) => d.meals[k] ? <MealCard key={k} meal={d.meals[k]!} label={d.mealsFromPlan && d.meals[k]!.servings ? `${label} · ${tr("حصة", "portion")} ×${d.meals[k]!.servings}` : label} fav={d.favourites.includes(d.meals[k]!.id)} onFav={fav} /> : null)}
             </div>
           </section>
 

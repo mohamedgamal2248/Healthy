@@ -168,3 +168,16 @@ test("a purchase closed by a browser signal can be reopened and granted exactly 
   assert.equal((await pg.query<{ r: string }>("select hl_complete_purchase($1,'tx9',10,0) r", [p])).rows[0].r, "already_completed");
   assert.equal((await bal(pg, "alice")).pack, 10);
 });
+
+test("plan day: only today's day of this week's plan is returned", async () => {
+  const pg = await db();
+  await pg.exec(readFileSync("supabase/migrations/0022_plan_day.sql", "utf8").replace(/revoke all on [\s\S]*?;/g, "").replace(/grant execute on [\s\S]*?;/g, ""));
+  const plan = { days: [{ date: "2026-11-28", slots: [{ type: "breakfast", source: "catalogue", meal_id: "m1", servings: 1.5, calories: 585, protein_g: 26 }], total_kcal: 585 }, { date: "2026-11-29", slots: [], total_kcal: 0 }], notes: {} };
+  await pg.query("insert into hl_diet_plans (username, week_start, daily_calorie_target, daily_water_target, adjustment_kcal, plan) values ('alice','2026-11-28',2830,2000,0,$1)", [JSON.stringify(plan)]);
+  const day = (d: string, w = "2026-11-28", u = "alice") => pg.query<{ r: { date: string; slots: { meal_id: string }[] } | null }>("select hl_plan_day($1,$2::date,$3) r", [u, w, d]).then((x) => x.rows[0].r);
+  assert.equal((await day("2026-11-28"))?.slots[0].meal_id, "m1");
+  assert.equal((await day("2026-11-29"))?.date, "2026-11-29");
+  assert.equal(await day("2026-12-05"), null); // a date outside the plan
+  assert.equal(await day("2026-11-28", "2026-11-21"), null); // another week
+  assert.equal(await day("2026-11-28", "2026-11-28", "bob"), null); // another person
+});
