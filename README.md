@@ -6,6 +6,7 @@ Healthy turns healthy living into a small daily habit: three short challenges a 
 
 - **Network: Pi Mainnet** (production Pi app, real Pi). Test payments exist only in a separate staging copy; see [Deployment](#deployment).
 - Open in Pi Browser: <https://healthai4171.pinet.com> (the app's PiNet URL)
+- Demo video (2 min 36 s): <https://youtube.com/shorts/BwIgKIPTxsc>
 - Web host: <https://healthy-ai-app.vercel.app>
 - Languages: English (default) and Arabic with full RTL support
 - License: [PiOS](./LICENSE) (Pi Open Source)
@@ -20,6 +21,7 @@ Healthy turns healthy living into a small daily habit: three short challenges a 
 | **Who it is for** | Pi Pioneers in Egypt and the Arab world who want to eat better and build one small habit a day, on a normal budget. |
 | **The problem** | Diet plans are expensive, foreign apps don't know Egyptian food, and counting calories takes real effort. |
 | **How Pi is used** | Sign-in with Pi only (no email or password), verified on the server. AI credits and a monthly plan are paid in Pi (user-to-app), verified with the Pi API before anything is granted. Community features use badges and rankings only, never Pi prizes or fees. |
+| **Demo video** | <https://youtube.com/shorts/BwIgKIPTxsc> (2 min 36 s, public) |
 | **Open it** | In Pi Browser: <https://healthai4171.pinet.com> |
 
 ---
