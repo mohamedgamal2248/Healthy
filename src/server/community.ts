@@ -113,9 +113,9 @@ export async function groupSnapshot(username: string, today: string) {
   return { title_ar: g.title_ar, title_en: g.title_en, members: Number(counts.members), checkedToday: Number(counts.checked), joined: !!me.data, myDays: (me.data as { days_completed: number } | null)?.days_completed ?? 0 };
 }
 
-/** Newest shared recipes (so fresh content shows up even before it collects likes). */
+/** Shared recipes, newest first (the community list; up to 30). */
 export async function latestRecipes() {
-  const rows = must(await db().from("hl_recipes").select("id,username,title,content,like_count,save_count,shared_at").eq("shared", true).eq("hidden", false).order("shared_at", { ascending: false }).limit(10)) as { id: string; username: string; title: string; content: { recipe: { calories: number; protein: number } }; like_count: number; save_count: number }[];
+  const rows = must(await db().from("hl_recipes").select("id,username,title,content,like_count,save_count,shared_at").eq("shared", true).eq("hidden", false).order("shared_at", { ascending: false }).limit(30)) as { id: string; username: string; title: string; content: { recipe: { calories: number; protein: number } }; like_count: number; save_count: number }[];
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id);
   const okAuthors = await visibleAuthors(rows.map((r) => r.username));

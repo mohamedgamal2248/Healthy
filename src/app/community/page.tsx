@@ -30,7 +30,6 @@ function Inner() {
   const [ov, setOv] = useState<Record<string, { liked?: boolean; likes?: number; saved?: boolean; saves?: number }>>({});
   const [busy, setBusy] = useState(false);
   const [btab, setBtab] = useState<"week" | "month">("week");
-  const [rtab, setRtab] = useState<"top" | "new">("top");
   const [ctab, setCtab] = useState<"challenge" | "board" | "recipes">("challenge");
   if (!pub || !mine) return <PageSkeleton />;
   const withMine = (r: PR): R => ({ ...r, liked: mine.likedIds.includes(r.id), saved: mine.savedIds.includes(r.id), ...ov[r.id] });
@@ -111,18 +110,17 @@ function Inner() {
       {ctab === "recipes" && (
       <section>
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="h2">{tr("وصفات المجتمع", "Community recipes")}</h2>
-          <div className="flex gap-1.5">{([["top", tr("الأفضل", "Top")], ["new", tr("الأحدث", "Newest")]] as const).map(([k, l]) => (<button key={k} className="chip" aria-pressed={rtab === k} onClick={() => setRtab(k)}>{l}</button>))}</div>
+          <h2 className="h2">{tr("وصفات المجتمع", "Community recipes")}</h2><span className="muted">{tr("من الأحدث إلى الأقدم", "Newest first")}</span>
         </div>
-        {(rtab === "top" ? d.topRecipes : d.latestRecipes).length === 0 ? <EmptyState icon="chef" title={tr("لا وصفات بعد", "No recipes yet")} body={tr("ولّد وصفة من Healthy AI ثم اضغط «انشر في المجتمع» لتظهر هنا ويحفظها الآخرون.", "Generate a recipe with Healthy AI, then press Publish to community so others can like and save it.")} /> : (
-          <ul className="space-y-2.5">{(rtab === "top" ? d.topRecipes : d.latestRecipes).map((r) => (
+        {d.latestRecipes.length === 0 ? <EmptyState icon="chef" title={tr("لا وصفات بعد", "No recipes yet")} body={tr("ولّد وصفة من Healthy AI ثم اضغط «انشر في المجتمع» لتظهر هنا ويحفظها الآخرون.", "Generate a recipe with Healthy AI, then press Publish to community so others can like and save it.")} /> : (
+          <ul className="space-y-2.5">{d.latestRecipes.map((r) => (
             <li key={r.id} className="card flex items-center gap-3 !p-3.5">
               <a href={`/r/${r.id}`} className="min-w-0 flex-1"><p className="truncate font-extrabold">{r.title}</p><p className="muted flex items-center gap-2"><bdi dir="ltr">@{r.author}</bdi><VerifiedBadge small /></p></a>
               <button className="btn-ghost btn-sm !px-2.5" onClick={() => like(r.id)} aria-pressed={r.liked} aria-label={tr("إعجاب", "Like")}><Icon name="heart" size={20} filled={r.liked} className={r.liked ? "text-rose-600" : ""} /><span className="tabular-nums">{r.likes}</span></button>
               <button className="btn-ghost btn-sm !px-2.5" onClick={() => save(r.id)} aria-pressed={r.saved} aria-label={tr("حفظ", "Save")}><Icon name="book" size={20} filled={r.saved} className={r.saved ? "text-brand-600" : ""} /><span className="tabular-nums">{r.saves}</span></button>
             </li>))}</ul>
         )}
-        {(rtab === "top" ? d.topRecipes : d.latestRecipes).length < 3 && (d.examples?.length ?? 0) > 0 && (
+        {d.latestRecipes.length < 3 && (d.examples?.length ?? 0) > 0 && (
           <div className="mt-5">
             <h3 className="mb-1 font-extrabold">{tr("أمثلة من فريق Healthy", "Examples from the Healthy team")}</h3>
             <p className="muted mb-3">{tr("دي وجبات من كتالوجنا (مش من مستخدمين). وصفاتك المنشورة هتظهر هنا مع الناس.", "These are meals from our catalogue, not from users. Recipes you publish will appear here with everyone else's.")}</p>
